@@ -145,20 +145,60 @@ class _ImageCardState extends State<ImageCard> {
                     widget.sizeNotifier.value = clampedSize;
                   });
                 }
-                return SizedBox(
-                  width: clampedSize.width,
-                  height: clampedSize.height,
-                  child: Card(
-                    clipBehavior: Clip.antiAlias,
-                    elevation: 2,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        _buildImageContent(context, clampedSize),
-                        _buildResizeHandle(),
-                      ],
-                    ),
-                  ),
+                return LayoutBuilder(
+                  builder: (context, constraints) {
+                    final availableWidth = constraints.maxWidth.isFinite
+                        ? constraints.maxWidth
+                        : clampedSize.width;
+                    final desiredWidth = clampedSize.width;
+                    final adjustedWidth = availableWidth.isFinite
+                        ? desiredWidth
+                            .clamp(_minWidth, availableWidth)
+                            .toDouble()
+                        : desiredWidth;
+
+                    if ((adjustedWidth - desiredWidth).abs() > 0.5) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        final currentSize = widget.sizeNotifier.value;
+                        if (!mounted ||
+                            (widget.sizeNotifier.value.width - adjustedWidth)
+                                    .abs() <=
+                                0.5) {
+                          return;
+                        }
+                        widget.sizeNotifier.value =
+                            Size(adjustedWidth, currentSize.height);
+                      });
+                    }
+
+                    final widthFactor =
+                        availableWidth.isFinite && availableWidth > 0
+                            ? (adjustedWidth / availableWidth).clamp(0.0, 1.0)
+                            : 1.0;
+
+                    return Align(
+                      alignment: Alignment.topLeft,
+                      widthFactor: widthFactor == 0 ? null : widthFactor,
+                      child: SizedBox(
+                        width: adjustedWidth,
+                        height: clampedSize.height,
+                        child: Card(
+                          clipBehavior: Clip.antiAlias,
+                          elevation: 2,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              _buildImageContent(
+                                context,
+                                Size(adjustedWidth, clampedSize.height),
+                              ),
+                              _buildResizeHandle(),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 );
               },
             ),
@@ -186,7 +226,7 @@ class _ImageCardState extends State<ImageCard> {
               duration: const Duration(milliseconds: 200),
               child: switch (_visualState) {
                 _CardVisualState.loading =>
-                    _LoadingPlaceholder(progress: _latestChunk),
+                  _LoadingPlaceholder(progress: _latestChunk),
                 _CardVisualState.error => _ErrorPlaceholder(
                     onRetry: _retryCount < _maxRetryCount ? _handleRetry : null,
                   ),
@@ -228,9 +268,8 @@ class _ImageCardState extends State<ImageCard> {
   Widget _buildImageLayer(Size size, double scale) {
     _attachImageStream(size, scale);
     final pixelRatio = MediaQuery.of(context).devicePixelRatio;
-    final cacheWidth = (size.width * scale * pixelRatio)
-        .clamp(64, 4096)
-        .round();
+    final cacheWidth =
+        (size.width * scale * pixelRatio).clamp(64, 4096).round();
 
     return Positioned.fill(
       child: Transform.scale(
@@ -331,11 +370,9 @@ class _ImageCardState extends State<ImageCard> {
       return KeyEventResult.ignored;
     }
     final pressed = HardwareKeyboard.instance.logicalKeysPressed;
-    final ctrlPressed =
-        pressed.contains(LogicalKeyboardKey.controlLeft) ||
+    final ctrlPressed = pressed.contains(LogicalKeyboardKey.controlLeft) ||
         pressed.contains(LogicalKeyboardKey.controlRight);
-    final shiftPressed =
-        pressed.contains(LogicalKeyboardKey.shiftLeft) ||
+    final shiftPressed = pressed.contains(LogicalKeyboardKey.shiftLeft) ||
         pressed.contains(LogicalKeyboardKey.shiftRight);
 
     if (ctrlPressed &&
@@ -398,8 +435,7 @@ class _ImageCardState extends State<ImageCard> {
     if (!mounted) {
       return;
     }
-    final shouldUpdate =
-        _visualState != state ||
+    final shouldUpdate = _visualState != state ||
         (_latestChunk?.cumulativeBytesLoaded ?? -1) !=
             (chunk?.cumulativeBytesLoaded ?? -1);
     if (!shouldUpdate) {

@@ -1,0 +1,10 @@
+# Flutter build artifacts
+.dart_tool/
+build/
+.flutter-plugins-dependencies
+.flutter-plugins
+
+# IDE specific
+.idea/
+.vscode/
+
