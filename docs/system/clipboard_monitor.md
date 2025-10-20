@@ -26,7 +26,7 @@
 ## 6. 実装方針
 - 監視用 isolate を専用に起動し、`SetWinEventHook(EVENT_SYSTEM_CLIPBOARD)` で通知を受信。フック登録に失敗した場合のみ 500ms ポーリングにフォールバックする。
 - フォールバックは Win32 API で `AddClipboardFormatListener` が利用できない環境（hook 失敗、アクセス拒否など）で有効化し、hook 再試行は 30 秒間隔で実施。
-- データ種別は `RegisterClipboardFormat('PNG')` で確保した PNG を優先し、取得できなかった場合は `CF_DIB` を解析して RGBA → PNG へ変換したデータを ImageSaver に渡す（CF_UNICODETEXT のみ正規化して URL 判定）。
+- データ種別は `RegisterClipboardFormat('PNG')` で確保した PNG を優先し、取得できなかった場合は `CF_DIBV5` → `CF_DIB` の順に解析して RGBA → PNG へ変換したデータを ImageSaver に渡す（CF_UNICODETEXT のみ正規化して URL 判定）。
 - URL 検出時は `UrlDownloadService` を通じてバイト列と拡張子を取得し、ImageSaver へフォワードする。
 - テキストは `CF_UNICODETEXT` を参照し、画像と同時に取得できた場合は画像保存を優先し、URL はメタデータの `source` へ割り当てる。
 - URL の正規化では `Uri.tryParse` を使用し、HTTP/HTTPS のみ許容。判定不可の文字列は破棄してログに残す。
