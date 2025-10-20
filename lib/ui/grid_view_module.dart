@@ -41,19 +41,22 @@ class GridViewModule extends StatelessWidget {
             itemCount: state.images.length,
             itemBuilder: (context, index) {
               final item = state.images[index];
-              return ImageCard(
-                item: item,
-                onCopy: () async {
-                  try {
-                    await copyService.copyImage(item);
-                    _showSnackBar(context, 'クリップボードにコピーしました');
-                  } catch (error) {
-                    _showSnackBar(context, 'コピーに失敗しました');
-                  }
-                },
-                onOpenPreview: () {
-                  _showPreviewDialog(context, item);
-                },
+              return AspectRatio(
+                aspectRatio: 4 / 3,
+                child: ImageCard(
+                  item: item,
+                  onCopy: () async {
+                    try {
+                      await copyService.copyImage(item);
+                      _showSnackBar(context, 'クリップボードにコピーしました');
+                    } catch (error) {
+                      _showSnackBar(context, 'コピーに失敗しました');
+                    }
+                  },
+                  onOpenPreview: () {
+                    _showPreviewDialog(context, item);
+                  },
+                ),
               );
             },
           );

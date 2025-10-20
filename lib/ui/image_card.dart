@@ -24,6 +24,7 @@ class ImageCard extends StatelessWidget {
       child: InkWell(
         onTap: onOpenPreview,
         child: Stack(
+          fit: StackFit.expand,
           children: [
             Positioned.fill(
               child: Image.file(
