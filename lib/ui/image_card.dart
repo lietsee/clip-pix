@@ -419,15 +419,15 @@ class _ImageCardState extends State<ImageCard> {
       });
     }
 
-    final phase = WidgetsBinding.instance.schedulerPhase;
+    final binding = WidgetsBinding.instance;
+    final phase = binding.schedulerPhase;
     if (phase == SchedulerPhase.idle ||
-        phase == SchedulerPhase.postFrameCallbacks ||
-        phase == SchedulerPhase.persistentCallbacks) {
+        phase == SchedulerPhase.postFrameCallbacks) {
       apply();
       return;
     }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) => apply());
+    binding.addPostFrameCallback((_) => apply());
   }
 
   void _attachImageStream(Size size, double scale) {
