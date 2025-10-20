@@ -8,6 +8,8 @@ import 'package:logging/logging.dart';
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 
+import 'data/grid_card_preferences_repository.dart';
+import 'data/models/grid_card_pref.dart';
 import 'data/models/image_entry.dart';
 import 'data/models/image_item.dart';
 import 'data/image_repository.dart';
@@ -41,13 +43,11 @@ Future<void> main() async {
       ClipPixApp(
         appStateBox: boxes.appStateBox,
         imageHistoryBox: boxes.imageHistoryBox,
+        gridCardPrefBox: boxes.gridCardPrefBox,
       ),
     ),
-    (error, stackTrace) => Logger('ClipPixApp').severe(
-      'Uncaught zone error',
-      error,
-      stackTrace,
-    ),
+    (error, stackTrace) =>
+        Logger('ClipPixApp').severe('Uncaught zone error', error, stackTrace),
   );
 }
 
@@ -61,8 +61,9 @@ void _configureLogging() {
     sink = logFile.openWrite(mode: FileMode.append);
   } catch (error, stackTrace) {
     debugPrint('Failed to initialize log file: $error');
-    Logger('ClipPixLogging')
-        .warning('Failed to initialize log file', error, stackTrace);
+    Logger(
+      'ClipPixLogging',
+    ).warning('Failed to initialize log file', error, stackTrace);
   }
   Logger.root.onRecord.listen((record) {
     final line =
@@ -84,13 +85,29 @@ void _registerHiveAdapters() {
   if (!Hive.isAdapterRegistered(2)) {
     Hive.registerAdapter(ImageEntryAdapter());
   }
+  if (!Hive.isAdapterRegistered(3)) {
+    Hive.registerAdapter(GridCardPreferenceAdapter());
+  }
 }
 
-Future<({Box<dynamic> appStateBox, Box<dynamic> imageHistoryBox})>
-    _openCoreBoxes() async {
+Future<
+  ({
+    Box<dynamic> appStateBox,
+    Box<dynamic> imageHistoryBox,
+    Box<GridCardPreference> gridCardPrefBox,
+  })
+>
+_openCoreBoxes() async {
   final appStateBox = await Hive.openBox<dynamic>('app_state');
   final imageHistoryBox = await Hive.openBox<dynamic>('image_history');
-  return (appStateBox: appStateBox, imageHistoryBox: imageHistoryBox);
+  final gridCardPrefBox = await Hive.openBox<GridCardPreference>(
+    'grid_card_prefs',
+  );
+  return (
+    appStateBox: appStateBox,
+    imageHistoryBox: imageHistoryBox,
+    gridCardPrefBox: gridCardPrefBox,
+  );
 }
 
 class ClipPixApp extends StatelessWidget {
@@ -98,10 +115,12 @@ class ClipPixApp extends StatelessWidget {
     super.key,
     required this.appStateBox,
     required this.imageHistoryBox,
+    required this.gridCardPrefBox,
   });
 
   final Box<dynamic> appStateBox;
   final Box<dynamic> imageHistoryBox;
+  final Box<GridCardPreference> gridCardPrefBox;
 
   @override
   Widget build(BuildContext context) {
@@ -110,24 +129,20 @@ class ClipPixApp extends StatelessWidget {
         appStateBox: appStateBox,
         imageHistoryBox: imageHistoryBox,
       ),
-      Provider<ImageRepository>(
-        create: (_) => ImageRepository(),
+      Provider<GridCardPreferencesRepository>(
+        create: (_) => GridCardPreferencesRepository(gridCardPrefBox),
       ),
+      Provider<ImageRepository>(create: (_) => ImageRepository()),
       StateNotifierProvider<ImageLibraryNotifier, ImageLibraryState>(
-        create: (context) => ImageLibraryNotifier(
-          context.read<ImageRepository>(),
-        ),
+        create: (context) =>
+            ImageLibraryNotifier(context.read<ImageRepository>()),
       ),
-      Provider<FolderPickerService>(
-        create: (_) => FolderPickerService(),
-      ),
+      Provider<FolderPickerService>(create: (_) => FolderPickerService()),
       Provider<UrlDownloadService>(
         create: (_) => UrlDownloadService(),
         dispose: (_, service) => service.dispose(),
       ),
-      Provider<ClipboardCopyService>(
-        create: (_) => ClipboardCopyService(),
-      ),
+      Provider<ClipboardCopyService>(create: (_) => ClipboardCopyService()),
       Provider<ImageSaver>(
         create: (context) => ImageSaver(
           getSelectedFolder: () {
@@ -136,96 +151,117 @@ class ClipPixApp extends StatelessWidget {
           },
         ),
       ),
-      ProxyProvider4<ImageSaver, ClipboardCopyService, UrlDownloadService,
-          ImageLibraryNotifier, ClipboardMonitor>(
-        update: (context, imageSaver, copyService, downloadService,
-            imageLibrary, previous) {
-          previous?.dispose();
-          late final ClipboardMonitor monitor;
-          monitor = ClipboardMonitor(
-            getSelectedFolder: () =>
-                context.read<SelectedFolderState>().current,
-            onImageCaptured: (
-              imageData, {
-              String? source,
-              ImageSourceType sourceType = ImageSourceType.local,
-            }) async {
-              SaveResult result;
-              try {
-                result = await imageSaver.saveImageData(
-                  imageData,
-                  source: source,
-                  sourceType: sourceType,
-                );
-              } catch (error, stackTrace) {
-                Logger('ClipboardMonitorHandler')
-                    .severe('Image save failed', error, stackTrace);
-                result = SaveResult.failed(error: error);
-              }
-              if (result.isSuccess) {
-                final historyNotifier = context.read<ImageHistoryNotifier>();
-                historyNotifier.addEntry(
-                  ImageEntry(
-                    filePath: result.filePath!,
-                    metadataPath: result.metadataPath!,
-                    sourceType: sourceType,
-                    savedAt: DateTime.now().toUtc(),
-                  ),
-                );
-                await imageLibrary.addOrUpdate(File(result.filePath!));
-              } else {
-                context
-                    .read<WatcherStatusNotifier>()
-                    .setError('image_save_failed');
-              }
-              monitor.onSaveCompleted(result);
+      ProxyProvider4<
+        ImageSaver,
+        ClipboardCopyService,
+        UrlDownloadService,
+        ImageLibraryNotifier,
+        ClipboardMonitor
+      >(
+        update:
+            (
+              context,
+              imageSaver,
+              copyService,
+              downloadService,
+              imageLibrary,
+              previous,
+            ) {
+              previous?.dispose();
+              late final ClipboardMonitor monitor;
+              monitor = ClipboardMonitor(
+                getSelectedFolder: () =>
+                    context.read<SelectedFolderState>().current,
+                onImageCaptured:
+                    (
+                      imageData, {
+                      String? source,
+                      ImageSourceType sourceType = ImageSourceType.local,
+                    }) async {
+                      SaveResult result;
+                      try {
+                        result = await imageSaver.saveImageData(
+                          imageData,
+                          source: source,
+                          sourceType: sourceType,
+                        );
+                      } catch (error, stackTrace) {
+                        Logger(
+                          'ClipboardMonitorHandler',
+                        ).severe('Image save failed', error, stackTrace);
+                        result = SaveResult.failed(error: error);
+                      }
+                      if (result.isSuccess) {
+                        final historyNotifier = context
+                            .read<ImageHistoryNotifier>();
+                        historyNotifier.addEntry(
+                          ImageEntry(
+                            filePath: result.filePath!,
+                            metadataPath: result.metadataPath!,
+                            sourceType: sourceType,
+                            savedAt: DateTime.now().toUtc(),
+                          ),
+                        );
+                        await imageLibrary.addOrUpdate(File(result.filePath!));
+                      } else {
+                        context.read<WatcherStatusNotifier>().setError(
+                          'image_save_failed',
+                        );
+                      }
+                      monitor.onSaveCompleted(result);
+                    },
+                onUrlCaptured: (url) async {
+                  final historyNotifier = context.read<ImageHistoryNotifier>();
+                  final watcherStatus = context.read<WatcherStatusNotifier>();
+                  final downloadResult = await downloadService.downloadImage(
+                    url,
+                  );
+                  if (downloadResult == null) {
+                    watcherStatus.setError('download_failed');
+                    monitor.onSaveCompleted(
+                      SaveResult.failed(error: 'download_failed'),
+                    );
+                    return;
+                  }
+                  SaveResult saveResult;
+                  try {
+                    saveResult = await imageSaver.saveImageData(
+                      downloadResult.bytes,
+                      source: url,
+                      sourceType: ImageSourceType.web,
+                    );
+                  } catch (error, stackTrace) {
+                    Logger(
+                      'ClipboardMonitorHandler',
+                    ).severe('URL save failed', error, stackTrace);
+                    saveResult = SaveResult.failed(error: error);
+                  }
+                  if (saveResult.isSuccess) {
+                    historyNotifier.addEntry(
+                      ImageEntry(
+                        filePath: saveResult.filePath!,
+                        metadataPath: saveResult.metadataPath!,
+                        sourceType: ImageSourceType.web,
+                        savedAt: DateTime.now().toUtc(),
+                      ),
+                    );
+                    await imageLibrary.addOrUpdate(File(saveResult.filePath!));
+                  } else {
+                    watcherStatus.setError('image_save_failed');
+                  }
+                  monitor.onSaveCompleted(saveResult);
+                },
+              );
+              copyService.registerMonitor(monitor);
+              return monitor;
             },
-            onUrlCaptured: (url) async {
-              final historyNotifier = context.read<ImageHistoryNotifier>();
-              final watcherStatus = context.read<WatcherStatusNotifier>();
-              final downloadResult = await downloadService.downloadImage(url);
-              if (downloadResult == null) {
-                watcherStatus.setError('download_failed');
-                monitor.onSaveCompleted(
-                  SaveResult.failed(error: 'download_failed'),
-                );
-                return;
-              }
-              SaveResult saveResult;
-              try {
-                saveResult = await imageSaver.saveImageData(
-                  downloadResult.bytes,
-                  source: url,
-                  sourceType: ImageSourceType.web,
-                );
-              } catch (error, stackTrace) {
-                Logger('ClipboardMonitorHandler')
-                    .severe('URL save failed', error, stackTrace);
-                saveResult = SaveResult.failed(error: error);
-              }
-              if (saveResult.isSuccess) {
-                historyNotifier.addEntry(
-                  ImageEntry(
-                    filePath: saveResult.filePath!,
-                    metadataPath: saveResult.metadataPath!,
-                    sourceType: ImageSourceType.web,
-                    savedAt: DateTime.now().toUtc(),
-                  ),
-                );
-                await imageLibrary.addOrUpdate(File(saveResult.filePath!));
-              } else {
-                watcherStatus.setError('image_save_failed');
-              }
-              monitor.onSaveCompleted(saveResult);
-            },
-          );
-          copyService.registerMonitor(monitor);
-          return monitor;
-        },
         dispose: (_, monitor) => monitor.dispose(),
       ),
-      ProxyProvider2<WatcherStatusNotifier, ImageLibraryNotifier,
-          FileWatcherService>(
+      ProxyProvider2<
+        WatcherStatusNotifier,
+        ImageLibraryNotifier,
+        FileWatcherService
+      >(
         update: (context, watcherStatus, imageLibrary, previous) {
           previous?.stop();
           final historyNotifier = context.read<ImageHistoryNotifier>();
