@@ -9,7 +9,7 @@ import 'models/image_source_type.dart';
 
 class ImageRepository {
   ImageRepository({Logger? logger})
-      : _logger = logger ?? Logger('ImageRepository');
+    : _logger = logger ?? Logger('ImageRepository');
 
   final Logger _logger;
 
@@ -32,7 +32,13 @@ class ImageRepository {
           items.add(item);
         }
       }
-      items.sort((a, b) => b.savedAt.compareTo(a.savedAt));
+      items.sort((a, b) {
+        final savedAtCompare = b.savedAt.compareTo(a.savedAt);
+        if (savedAtCompare != 0) {
+          return savedAtCompare;
+        }
+        return b.filePath.compareTo(a.filePath);
+      });
       return items;
     } catch (error, stackTrace) {
       _logger.severe('Failed to load directory images', error, stackTrace);
@@ -64,7 +70,10 @@ class ImageRepository {
       );
     } catch (error, stackTrace) {
       _logger.warning(
-          'Failed to build image item for ${file.path}', error, stackTrace);
+        'Failed to build image item for ${file.path}',
+        error,
+        stackTrace,
+      );
       return null;
     }
   }
