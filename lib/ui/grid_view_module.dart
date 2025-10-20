@@ -265,9 +265,8 @@ class _GridViewModuleState extends State<GridViewModule> {
       newItems.map((item) => item.id),
     );
     if (duplicateIncoming.isNotEmpty) {
-      dev.log(
-        'Incoming duplicates detected: $duplicateIncoming',
-        name: 'GridViewModule',
+      debugPrint(
+        '[GridViewModule] incoming duplicates detected: $duplicateIncoming',
       );
     }
     final newIds = newItems.map((item) => item.id).toSet();
@@ -373,9 +372,14 @@ class _GridViewModuleState extends State<GridViewModule> {
         .where((element) => element.value > 1)
         .map((e) => e.key)
         .toList();
+<<<<<<< HEAD
     dev.log(
       '$label: total=${entries.length} removing=${entries.where((e) => e.isRemoving).length} duplicates=$duplicates entries=${entries.map((e) => '${e.item.id}|v${e.version}|rem=${e.isRemoving}|opacity=${e.opacity.toStringAsFixed(2)}').join(', ')}',
       name: 'GridViewModule',
+=======
+    debugPrint(
+      '[GridViewModule] $label total=${entries.length} removing=${entries.where((e) => e.isRemoving).length} duplicates=$duplicates entries=${entries.map((e) => '${e.item.id}|v${e.version}|rem=${e.isRemoving}|opacity=${e.opacity.toStringAsFixed(2)}').join(', ')}',
+>>>>>>> e1c7269 (chore: add diagnostic logging for grid entries)
     );
   }
 
