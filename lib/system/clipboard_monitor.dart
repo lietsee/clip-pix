@@ -27,7 +27,7 @@ enum ClipboardMonitorMode { hook, polling }
 
 enum _ClipboardEventType { image, url }
 
-const int _eventSystemClipboard = 0x0000800d;
+const int _eventSystemClipboard = 0x00000006;
 const int _wineventOutOfContext = 0x0000;
 const int _wineventSkipOwnProcess = 0x0002;
 
@@ -98,6 +98,9 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
 
   Timer? _pollingTimer;
   String? _lastPolledTextSignature;
+  Timer? _sequenceWatcher;
+  int? _lastSequenceNumber;
+  bool _sequenceCheckInProgress = false;
   _Win32ClipboardHook? _hook;
   int? _pngClipboardFormat;
 
@@ -113,6 +116,7 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
       return;
     }
     _isRunning = true;
+    _startSequenceWatcher();
     await _initializeHook();
   }
 
@@ -124,8 +128,10 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
     await _disposeHook();
     _pollingTimer?.cancel();
     _pollingTimer = null;
+    _stopSequenceWatcher();
     _eventQueue.clear();
     _lastPolledTextSignature = null;
+    _lastSequenceNumber = null;
   }
 
   Future<void> onFolderChanged(Directory? directory) async {
@@ -272,9 +278,17 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
   }
 
   Future<void> _handleHookEvent() async {
+    await _processClipboardSnapshot();
+  }
+
+  Future<void> _processClipboardSnapshot() async {
     if (!_isRunning) {
       return;
     }
+    if (_sequenceCheckInProgress) {
+      return;
+    }
+    _sequenceCheckInProgress = true;
     try {
       final snapshot = _readClipboardSnapshot();
       if (snapshot == null) {
@@ -290,7 +304,9 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
       }
     } catch (error, stackTrace) {
       _logger.warning(
-          'Failed to process clipboard hook event', error, stackTrace);
+          'Failed to process clipboard snapshot', error, stackTrace);
+    } finally {
+      _sequenceCheckInProgress = false;
     }
   }
 
@@ -563,6 +579,34 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
       await Future<void>.delayed(_queueResumeDelay);
       _processQueue();
     }
+  }
+
+  void _startSequenceWatcher() {
+    _sequenceWatcher ??= Timer.periodic(
+      const Duration(milliseconds: 400),
+      (_) => _checkClipboardSequence(),
+    );
+  }
+
+  void _stopSequenceWatcher() {
+    _sequenceWatcher?.cancel();
+    _sequenceWatcher = null;
+  }
+
+  Future<void> _checkClipboardSequence() async {
+    if (!_isRunning) {
+      return;
+    }
+    final sequence = GetClipboardSequenceNumber();
+    if (sequence == 0) {
+      return;
+    }
+    if (_lastSequenceNumber != null && _lastSequenceNumber == sequence) {
+      return;
+    }
+    _lastSequenceNumber = sequence;
+    _logger.fine('Clipboard sequence changed: $sequence');
+    await _processClipboardSnapshot();
   }
 
   Future<void> _pollClipboard() async {
