@@ -271,11 +271,12 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
     );
   }
 
-  Future<void> _handleHookEvent() async {
+  Future<void> _handleHookEvent(int eventCode) async {
     if (!_isRunning) {
       return;
     }
     try {
+      _logger.fine('WinEvent event=$eventCode received');
       final snapshot = _readClipboardSnapshot();
       if (snapshot == null) {
         return;
@@ -618,7 +619,7 @@ class _ClipboardSnapshot {
 class _Win32ClipboardHook {
   _Win32ClipboardHook(this._onEvent, this._logger);
 
-  final FutureOr<void> Function() _onEvent;
+  final FutureOr<void> Function(int eventCode) _onEvent;
   final Logger _logger;
 
   Isolate? _isolate;
@@ -651,7 +652,8 @@ class _Win32ClipboardHook {
             }
             break;
           case 'event':
-            Future.microtask(() => _onEvent());
+            final code = message.length > 1 ? message[1] as int : 0;
+            Future.microtask(() => _onEvent(code));
             break;
           case 'error':
             final code = message.length > 1 ? message[1] : null;
@@ -822,6 +824,6 @@ void _winEventProc(
   int dwmsEventTime,
 ) {
   if (event == _eventSystemClipboard) {
-    _HookState.instance?.mainPort.send(['event']);
+    _HookState.instance?.mainPort.send(['event', event]);
   }
 }
