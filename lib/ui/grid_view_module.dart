@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:provider/provider.dart';
 
 import '../data/grid_card_preferences_repository.dart';
@@ -125,62 +124,63 @@ class _GridViewModuleState extends State<GridViewModule> {
       onRefresh: () => libraryNotifier.refresh(),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final crossAxisCount = _calculateCrossAxisCount(constraints.maxWidth);
           final controller = _resolveController(selectedState);
           _currentBuildKeys.clear();
-          return MasonryGridView.builder(
+          return SingleChildScrollView(
             controller: controller,
-            gridDelegate: SliverSimpleGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: crossAxisCount,
-            ),
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.only(
               bottom: 80,
               left: 12,
               right: 12,
               top: 12,
             ),
-            itemCount: _entries.length,
-            itemBuilder: (context, index) {
-              final entry = _entries[index];
-              final item = entry.item;
-              final sizeNotifier = _sizeNotifiers[item.id]!;
-              final scaleNotifier = _scaleNotifiers[item.id]!;
-
-              if (index >= _entries.length - 3) {
-                _prefetchAhead(context, index + 1);
-              }
-
-              final animatedKey = ObjectKey(entry);
-              final entryHash = identityHashCode(entry);
-              debugPrint(
-                '[GridViewModule] build_child index=$index key=$animatedKey entryHash=$entryHash removing=${entry.isRemoving} opacity=${entry.opacity.toStringAsFixed(2)}',
-              );
-              if (!_currentBuildKeys.add(animatedKey)) {
-                debugPrint(
-                  '[GridViewModule] duplicate_detected index=$index key=$animatedKey entryHash=$entryHash',
-                );
-              }
-              return AnimatedOpacity(
-                key: animatedKey,
-                duration: _animationDuration,
-                opacity: entry.opacity,
-                child: ImageCard(
-                  item: item,
-                  sizeNotifier: sizeNotifier,
-                  scaleNotifier: scaleNotifier,
-                  onResize: _handleResize,
-                  onZoom: _handleZoom,
-                  onRetry: _handleRetry,
-                  onOpenPreview: _showPreviewDialog,
-                  onCopyImage: _handleCopy,
-                ),
-              );
-            },
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: constraints.maxWidth),
+              child: Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                alignment: WrapAlignment.start,
+                children: [
+                  for (final entry in _entries)
+                    AnimatedOpacity(
+                      key: ObjectKey(entry),
+                      duration: _animationDuration,
+                      opacity: entry.opacity,
+                      child: _buildCard(entry),
+                    ),
+                ],
+              ),
+            ),
           );
         },
       ),
+    );
+  }
+
+  Widget _buildCard(_GridEntry entry) {
+    final item = entry.item;
+    final sizeNotifier = _sizeNotifiers[item.id]!;
+    final scaleNotifier = _scaleNotifiers[item.id]!;
+    final animatedKey = ObjectKey(entry);
+    final entryHash = identityHashCode(entry);
+    debugPrint(
+      '[GridViewModule] build_child key=$animatedKey entryHash=$entryHash removing=${entry.isRemoving} opacity=${entry.opacity.toStringAsFixed(2)}',
+    );
+    if (!_currentBuildKeys.add(animatedKey)) {
+      debugPrint(
+        '[GridViewModule] duplicate_detected key=$animatedKey entryHash=$entryHash',
+      );
+    }
+    return ImageCard(
+      item: item,
+      sizeNotifier: sizeNotifier,
+      scaleNotifier: scaleNotifier,
+      onResize: _handleResize,
+      onZoom: _handleZoom,
+      onRetry: _handleRetry,
+      onOpenPreview: _showPreviewDialog,
+      onCopyImage: _handleCopy,
     );
   }
 
@@ -223,13 +223,6 @@ class _GridViewModuleState extends State<GridViewModule> {
     });
   }
 
-  void _prefetchAhead(BuildContext context, int startIndex) {
-    for (var i = startIndex; i < startIndex + 3 && i < _entries.length; i++) {
-      final entry = _entries[i];
-      precacheImage(FileImage(File(entry.item.filePath)), context);
-    }
-  }
-
   ScrollController _resolveController(SelectedFolderState selectedState) {
     if (selectedState.viewMode == FolderViewMode.root &&
         widget.controller != null) {
@@ -238,16 +231,6 @@ class _GridViewModuleState extends State<GridViewModule> {
     final directory = widget.state.activeDirectory;
     final key = directory?.path ?? '_root';
     return _directoryControllers.putIfAbsent(key, () => ScrollController());
-  }
-
-  int _calculateCrossAxisCount(double width) {
-    if (width <= 1200) {
-      return 2;
-    }
-    if (width <= 1800) {
-      return 3;
-    }
-    return 4;
   }
 
   _GridEntry _createEntry(ImageItem item) {

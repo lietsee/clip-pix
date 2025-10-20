@@ -1,11 +1,11 @@
 # GridView 詳細設計
 
 ## 1. 概要
-指定フォルダ内の画像を動的グリッドで表示。Lazy Load対応。
+指定フォルダ内の画像を動的タイルで表示し、横幅ベースでラップ配置する。
 
 ## 2. 責務
 - 画像カードの生成・配置・再描画。
-- カードサイズ変更時のレイアウト再計算。
+- カードサイズ変更時のラップレイアウト再計算。
 - マウスホイールでズーム。
 
 ## 3. 入出力
@@ -18,7 +18,7 @@
 ## 4. 依存関係
 - ImageCard
 - Hive (サイズ・スケール記録)
-- flutter_staggered_grid_view (MasonryGridView)
+- `SingleChildScrollView` / `Wrap`
 
 ## 5. エラーハンドリング
 - 読み込み失敗画像はプレースホルダー表示。
@@ -26,15 +26,15 @@
 ## 6. 状態保持
 - 各カードの `size` と `scale` を Hive に保存・復元。
 
-## 7. Masonry 設計
-- `MasonryGridView.builder` を使用し、`crossAxisSpacing` と `mainAxisSpacing` は 12px。
-- `crossAxisCount` は画面幅に応じて可変：`<=1200px:2列`、`<=1800px:3列`、`>1800px:4列`。
+## 7. レイアウト設計
+- `SingleChildScrollView` 内で `Wrap` を用い、`spacing`/`runSpacing` は 12px。
+- 各カードは保存済みの幅・高さで `SizedBox` 表示し、行内で自然に折り返す。
 - ルート表示とサブフォルダ表示で同一レイアウトを共有し、スクロール位置はそれぞれ別の `ScrollController` で保持。
 
 ## 8. リサイズフロー
-- 画像カードは各自 `ValueNotifier<Size>` を保持し、`ValueListenableBuilder` で高さを更新。
+- 画像カードは各自 `ValueNotifier<Size>` を保持し、`ValueListenableBuilder` で幅・高さを更新。
 - リサイズハンドル操作時に `onResize` を発火し、Hive に新サイズを書き込み後に `notifyListeners`。
-- `setState` と `ValueNotifier` の更新によりカードが再ビルドされ、`flutter_staggered_grid_view` が内部で新しい高さを反映する。
+- `Wrap` 再レイアウトにより横幅変更が即座に反映され、隣接カードの位置も再計算される。
 
 ## 9. ズーム操作
 - ズームは右クリックを押下しながらマウスホイールを回転した場合にのみ有効。
