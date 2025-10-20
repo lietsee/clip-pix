@@ -30,6 +30,7 @@ enum _ClipboardEventType { image, url }
 const int _eventSystemClipboard = 0x0000800d;
 const int _wineventOutOfContext = 0x0000;
 const int _wineventSkipOwnProcess = 0x0002;
+const int _wmQuit = 0x0012;
 
 class _ClipboardEvent {
   _ClipboardEvent.image({
@@ -714,10 +715,12 @@ class _HookState {
   _HookState({
     required this.mainPort,
     required this.unhook,
+    required this.threadId,
   });
 
   final SendPort mainPort;
   final _UnhookWinEventDart unhook;
+  final int threadId;
   ffi.Pointer<ffi.Void> hookHandle = ffi.Pointer.fromAddress(0);
 
   static _HookState? instance;
@@ -775,7 +778,10 @@ void _clipboardHookIsolate(_HookInitMessage message) {
     'UnhookWinEvent',
   );
 
-  _HookState.instance = _HookState(mainPort: mainPort, unhook: unhookWinEvent);
+  _HookState.instance = _HookState(
+      mainPort: mainPort,
+      unhook: unhookWinEvent,
+      threadId: GetCurrentThreadId());
 
   final hookHandle = setWinEventHook(
     _eventSystemClipboard,
@@ -800,18 +806,36 @@ void _clipboardHookIsolate(_HookInitMessage message) {
 
   controlPort.listen((message) {
     if (message == 'stop') {
-      try {
-        final handle = _HookState.instance?.hookHandle;
-        if (handle != null && handle.address != 0) {
-          _HookState.instance?.unhook(handle);
-        }
-      } finally {
-        mainPort.send(['stopped']);
-        controlPort.close();
-        _HookState.instance = null;
+      final state = _HookState.instance;
+      if (state != null) {
+        PostThreadMessage(state.threadId, _wmQuit, 0, 0);
       }
     }
   });
+
+  final msg = calloc<MSG>();
+  var running = true;
+  while (running) {
+    final result = GetMessage(msg, NULL, 0, 0);
+    if (result == 0 || result == -1) {
+      running = false;
+    } else {
+      TranslateMessage(msg);
+      DispatchMessage(msg);
+    }
+  }
+  calloc.free(msg);
+
+  try {
+    final handle = _HookState.instance?.hookHandle;
+    if (handle != null && handle.address != 0) {
+      _HookState.instance?.unhook(handle);
+    }
+  } finally {
+    mainPort.send(['stopped']);
+    _HookState.instance = null;
+    controlPort.close();
+  }
 }
 
 void _winEventProc(
