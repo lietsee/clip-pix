@@ -7,7 +7,6 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:ffi/ffi.dart';
-import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 import 'package:logging/logging.dart';
 import 'package:win32/win32.dart';
@@ -97,7 +96,6 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
   DateTime? _guardExpiry;
 
   Timer? _pollingTimer;
-  String? _lastPolledTextSignature;
   Timer? _sequenceWatcher;
   int? _lastSequenceNumber;
   int? _baselineSequenceNumber;
@@ -135,7 +133,6 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
     _pollingTimer = null;
     _stopSequenceWatcher();
     _eventQueue.clear();
-    _lastPolledTextSignature = null;
     _lastSequenceNumber = null;
     _baselineSequenceNumber = null;
     _hasSequenceAdvanced = false;
@@ -294,6 +291,10 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
     await _processClipboardSnapshot();
   }
 
+  Future<void> _pollClipboard() async {
+    await _processClipboardSnapshot();
+  }
+
   Future<void> _processClipboardSnapshot() async {
     if (!_isRunning) {
       return;
@@ -304,16 +305,20 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
     _sequenceCheckInProgress = true;
     try {
       final currentSequence = GetClipboardSequenceNumber();
-      if (!_hasSequenceAdvanced && _baselineSequenceNumber != null) {
+      if (!_hasSequenceAdvanced) {
+        if (_baselineSequenceNumber == null) {
+          _baselineSequenceNumber = currentSequence;
+          _logger.fine('Clipboard baseline sequence set to $currentSequence');
+          return;
+        }
         if (currentSequence == _baselineSequenceNumber) {
-          _logger.fine('Skipping initial clipboard snapshot at startup');
+          _logger.fine('Skipping clipboard snapshot (baseline sequence)');
           return;
         }
         _hasSequenceAdvanced = true;
       }
       if (currentSequence != 0) {
         _lastSequenceNumber = currentSequence;
-        _hasSequenceAdvanced = true;
       }
       final snapshot = _readClipboardSnapshot();
       if (snapshot == null) {
@@ -764,31 +769,21 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
     if (sequence == 0) {
       return;
     }
+    if (_baselineSequenceNumber != null &&
+        !_hasSequenceAdvanced &&
+        sequence == _baselineSequenceNumber) {
+      return;
+    }
     if (_lastSequenceNumber != null && _lastSequenceNumber == sequence) {
       return;
     }
     _lastSequenceNumber = sequence;
-    _hasSequenceAdvanced = true;
+    if (_baselineSequenceNumber != null &&
+        sequence != _baselineSequenceNumber) {
+      _hasSequenceAdvanced = true;
+    }
     _logger.fine('Clipboard sequence changed: $sequence');
     await _processClipboardSnapshot();
-  }
-
-  Future<void> _pollClipboard() async {
-    if (!_isRunning) {
-      return;
-    }
-    try {
-      final data = await Clipboard.getData(Clipboard.kTextPlain);
-      final text = data?.text;
-      if (text != null && text.isNotEmpty) {
-        if (text != _lastPolledTextSignature) {
-          _lastPolledTextSignature = text;
-          await handleClipboardUrl(text);
-        }
-      }
-    } catch (error, stackTrace) {
-      _logger.fine('Clipboard poll failed', error, stackTrace);
-    }
   }
 
   bool _isDuplicate(String hash) {
