@@ -24,7 +24,7 @@
 - 連続5回失敗した場合は監視を停止し、Provider に例外状態を通知。
 
 ## 6. 実装方針
-- 監視用 isolate を専用に起動し、`SetWinEventHook(EVENT_OBJECT_NAMECHANGE)` + `OBJID_CLIPBOARD` フィルタで通知を受信。フック登録に失敗した場合のみ 500ms ポーリングにフォールバックする。
+- 監視用 isolate を専用に起動し、`SetWinEventHook(EVENT_SYSTEM_CLIPBOARD)` で通知を受信。フック登録に失敗した場合のみ 500ms ポーリングにフォールバックする。
 - フォールバックは Win32 API で `AddClipboardFormatListener` が利用できない環境（hook 失敗、アクセス拒否など）で有効化し、hook 再試行は 30 秒間隔で実施。
 - データ種別は `RegisterClipboardFormat('PNG')` で確保した PNG を優先し、取得できなかった場合は `CF_DIB` を解析して RGBA → PNG へ変換したデータを ImageSaver に渡す（CF_UNICODETEXT のみ正規化して URL 判定）。
 - URL 検出時は `UrlDownloadService` を通じてバイト列と拡張子を取得し、ImageSaver へフォワードする。

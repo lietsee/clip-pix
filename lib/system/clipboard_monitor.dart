@@ -27,11 +27,9 @@ enum ClipboardMonitorMode { hook, polling }
 
 enum _ClipboardEventType { image, url }
 
-const int _eventObjectNameChange = 0x0000800c;
+const int _eventSystemClipboard = 0x0000800d;
 const int _wineventOutOfContext = 0x0000;
 const int _wineventSkipOwnProcess = 0x0002;
-const int _objidClipboard = 0xFFFFFFFC;
-const int _wmQuit = 0x0012;
 
 class _ClipboardEvent {
   _ClipboardEvent.image({
@@ -273,15 +271,11 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
     );
   }
 
-  Future<void> _handleHookEvent(int eventCode, int objectId) async {
+  Future<void> _handleHookEvent() async {
     if (!_isRunning) {
       return;
     }
     try {
-      if (eventCode != _eventObjectNameChange || objectId != _objidClipboard) {
-        return;
-      }
-      _logger.fine('WinEvent event=$eventCode objectId=$objectId received');
       final snapshot = _readClipboardSnapshot();
       if (snapshot == null) {
         return;
@@ -624,7 +618,7 @@ class _ClipboardSnapshot {
 class _Win32ClipboardHook {
   _Win32ClipboardHook(this._onEvent, this._logger);
 
-  final FutureOr<void> Function(int eventCode, int objectId) _onEvent;
+  final FutureOr<void> Function() _onEvent;
   final Logger _logger;
 
   Isolate? _isolate;
@@ -657,9 +651,7 @@ class _Win32ClipboardHook {
             }
             break;
           case 'event':
-            final code = message.length > 1 ? message[1] as int : 0;
-            final objectId = message.length > 2 ? message[2] as int : 0;
-            Future.microtask(() => _onEvent(code, objectId));
+            Future.microtask(() => _onEvent());
             break;
           case 'error':
             final code = message.length > 1 ? message[1] : null;
@@ -720,12 +712,10 @@ class _HookState {
   _HookState({
     required this.mainPort,
     required this.unhook,
-    required this.threadId,
   });
 
   final SendPort mainPort;
   final _UnhookWinEventDart unhook;
-  final int threadId;
   ffi.Pointer<ffi.Void> hookHandle = ffi.Pointer.fromAddress(0);
 
   static _HookState? instance;
@@ -783,14 +773,11 @@ void _clipboardHookIsolate(_HookInitMessage message) {
     'UnhookWinEvent',
   );
 
-  _HookState.instance = _HookState(
-      mainPort: mainPort,
-      unhook: unhookWinEvent,
-      threadId: GetCurrentThreadId());
+  _HookState.instance = _HookState(mainPort: mainPort, unhook: unhookWinEvent);
 
   final hookHandle = setWinEventHook(
-    _eventObjectNameChange,
-    _eventObjectNameChange,
+    _eventSystemClipboard,
+    _eventSystemClipboard,
     ffi.Pointer.fromAddress(0),
     _callbackPointer,
     0,
@@ -811,36 +798,18 @@ void _clipboardHookIsolate(_HookInitMessage message) {
 
   controlPort.listen((message) {
     if (message == 'stop') {
-      final state = _HookState.instance;
-      if (state != null) {
-        PostThreadMessage(state.threadId, _wmQuit, 0, 0);
+      try {
+        final handle = _HookState.instance?.hookHandle;
+        if (handle != null && handle.address != 0) {
+          _HookState.instance?.unhook(handle);
+        }
+      } finally {
+        mainPort.send(['stopped']);
+        controlPort.close();
+        _HookState.instance = null;
       }
     }
   });
-
-  final msg = calloc<MSG>();
-  var running = true;
-  while (running) {
-    final result = GetMessage(msg, NULL, 0, 0);
-    if (result == 0 || result == -1) {
-      running = false;
-    } else {
-      TranslateMessage(msg);
-      DispatchMessage(msg);
-    }
-  }
-  calloc.free(msg);
-
-  try {
-    final handle = _HookState.instance?.hookHandle;
-    if (handle != null && handle.address != 0) {
-      _HookState.instance?.unhook(handle);
-    }
-  } finally {
-    mainPort.send(['stopped']);
-    _HookState.instance = null;
-    controlPort.close();
-  }
 }
 
 void _winEventProc(
@@ -852,7 +821,7 @@ void _winEventProc(
   int dwEventThread,
   int dwmsEventTime,
 ) {
-  if (event == _eventObjectNameChange) {
-    _HookState.instance?.mainPort.send(['event', event, idObject]);
+  if (event == _eventSystemClipboard) {
+    _HookState.instance?.mainPort.send(['event']);
   }
 }
