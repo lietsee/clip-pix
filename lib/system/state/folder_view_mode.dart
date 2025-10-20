@@ -1,0 +1,1 @@
+enum FolderViewMode { root, subfolder }

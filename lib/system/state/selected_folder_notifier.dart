@@ -1,0 +1,114 @@
+import 'dart:io';
+
+import 'package:hive/hive.dart';
+import 'package:path/path.dart' as p;
+import 'package:logging/logging.dart';
+import 'package:state_notifier/state_notifier.dart';
+
+import '../../data/models/image_entry.dart';
+import 'folder_view_mode.dart';
+import 'selected_folder_state.dart';
+
+class SelectedFolderNotifier extends StateNotifier<SelectedFolderState> {
+  SelectedFolderNotifier(this._box)
+      : _logger = Logger('SelectedFolderNotifier'),
+        super(SelectedFolderState.initial()) {
+    restoreFromHive();
+  }
+
+  final Box<dynamic> _box;
+  final Logger _logger;
+
+  static const _storageKey = 'selected_folder';
+
+  Future<void> restoreFromHive() async {
+    final stored = _box.get(_storageKey);
+    if (stored is Map) {
+      try {
+        state = SelectedFolderState.fromJson(
+          stored.cast<String, dynamic>(),
+        );
+      } catch (error, stackTrace) {
+        _logger.warning('Failed to restore folder state', error, stackTrace);
+      }
+    }
+    _validateCurrentFolder();
+  }
+
+  Future<void> persist() async {
+    await _box.put(_storageKey, state.toJson());
+  }
+
+  Future<void> setFolder(Directory directory) async {
+    final sanitizedHistory = _buildHistory(directory);
+    state = state.copyWith(
+      current: directory,
+      history: sanitizedHistory,
+      viewMode: FolderViewMode.root,
+      currentTab: null,
+      rootScrollOffset: 0,
+      isValid: _isDirectoryWritable(directory),
+    );
+    await persist();
+  }
+
+  Future<void> clearFolder() async {
+    state = SelectedFolderState.initial();
+    await persist();
+  }
+
+  Future<void> switchToRoot() async {
+    state = state.copyWith(
+      viewMode: FolderViewMode.root,
+      currentTab: null,
+    );
+    await persist();
+  }
+
+  Future<void> switchToSubfolder(String name) async {
+    state = state.copyWith(
+      viewMode: FolderViewMode.subfolder,
+      currentTab: name,
+    );
+    await persist();
+  }
+
+  Future<void> updateRootScroll(double offset) async {
+    state = state.copyWith(rootScrollOffset: offset);
+    await persist();
+  }
+
+  void _validateCurrentFolder() {
+    final current = state.current;
+    if (current == null) {
+      state = state.copyWith(isValid: false);
+      return;
+    }
+    final isValid = _isDirectoryWritable(current);
+    state = state.copyWith(isValid: isValid);
+  }
+
+  List<Directory> _buildHistory(Directory newDirectory) {
+    final history = <Directory>[newDirectory];
+    history.addAll(
+      state.history.where((dir) => dir.path != newDirectory.path).take(2),
+    );
+    return history;
+  }
+
+  bool _isDirectoryWritable(Directory directory) {
+    try {
+      if (!directory.existsSync()) {
+        return false;
+      }
+      final testFile = File(p.join(directory.path, '.clip_pix_access_test'));
+      testFile.writeAsStringSync('ok');
+      testFile.deleteSync();
+      return true;
+    } catch (error, stackTrace) {
+      _logger.warning(
+          'Directory validation failed: ${directory.path}', error, stackTrace);
+      return false;
+    }
+  }
+}
