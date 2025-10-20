@@ -302,6 +302,7 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
       return null;
     }
     try {
+      _logAvailableFormats();
       final image = _readPngFromClipboardLocked();
       if (image != null) {
         return _ClipboardSnapshot(
@@ -320,6 +321,27 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
     } finally {
       CloseClipboard();
     }
+  }
+
+  void _logAvailableFormats() {
+    var format = EnumClipboardFormats(0);
+    if (format == 0) {
+      _logger.fine('Clipboard contains no additional formats');
+      return;
+    }
+    final formats = <String>[];
+    const known = {
+      CF_BITMAP: 'CF_BITMAP',
+      CF_DIB: 'CF_DIB',
+      CF_DIBV5: 'CF_DIBV5',
+      CF_UNICODETEXT: 'CF_UNICODETEXT',
+    };
+    while (format != 0) {
+      final name = known[format] ?? format.toString();
+      formats.add(name);
+      format = EnumClipboardFormats(format);
+    }
+    _logger.fine('Clipboard formats enumerated: ${formats.join(', ')}');
   }
 
   Uint8List? _readPngFromClipboardLocked() {
