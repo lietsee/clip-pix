@@ -144,11 +144,12 @@ class _GridViewModuleState extends State<GridViewModule> {
                 _prefetchAhead(context, index + 1);
               }
 
+              final keySuffix = entry.isRemoving ? 'removing' : 'active';
               return AnimatedOpacity(
                 duration: _animationDuration,
                 opacity: entry.opacity,
                 child: ImageCard(
-                  key: ValueKey(item.id),
+                  key: ValueKey('${item.id}_$keySuffix'),
                   item: item,
                   sizeNotifier: sizeNotifier,
                   scaleNotifier: scaleNotifier,
