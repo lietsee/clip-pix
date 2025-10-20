@@ -3,10 +3,12 @@ import 'dart:collection';
 import 'dart:ffi' as ffi;
 import 'dart:isolate';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/services.dart';
+import 'package:image/image.dart' as img;
 import 'package:logging/logging.dart';
 import 'package:win32/win32.dart';
 
@@ -305,6 +307,11 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
         return _ClipboardSnapshot(
             imageData: image, sourceType: ImageSourceType.local);
       }
+      final dibImage = _readDibFromClipboardLocked();
+      if (dibImage != null) {
+        return _ClipboardSnapshot(
+            imageData: dibImage, sourceType: ImageSourceType.local);
+      }
       final text = _readUnicodeTextFromClipboardLocked();
       if (text != null && text.isNotEmpty) {
         return _ClipboardSnapshot(text: text);
@@ -341,6 +348,29 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
     return bytes;
   }
 
+  Uint8List? _readDibFromClipboardLocked() {
+    final handleValue = GetClipboardData(CF_DIB);
+    if (handleValue == 0) {
+      return null;
+    }
+    final handle = ffi.Pointer<ffi.Void>.fromAddress(handleValue);
+    final rawPointer = GlobalLock(handle);
+    if (rawPointer.address == 0) {
+      return null;
+    }
+    try {
+      final size = GlobalSize(handle);
+      if (size <= 0) {
+        return null;
+      }
+      final data = rawPointer.cast<ffi.Uint8>().asTypedList(size);
+      final bytes = Uint8List.fromList(data);
+      return _convertDibToPng(bytes);
+    } finally {
+      GlobalUnlock(handle);
+    }
+  }
+
   String? _readUnicodeTextFromClipboardLocked() {
     final handleValue = GetClipboardData(CF_UNICODETEXT);
     if (handleValue == 0) {
@@ -355,6 +385,86 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
     final text = pointer.toDartString();
     GlobalUnlock(handle);
     return text;
+  }
+
+  Uint8List? _convertDibToPng(Uint8List dibBytes) {
+    const int biRgb = 0;
+    const int biBitfields = 3;
+
+    if (dibBytes.length < 40) {
+      return null;
+    }
+    final byteData = ByteData.view(dibBytes.buffer);
+    final headerSize = byteData.getUint32(0, Endian.little);
+    if (headerSize < 40 || headerSize > dibBytes.length) {
+      return null;
+    }
+
+    final width = byteData.getInt32(4, Endian.little);
+    final heightRaw = byteData.getInt32(8, Endian.little);
+    final planes = byteData.getUint16(12, Endian.little);
+    final bitCount = byteData.getUint16(14, Endian.little);
+    final compression = byteData.getUint32(16, Endian.little);
+    var imageSize = byteData.getUint32(20, Endian.little);
+
+    if (planes != 1) {
+      return null;
+    }
+    if (bitCount != 24 && bitCount != 32) {
+      return null;
+    }
+    if (compression != biRgb && compression != biBitfields) {
+      return null;
+    }
+
+    final widthAbs = width.abs();
+    final heightAbs = heightRaw.abs();
+    if (widthAbs == 0 || heightAbs == 0) {
+      return null;
+    }
+
+    final bytesPerPixel = bitCount ~/ 8;
+    final stride = ((widthAbs * bytesPerPixel + 3) ~/ 4) * 4;
+    final pixelOffset = headerSize;
+    if (imageSize == 0) {
+      imageSize = stride * heightAbs;
+    }
+    if (pixelOffset + imageSize > dibBytes.length) {
+      return null;
+    }
+
+    final pixels = dibBytes.sublist(pixelOffset, pixelOffset + imageSize);
+    final output = Uint8List(widthAbs * heightAbs * 4);
+    final bottomUp = heightRaw > 0;
+
+    for (var y = 0; y < heightAbs; y++) {
+      final srcY = bottomUp ? heightAbs - 1 - y : y;
+      final srcRowStart = srcY * stride;
+      final dstRowStart = y * widthAbs * 4;
+      for (var x = 0; x < widthAbs; x++) {
+        final srcIndex = srcRowStart + x * bytesPerPixel;
+        if (srcIndex + bytesPerPixel > pixels.length) {
+          return null;
+        }
+        final blue = pixels[srcIndex];
+        final green = pixels[srcIndex + 1];
+        final red = pixels[srcIndex + 2];
+        final alpha = bytesPerPixel == 4 ? pixels[srcIndex + 3] : 0xFF;
+        final dstIndex = dstRowStart + x * 4;
+        output[dstIndex] = red;
+        output[dstIndex + 1] = green;
+        output[dstIndex + 2] = blue;
+        output[dstIndex + 3] = alpha;
+      }
+    }
+
+    final image = img.Image.fromBytes(
+      width: widthAbs,
+      height: heightAbs,
+      bytes: output.buffer,
+      numChannels: 4,
+    );
+    return Uint8List.fromList(img.encodePng(image));
   }
 
   int _ensurePngFormat() {
