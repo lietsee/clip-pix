@@ -100,7 +100,10 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
   String? _lastPolledTextSignature;
   Timer? _sequenceWatcher;
   int? _lastSequenceNumber;
+  int? _baselineSequenceNumber;
+  bool _hasSequenceAdvanced = false;
   bool _sequenceCheckInProgress = false;
+  final Set<String> _sessionHashes = <String>{};
   _Win32ClipboardHook? _hook;
   int? _pngClipboardFormat;
 
@@ -116,6 +119,8 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
       return;
     }
     _isRunning = true;
+    _baselineSequenceNumber = GetClipboardSequenceNumber();
+    _hasSequenceAdvanced = false;
     _startSequenceWatcher();
     await _initializeHook();
   }
@@ -132,6 +137,9 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
     _eventQueue.clear();
     _lastPolledTextSignature = null;
     _lastSequenceNumber = null;
+    _baselineSequenceNumber = null;
+    _hasSequenceAdvanced = false;
+    _sessionHashes.clear();
   }
 
   Future<void> onFolderChanged(Directory? directory) async {
@@ -194,7 +202,12 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
       return;
     }
 
+    if (_sessionHashes.contains(hash)) {
+      _logger.fine('Clipboard image ignored due to session duplicate hash');
+      return;
+    }
     _recentHashes[hash] = DateTime.now();
+    _sessionHashes.add(hash);
     _enqueueEvent(
       _ClipboardEvent.image(
         timestamp: DateTime.now(),
@@ -290,6 +303,18 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
     }
     _sequenceCheckInProgress = true;
     try {
+      final currentSequence = GetClipboardSequenceNumber();
+      if (!_hasSequenceAdvanced && _baselineSequenceNumber != null) {
+        if (currentSequence == _baselineSequenceNumber) {
+          _logger.fine('Skipping initial clipboard snapshot at startup');
+          return;
+        }
+        _hasSequenceAdvanced = true;
+      }
+      if (currentSequence != 0) {
+        _lastSequenceNumber = currentSequence;
+        _hasSequenceAdvanced = true;
+      }
       final snapshot = _readClipboardSnapshot();
       if (snapshot == null) {
         return;
@@ -743,6 +768,7 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
       return;
     }
     _lastSequenceNumber = sequence;
+    _hasSequenceAdvanced = true;
     _logger.fine('Clipboard sequence changed: $sequence');
     await _processClipboardSnapshot();
   }
