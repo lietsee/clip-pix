@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 
 import '../data/models/image_entry.dart';
@@ -11,6 +12,7 @@ import '../system/state/image_history_state.dart';
 import '../system/state/image_library_notifier.dart';
 import '../system/state/image_library_state.dart';
 import '../system/state/selected_folder_notifier.dart';
+import '../system/state/folder_view_mode.dart';
 import '../system/state/selected_folder_state.dart';
 import '../system/state/watcher_status_notifier.dart';
 import '../system/state/watcher_status_state.dart';
@@ -24,7 +26,23 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
+  late final ScrollController _rootScrollController;
+  late final ScrollController _subfolderScrollController;
   String? _lastLoadedPath;
+
+  @override
+  void initState() {
+    super.initState();
+    _rootScrollController = ScrollController();
+    _subfolderScrollController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _rootScrollController.dispose();
+    _subfolderScrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +55,7 @@ class _MainScreenState extends State<MainScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('ClipPix'),
+        title: _Breadcrumb(selectedState: selectedState),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -53,15 +71,7 @@ class _MainScreenState extends State<MainScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _requestFolderSelection(context),
-        icon: const Icon(Icons.folder),
-        label: const Text('フォルダを選択'),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: _buildBody(context, selectedState, libraryState, historyState),
-      ),
+      body: _buildBody(context, selectedState, historyState, libraryState),
       bottomNavigationBar: watcherStatus.lastError != null
           ? _ErrorBanner(message: watcherStatus.lastError!)
           : null,
@@ -71,8 +81,8 @@ class _MainScreenState extends State<MainScreen> {
   Widget _buildBody(
     BuildContext context,
     SelectedFolderState folderState,
-    ImageLibraryState libraryState,
     ImageHistoryState historyState,
+    ImageLibraryState libraryState,
   ) {
     final directory = folderState.current;
     if (directory == null || !folderState.isValid) {
@@ -80,23 +90,86 @@ class _MainScreenState extends State<MainScreen> {
           onSelectFolder: () => _requestFolderSelection(context));
     }
 
+    final tabs = _buildTabs(context, folderState);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          '選択フォルダ: ${directory.path}',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const SizedBox(height: 12),
-        if (historyState.entries.isNotEmpty) ...[
+        _TabBar(tabs: tabs, controller: _subfolderScrollController),
+        if (historyState.entries.isNotEmpty)
           _HistoryStrip(entries: historyState.entries.toList()),
-          const SizedBox(height: 12),
-        ],
         Expanded(
-          child: GridViewModule(state: libraryState),
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              if (notification.metrics.axis == Axis.vertical &&
+                  folderState.viewMode == FolderViewMode.root) {
+                context
+                    .read<SelectedFolderNotifier>()
+                    .updateRootScroll(notification.metrics.pixels);
+              }
+              return false;
+            },
+            child: GridViewModule(
+              state: libraryState,
+              controller: folderState.viewMode == FolderViewMode.root
+                  ? _rootScrollController
+                  : null,
+            ),
+          ),
         ),
       ],
     );
+  }
+
+  List<_FolderTab> _buildTabs(
+    BuildContext context,
+    SelectedFolderState state,
+  ) {
+    final directory = state.current;
+    if (directory == null) {
+      return const <_FolderTab>[];
+    }
+
+    final tabs = <_FolderTab>[
+      _FolderTab(
+        label: 'ルート',
+        isActive: state.viewMode == FolderViewMode.root,
+        onTap: () => context.read<SelectedFolderNotifier>().switchToRoot(),
+      ),
+    ];
+
+    final subdirs = directory
+        .listSync(followLinks: false)
+        .whereType<Directory>()
+        .toList()
+      ..sort((a, b) => a.path.compareTo(b.path));
+
+    for (final dir in subdirs) {
+      final name = dir.uri.pathSegments.isNotEmpty
+          ? dir.uri.pathSegments.lastWhere((_) => true)
+          : dir.path;
+      tabs.add(
+        _FolderTab(
+          label: name,
+          isActive: state.viewMode == FolderViewMode.subfolder &&
+              state.currentTab == name,
+          onTap: () async {
+            context.read<SelectedFolderNotifier>().switchToSubfolder(name);
+            await context.read<ImageLibraryNotifier>().loadForDirectory(dir);
+          },
+        ),
+      );
+    }
+
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (state.viewMode == FolderViewMode.root) {
+        final offset = state.rootScrollOffset;
+        if (_rootScrollController.hasClients) {
+          _rootScrollController.jumpTo(offset);
+        }
+      }
+    });
+
+    return tabs;
   }
 
   Future<void> _requestFolderSelection(BuildContext context) async {
@@ -158,10 +231,93 @@ class _MainScreenState extends State<MainScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final imageLibrary = context.read<ImageLibraryNotifier>();
+      context.read<SelectedFolderNotifier>().switchToRoot();
       await imageLibrary.loadForDirectory(directory);
       await context.read<FileWatcherService>().start(directory);
       await context.read<ClipboardMonitor>().onFolderChanged(directory);
     });
+  }
+}
+
+class _Breadcrumb extends StatelessWidget {
+  const _Breadcrumb({required this.selectedState});
+
+  final SelectedFolderState selectedState;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = selectedState.current;
+    if (current == null) {
+      return const Text('ClipPix');
+    }
+    final segments = current.path.split(Platform.pathSeparator);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < segments.length; i++)
+          if (segments[i].isNotEmpty) ...[
+            InkWell(
+              onTap: () => _openInExplorer(current.path),
+              child: Text(segments[i]),
+            ),
+            if (i < segments.length - 1)
+              const Icon(Icons.chevron_right, size: 16),
+          ],
+      ],
+    );
+  }
+
+  void _openInExplorer(String path) {
+    if (!Platform.isWindows) {
+      return;
+    }
+    Process.run('explorer.exe', ['/select,', path]);
+  }
+}
+
+class _TabBar extends StatelessWidget {
+  const _TabBar({required this.tabs, required this.controller});
+
+  final List<_FolderTab> tabs;
+  final ScrollController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 48,
+      child: ListView.builder(
+        controller: controller,
+        scrollDirection: Axis.horizontal,
+        itemCount: tabs.length,
+        itemBuilder: (context, index) => tabs[index],
+      ),
+    );
+  }
+}
+
+class _FolderTab extends StatelessWidget {
+  const _FolderTab({
+    required this.label,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: isActive,
+        onSelected: (_) => onTap(),
+        selectedColor: theme.colorScheme.primaryContainer,
+      ),
+    );
   }
 }
 
@@ -226,6 +382,7 @@ class _HistoryStrip extends StatelessWidget {
       height: 80,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
         itemCount: entries.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, index) {

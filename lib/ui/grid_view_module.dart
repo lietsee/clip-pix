@@ -11,9 +11,10 @@ import '../system/state/image_library_state.dart';
 import 'image_card.dart';
 
 class GridViewModule extends StatelessWidget {
-  const GridViewModule({super.key, required this.state});
+  const GridViewModule({super.key, required this.state, this.controller});
 
   final ImageLibraryState state;
+  final ScrollController? controller;
 
   @override
   Widget build(BuildContext context) {
@@ -34,9 +35,10 @@ class GridViewModule extends StatelessWidget {
         builder: (context, constraints) {
           final crossAxisCount = _calculateCrossAxisCount(constraints.maxWidth);
           return MasonryGridView.count(
+            controller: controller,
             crossAxisCount: crossAxisCount,
-            mainAxisSpacing: 16,
-            crossAxisSpacing: 16,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
             padding: const EdgeInsets.only(bottom: 80),
             itemCount: state.images.length,
             itemBuilder: (context, index) {
