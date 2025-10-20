@@ -144,12 +144,13 @@ class _GridViewModuleState extends State<GridViewModule> {
                 _prefetchAhead(context, index + 1);
               }
 
-              final keySuffix = entry.isRemoving ? 'removing' : 'active';
+              final key = ValueKey('${item.id}_${entry.version}');
               return AnimatedOpacity(
+                key: key,
                 duration: _animationDuration,
                 opacity: entry.opacity,
                 child: ImageCard(
-                  key: ValueKey('${item.id}_$keySuffix'),
+                  key: key,
                   item: item,
                   sizeNotifier: sizeNotifier,
                   scaleNotifier: scaleNotifier,
@@ -282,6 +283,7 @@ class _GridViewModuleState extends State<GridViewModule> {
         if (existing.opacity != 1) {
           existing.opacity = 1;
         }
+        existing.version += 1;
         reordered.add(existing);
       } else {
         final entry = _createEntry(item);
@@ -340,10 +342,11 @@ class _GridViewModuleState extends State<GridViewModule> {
 }
 
 class _GridEntry {
-  _GridEntry({required this.item, required this.opacity});
+  _GridEntry({required this.item, required this.opacity, this.version = 0});
 
   ImageItem item;
   double opacity;
   bool isRemoving = false;
   Timer? removalTimer;
+  int version;
 }
