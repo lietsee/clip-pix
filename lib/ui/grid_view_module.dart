@@ -39,6 +39,7 @@ class _GridViewModuleState extends State<GridViewModule> {
 
   List<_GridEntry> _entries = <_GridEntry>[];
   bool _loggedInitialBuild = false;
+  final Set<Object> _currentBuildKeys = <Object>{};
 
   @override
   void didChangeDependencies() {
@@ -126,6 +127,7 @@ class _GridViewModuleState extends State<GridViewModule> {
         builder: (context, constraints) {
           final crossAxisCount = _calculateCrossAxisCount(constraints.maxWidth);
           final controller = _resolveController(selectedState);
+          _currentBuildKeys.clear();
           return MasonryGridView.builder(
             controller: controller,
             gridDelegate: SliverSimpleGridDelegateWithFixedCrossAxisCount(
@@ -150,16 +152,21 @@ class _GridViewModuleState extends State<GridViewModule> {
                 _prefetchAhead(context, index + 1);
               }
 
-              final key = ValueKey('${item.id}_${entry.version}');
+              final animatedKey = ObjectKey(entry);
+              final entryHash = identityHashCode(entry);
               debugPrint(
-                '[GridViewModule] build_child index=$index key=${key.value} removing=${entry.isRemoving} opacity=${entry.opacity.toStringAsFixed(2)}',
+                '[GridViewModule] build_child index=$index key=$animatedKey entryHash=$entryHash removing=${entry.isRemoving} opacity=${entry.opacity.toStringAsFixed(2)}',
               );
+              if (!_currentBuildKeys.add(animatedKey)) {
+                debugPrint(
+                  '[GridViewModule] duplicate_detected index=$index key=$animatedKey entryHash=$entryHash',
+                );
+              }
               return AnimatedOpacity(
-                key: key,
+                key: animatedKey,
                 duration: _animationDuration,
                 opacity: entry.opacity,
                 child: ImageCard(
-                  key: key,
                   item: item,
                   sizeNotifier: sizeNotifier,
                   scaleNotifier: scaleNotifier,
