@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as dev;
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -38,6 +39,7 @@ class _GridViewModuleState extends State<GridViewModule> {
   final Map<String, ScrollController> _directoryControllers = {};
 
   List<_GridEntry> _entries = <_GridEntry>[];
+  bool _loggedInitialBuild = false;
 
   @override
   void didChangeDependencies() {
@@ -113,6 +115,11 @@ class _GridViewModuleState extends State<GridViewModule> {
 
     final libraryNotifier = context.read<ImageLibraryNotifier>();
     final selectedState = context.watch<SelectedFolderState>();
+
+    if (!_loggedInitialBuild) {
+      _loggedInitialBuild = true;
+      _logEntries('build_init', _entries);
+    }
 
     return RefreshIndicator(
       onRefresh: () => libraryNotifier.refresh(),
@@ -253,6 +260,16 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   void _reconcileEntries(List<ImageItem> newItems) {
+    _logEntries('reconcile_before', _entries);
+    final duplicateIncoming = _findDuplicateIds(
+      newItems.map((item) => item.id),
+    );
+    if (duplicateIncoming.isNotEmpty) {
+      dev.log(
+        'Incoming duplicates detected: $duplicateIncoming',
+        name: 'GridViewModule',
+      );
+    }
     final newIds = newItems.map((item) => item.id).toSet();
     final existingMap = {for (final entry in _entries) entry.item.id: entry};
 
@@ -267,6 +284,7 @@ class _GridViewModuleState extends State<GridViewModule> {
             _entries.remove(entry);
             _disposeEntry(entry);
           });
+          _logEntries('reconcile_remove', _entries);
         });
       }
     }
@@ -302,8 +320,13 @@ class _GridViewModuleState extends State<GridViewModule> {
       }
     }
 
+    _logEntries('reconcile_after_pending', reordered);
     setState(() {
       _entries = reordered;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _logEntries('reconcile_after_post', _entries);
     });
   }
 
@@ -338,6 +361,33 @@ class _GridViewModuleState extends State<GridViewModule> {
         ),
       ),
     );
+  }
+
+  void _logEntries(String label, List<_GridEntry> entries) {
+    final counts = <String, int>{};
+    for (final entry in entries) {
+      final key = '${entry.item.id}_${entry.version}';
+      counts.update(key, (value) => value + 1, ifAbsent: () => 1);
+    }
+    final duplicates = counts.entries
+        .where((element) => element.value > 1)
+        .map((e) => e.key)
+        .toList();
+    dev.log(
+      '$label: total=${entries.length} removing=${entries.where((e) => e.isRemoving).length} duplicates=$duplicates entries=${entries.map((e) => '${e.item.id}|v${e.version}|rem=${e.isRemoving}|opacity=${e.opacity.toStringAsFixed(2)}').join(', ')}',
+      name: 'GridViewModule',
+    );
+  }
+
+  List<String> _findDuplicateIds(Iterable<String> ids) {
+    final seen = <String>{};
+    final duplicates = <String>[];
+    for (final id in ids) {
+      if (!seen.add(id)) {
+        duplicates.add(id);
+      }
+    }
+    return duplicates;
   }
 }
 
