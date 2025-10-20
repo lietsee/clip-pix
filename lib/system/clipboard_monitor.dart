@@ -1,9 +1,14 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:ffi' as ffi;
+import 'dart:isolate';
 import 'dart:io';
+
 import 'package:crypto/crypto.dart';
+import 'package:ffi/ffi.dart';
 import 'package:flutter/services.dart';
 import 'package:logging/logging.dart';
+import 'package:win32/win32.dart';
 
 import '../data/models/image_source_type.dart';
 import 'image_saver.dart';
@@ -19,6 +24,10 @@ typedef UrlCapturedCallback = Future<void> Function(String url);
 enum ClipboardMonitorMode { hook, polling }
 
 enum _ClipboardEventType { image, url }
+
+const int _eventSystemClipboard = 0x0000800d;
+const int _wineventOutOfContext = 0x0000;
+const int _wineventSkipOwnProcess = 0x0002;
 
 class _ClipboardEvent {
   _ClipboardEvent.image({
@@ -87,6 +96,8 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
 
   Timer? _pollingTimer;
   String? _lastPolledTextSignature;
+  _Win32ClipboardHook? _hook;
+  int? _pngClipboardFormat;
 
   ClipboardMonitorMode get mode => _mode;
 
@@ -108,7 +119,7 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
       return;
     }
     _isRunning = false;
-    _disposeHook();
+    await _disposeHook();
     _pollingTimer?.cancel();
     _pollingTimer = null;
     _eventQueue.clear();
@@ -221,12 +232,32 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
   }
 
   Future<void> _initializeHook() async {
-    _logger.info('Clipboard hook not yet implemented; using polling fallback');
-    _activatePollingFallback();
+    if (!Platform.isWindows) {
+      _logger.info(
+          'Clipboard hook unsupported on ${Platform.operatingSystem}; using polling');
+      _activatePollingFallback();
+      return;
+    }
+
+    _hook ??= _Win32ClipboardHook(_handleHookEvent, _logger);
+    final success = await _hook!.start();
+    if (success) {
+      _pollingTimer?.cancel();
+      _pollingTimer = null;
+      _mode = ClipboardMonitorMode.hook;
+      _logger.info('Clipboard hook initialized');
+    } else {
+      _logger.warning(
+          'Clipboard hook initialization failed, falling back to polling');
+      await _hook?.stop();
+      _hook = null;
+      _activatePollingFallback();
+    }
   }
 
-  void _disposeHook() {
-    // Hook resources will be released once implemented.
+  Future<void> _disposeHook() async {
+    await _hook?.stop();
+    _hook = null;
   }
 
   void _activatePollingFallback() {
@@ -236,6 +267,114 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
       const Duration(milliseconds: 500),
       (_) => _pollClipboard(),
     );
+  }
+
+  Future<void> _handleHookEvent() async {
+    if (!_isRunning) {
+      return;
+    }
+    try {
+      final snapshot = _readClipboardSnapshot();
+      if (snapshot == null) {
+        return;
+      }
+      if (snapshot.imageData != null) {
+        await handleClipboardImage(snapshot.imageData!,
+            sourceType: snapshot.sourceType);
+        return;
+      }
+      if (snapshot.text != null) {
+        await handleClipboardUrl(snapshot.text!);
+      }
+    } catch (error, stackTrace) {
+      _logger.warning(
+          'Failed to process clipboard hook event', error, stackTrace);
+    }
+  }
+
+  _ClipboardSnapshot? _readClipboardSnapshot() {
+    final open = OpenClipboard(NULL);
+    if (open == 0) {
+      final code = GetLastError();
+      _logger.fine('OpenClipboard failed with code $code');
+      return null;
+    }
+    try {
+      final image = _readPngFromClipboardLocked();
+      if (image != null) {
+        return _ClipboardSnapshot(
+            imageData: image, sourceType: ImageSourceType.local);
+      }
+      final text = _readUnicodeTextFromClipboardLocked();
+      if (text != null && text.isNotEmpty) {
+        return _ClipboardSnapshot(text: text);
+      }
+      return null;
+    } finally {
+      CloseClipboard();
+    }
+  }
+
+  Uint8List? _readPngFromClipboardLocked() {
+    final format = _ensurePngFormat();
+    if (format == 0) {
+      return null;
+    }
+    final handleValue = GetClipboardData(format);
+    if (handleValue == 0) {
+      return null;
+    }
+    final handle = ffi.Pointer<ffi.Void>.fromAddress(handleValue);
+    final rawPointer = GlobalLock(handle);
+    if (rawPointer.address == 0) {
+      return null;
+    }
+    final size = GlobalSize(handle);
+    if (size <= 0) {
+      GlobalUnlock(handle);
+      return null;
+    }
+    final pointer = rawPointer.cast<ffi.Uint8>();
+    final data = pointer.asTypedList(size);
+    final bytes = Uint8List.fromList(data);
+    GlobalUnlock(handle);
+    return bytes;
+  }
+
+  String? _readUnicodeTextFromClipboardLocked() {
+    final handleValue = GetClipboardData(CF_UNICODETEXT);
+    if (handleValue == 0) {
+      return null;
+    }
+    final handle = ffi.Pointer<ffi.Void>.fromAddress(handleValue);
+    final rawPointer = GlobalLock(handle);
+    if (rawPointer.address == 0) {
+      return null;
+    }
+    final pointer = rawPointer.cast<Utf16>();
+    final text = pointer.toDartString();
+    GlobalUnlock(handle);
+    return text;
+  }
+
+  int _ensurePngFormat() {
+    final cached = _pngClipboardFormat;
+    if (cached != null) {
+      return cached;
+    }
+    final name = 'PNG'.toNativeUtf16();
+    try {
+      final format = RegisterClipboardFormat(name);
+      if (format == 0) {
+        final code = GetLastError();
+        _logger.fine('RegisterClipboardFormat failed with code $code');
+      } else {
+        _pngClipboardFormat = format;
+      }
+      return format;
+    } finally {
+      calloc.free(name);
+    }
   }
 
   void _enqueueEvent(_ClipboardEvent event) {
@@ -332,5 +471,225 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
       return null;
     }
     return uri.toString();
+  }
+}
+
+class _ClipboardSnapshot {
+  const _ClipboardSnapshot(
+      {this.imageData, this.text, this.sourceType = ImageSourceType.local});
+
+  final Uint8List? imageData;
+  final String? text;
+  final ImageSourceType sourceType;
+}
+
+class _Win32ClipboardHook {
+  _Win32ClipboardHook(this._onEvent, this._logger);
+
+  final FutureOr<void> Function() _onEvent;
+  final Logger _logger;
+
+  Isolate? _isolate;
+  SendPort? _controlPort;
+  StreamSubscription<dynamic>? _subscription;
+  Completer<void>? _stoppedCompleter;
+
+  Future<bool> start() async {
+    if (_isolate != null) {
+      return true;
+    }
+
+    final readyCompleter = Completer<bool>();
+    final stoppedCompleter = Completer<void>();
+    _stoppedCompleter = stoppedCompleter;
+
+    final eventPort = ReceivePort();
+    _subscription = eventPort.listen((message) {
+      if (message is SendPort) {
+        _controlPort = message;
+        return;
+      }
+      if (message is List && message.isNotEmpty) {
+        final type = message[0];
+        switch (type) {
+          case 'ready':
+            if (!readyCompleter.isCompleted) {
+              readyCompleter
+                  .complete((message.length > 1 ? message[1] : false) as bool);
+            }
+            break;
+          case 'event':
+            Future.microtask(() => _onEvent());
+            break;
+          case 'error':
+            final code = message.length > 1 ? message[1] : null;
+            _logger.warning('Clipboard hook error code=$code');
+            break;
+          case 'stopped':
+            if (!stoppedCompleter.isCompleted) {
+              stoppedCompleter.complete();
+            }
+            break;
+        }
+      }
+    });
+
+    _isolate = await Isolate.spawn<_HookInitMessage>(
+      _clipboardHookIsolate,
+      _HookInitMessage(eventPort.sendPort),
+      debugName: 'clipboard_hook',
+    );
+
+    final success = await readyCompleter.future;
+    if (!success) {
+      await stop();
+    }
+    return success;
+  }
+
+  Future<void> stop() async {
+    final control = _controlPort;
+    _controlPort = null;
+    final stopped = _stoppedCompleter;
+
+    if (control != null) {
+      control.send('stop');
+      if (stopped != null && !stopped.isCompleted) {
+        try {
+          await stopped.future.timeout(const Duration(seconds: 1));
+        } catch (_) {}
+      }
+    }
+
+    await _subscription?.cancel();
+    _subscription = null;
+    _stoppedCompleter = null;
+
+    _isolate?.kill(priority: Isolate.immediate);
+    _isolate = null;
+  }
+}
+
+class _HookInitMessage {
+  const _HookInitMessage(this.mainPort);
+
+  final SendPort mainPort;
+}
+
+class _HookState {
+  _HookState({
+    required this.mainPort,
+    required this.unhook,
+  });
+
+  final SendPort mainPort;
+  final _UnhookWinEventDart unhook;
+  ffi.Pointer<ffi.Void> hookHandle = ffi.Pointer.fromAddress(0);
+
+  static _HookState? instance;
+}
+
+typedef _SetWinEventHookNative = ffi.Pointer<ffi.Void> Function(
+  ffi.Uint32 eventMin,
+  ffi.Uint32 eventMax,
+  ffi.Pointer<ffi.Void> hmodWinEventProc,
+  ffi.Pointer<ffi.NativeFunction<_WinEventProcNative>> lpfnWinEventProc,
+  ffi.Uint32 idProcess,
+  ffi.Uint32 idThread,
+  ffi.Uint32 dwFlags,
+);
+
+typedef _SetWinEventHookDart = ffi.Pointer<ffi.Void> Function(
+  int eventMin,
+  int eventMax,
+  ffi.Pointer<ffi.Void> hmodWinEventProc,
+  ffi.Pointer<ffi.NativeFunction<_WinEventProcNative>> lpfnWinEventProc,
+  int idProcess,
+  int idThread,
+  int dwFlags,
+);
+
+typedef _UnhookWinEventNative = ffi.Int32 Function(
+    ffi.Pointer<ffi.Void> hWinEventHook);
+typedef _UnhookWinEventDart = int Function(ffi.Pointer<ffi.Void> hWinEventHook);
+
+typedef _WinEventProcNative = ffi.Void Function(
+  ffi.Pointer<ffi.Void> hWinEventHook,
+  ffi.Uint32 event,
+  ffi.Pointer<ffi.Void> hwnd,
+  ffi.Int32 idObject,
+  ffi.Int32 idChild,
+  ffi.Uint32 dwEventThread,
+  ffi.Uint32 dwmsEventTime,
+);
+
+final ffi.Pointer<ffi.NativeFunction<_WinEventProcNative>> _callbackPointer =
+    ffi.Pointer.fromFunction<_WinEventProcNative>(_winEventProc);
+
+void _clipboardHookIsolate(_HookInitMessage message) {
+  final mainPort = message.mainPort;
+  final controlPort = ReceivePort();
+  mainPort.send(controlPort.sendPort);
+
+  final user32 = ffi.DynamicLibrary.open('user32.dll');
+  final setWinEventHook =
+      user32.lookupFunction<_SetWinEventHookNative, _SetWinEventHookDart>(
+    'SetWinEventHook',
+  );
+  final unhookWinEvent =
+      user32.lookupFunction<_UnhookWinEventNative, _UnhookWinEventDart>(
+    'UnhookWinEvent',
+  );
+
+  _HookState.instance = _HookState(mainPort: mainPort, unhook: unhookWinEvent);
+
+  final hookHandle = setWinEventHook(
+    _eventSystemClipboard,
+    _eventSystemClipboard,
+    ffi.Pointer.fromAddress(0),
+    _callbackPointer,
+    0,
+    0,
+    _wineventOutOfContext | _wineventSkipOwnProcess,
+  );
+
+  if (hookHandle.address == 0) {
+    final error = GetLastError();
+    mainPort.send(['ready', false, error]);
+    controlPort.close();
+    _HookState.instance = null;
+    return;
+  }
+
+  _HookState.instance!.hookHandle = hookHandle;
+  mainPort.send(['ready', true]);
+
+  controlPort.listen((message) {
+    if (message == 'stop') {
+      try {
+        final handle = _HookState.instance?.hookHandle;
+        if (handle != null && handle.address != 0) {
+          _HookState.instance?.unhook(handle);
+        }
+      } finally {
+        mainPort.send(['stopped']);
+        controlPort.close();
+        _HookState.instance = null;
+      }
+    }
+  });
+}
+
+void _winEventProc(
+  ffi.Pointer<ffi.Void> hWinEventHook,
+  int event,
+  ffi.Pointer<ffi.Void> hwnd,
+  int idObject,
+  int idChild,
+  int dwEventThread,
+  int dwmsEventTime,
+) {
+  if (event == _eventSystemClipboard) {
+    _HookState.instance?.mainPort.send(['event']);
   }
 }

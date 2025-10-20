@@ -5,17 +5,24 @@ import 'package:logging/logging.dart';
 
 import 'package:clip_pix/data/image_repository.dart';
 import 'package:clip_pix/system/state/image_library_notifier.dart';
+import 'package:clip_pix/system/state/image_library_state.dart';
+
+class _TestImageLibraryNotifier extends ImageLibraryNotifier {
+  _TestImageLibraryNotifier(ImageRepository repository) : super(repository);
+
+  ImageLibraryState get exposedState => state;
+}
 
 void main() {
   late Directory tempDir;
   late ImageRepository repository;
-  late ImageLibraryNotifier notifier;
+  late _TestImageLibraryNotifier notifier;
 
   setUp(() async {
     Logger.root.level = Level.OFF;
     tempDir = await Directory.systemTemp.createTemp('clip_pix_test');
     repository = ImageRepository();
-    notifier = ImageLibraryNotifier(repository);
+    notifier = _TestImageLibraryNotifier(repository);
   });
 
   tearDown(() async {
@@ -33,20 +40,21 @@ void main() {
 
       await notifier.loadForDirectory(tempDir);
 
-      expect(notifier.state.images.length, 2);
-      expect(notifier.state.isLoading, false);
+      expect(notifier.exposedState.images.length, 2);
+      expect(notifier.exposedState.isLoading, false);
       expect(
-          notifier.state.images.first.filePath.endsWith('image_2.png'), isTrue);
+          notifier.exposedState.images.first.filePath.endsWith('image_2.png'),
+          isTrue);
     });
 
     test('addOrUpdate inserts new file at head', () async {
-      final file = await _createImageWithMetadata(tempDir, 'image_a.jpg');
+      await _createImageWithMetadata(tempDir, 'image_a.jpg');
       await notifier.loadForDirectory(tempDir);
 
       final newFile = await _createImageWithMetadata(tempDir, 'image_b.jpg');
       await notifier.addOrUpdate(newFile);
 
-      expect(notifier.state.images.first.filePath, equals(newFile.path));
+      expect(notifier.exposedState.images.first.filePath, equals(newFile.path));
     });
 
     test('remove drops item by path', () async {
@@ -56,7 +64,8 @@ void main() {
       notifier.remove(file.path);
 
       expect(
-        notifier.state.images.where((item) => item.filePath == file.path),
+        notifier.exposedState.images
+            .where((item) => item.filePath == file.path),
         isEmpty,
       );
     });
