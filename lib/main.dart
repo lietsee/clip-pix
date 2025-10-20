@@ -1,7 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:hive/hive.dart';
+import 'package:flutter_state_notifier/flutter_state_notifier.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:logging/logging.dart';
 import 'package:provider/provider.dart';
@@ -9,15 +10,20 @@ import 'package:provider/single_child_widget.dart';
 
 import 'data/models/image_entry.dart';
 import 'data/models/image_item.dart';
+import 'data/image_repository.dart';
 import 'data/models/image_source_type.dart';
 import 'system/clipboard_copy_service.dart';
 import 'system/clipboard_monitor.dart';
+import 'system/folder_picker_service.dart';
 import 'system/file_watcher.dart';
 import 'system/image_saver.dart';
 import 'system/state/app_state_provider.dart';
+import 'system/state/image_library_notifier.dart';
+import 'system/state/image_library_state.dart';
 import 'system/state/image_history_notifier.dart';
 import 'system/state/selected_folder_state.dart';
 import 'system/state/watcher_status_notifier.dart';
+import 'system/url_download_service.dart';
 import 'ui/main_screen.dart';
 
 Future<void> main() async {
@@ -90,6 +96,21 @@ class ClipPixApp extends StatelessWidget {
         appStateBox: appStateBox,
         imageHistoryBox: imageHistoryBox,
       ),
+      Provider<ImageRepository>(
+        create: (_) => ImageRepository(),
+      ),
+      StateNotifierProvider<ImageLibraryNotifier, ImageLibraryState>(
+        create: (context) => ImageLibraryNotifier(
+          context.read<ImageRepository>(),
+        ),
+      ),
+      Provider<FolderPickerService>(
+        create: (_) => FolderPickerService(),
+      ),
+      Provider<UrlDownloadService>(
+        create: (_) => UrlDownloadService(),
+        dispose: (_, service) => service.dispose(),
+      ),
       Provider<ClipboardCopyService>(
         create: (_) => ClipboardCopyService(),
       ),
@@ -98,8 +119,10 @@ class ClipPixApp extends StatelessWidget {
           getSelectedFolder: () => context.read<SelectedFolderState>().current,
         ),
       ),
-      ProxyProvider2<ImageSaver, ClipboardCopyService, ClipboardMonitor>(
-        update: (context, imageSaver, copyService, previous) {
+      ProxyProvider4<ImageSaver, ClipboardCopyService, UrlDownloadService,
+          ImageLibraryNotifier, ClipboardMonitor>(
+        update: (context, imageSaver, copyService, downloadService,
+            imageLibrary, previous) {
           previous?.dispose();
           late final ClipboardMonitor monitor;
           monitor = ClipboardMonitor(
@@ -132,6 +155,7 @@ class ClipPixApp extends StatelessWidget {
                     savedAt: DateTime.now().toUtc(),
                   ),
                 );
+                await imageLibrary.addOrUpdate(File(result.filePath!));
               } else {
                 context
                     .read<WatcherStatusNotifier>()
@@ -140,8 +164,42 @@ class ClipPixApp extends StatelessWidget {
               monitor.onSaveCompleted(result);
             },
             onUrlCaptured: (url) async {
-              Logger('ClipboardMonitorHandler').info('URL captured: $url');
-              // TODO: implement URL download pipeline.
+              final historyNotifier = context.read<ImageHistoryNotifier>();
+              final watcherStatus = context.read<WatcherStatusNotifier>();
+              final downloadResult = await downloadService.downloadImage(url);
+              if (downloadResult == null) {
+                watcherStatus.setError('download_failed');
+                monitor.onSaveCompleted(
+                  SaveResult.failed(error: 'download_failed'),
+                );
+                return;
+              }
+              SaveResult saveResult;
+              try {
+                saveResult = await imageSaver.saveImageData(
+                  downloadResult.bytes,
+                  source: url,
+                  sourceType: ImageSourceType.web,
+                );
+              } catch (error, stackTrace) {
+                Logger('ClipboardMonitorHandler')
+                    .severe('URL save failed', error, stackTrace);
+                saveResult = SaveResult.failed(error: error);
+              }
+              if (saveResult.isSuccess) {
+                historyNotifier.addEntry(
+                  ImageEntry(
+                    filePath: saveResult.filePath!,
+                    metadataPath: saveResult.metadataPath!,
+                    sourceType: ImageSourceType.web,
+                    savedAt: DateTime.now().toUtc(),
+                  ),
+                );
+                await imageLibrary.addOrUpdate(File(saveResult.filePath!));
+              } else {
+                watcherStatus.setError('image_save_failed');
+              }
+              monitor.onSaveCompleted(saveResult);
             },
           );
           copyService.registerMonitor(monitor);
@@ -149,20 +207,17 @@ class ClipPixApp extends StatelessWidget {
         },
         dispose: (_, monitor) => monitor.dispose(),
       ),
-      ProxyProvider<WatcherStatusNotifier, FileWatcherService>(
-        update: (context, watcherStatus, previous) {
+      ProxyProvider2<WatcherStatusNotifier, ImageLibraryNotifier,
+          FileWatcherService>(
+        update: (context, watcherStatus, imageLibrary, previous) {
           previous?.stop();
           return FileWatcherService(
             watcherStatus: watcherStatus,
-            onFileAdded: (file) {
-              Logger('FileWatcherHandler').info('File added: ${file.path}');
-            },
+            onFileAdded: (file) => imageLibrary.addOrUpdate(file),
             onFileDeleted: (path) {
-              Logger('FileWatcherHandler').info('File deleted: $path');
+              imageLibrary.remove(path);
             },
-            onStructureChanged: () {
-              Logger('FileWatcherHandler').info('Folder structure changed');
-            },
+            onStructureChanged: () => imageLibrary.refresh(),
           );
         },
         dispose: (_, service) => service.stop(),

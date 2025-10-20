@@ -10,9 +10,9 @@ import 'state/watcher_status_notifier.dart';
 class FileWatcherService {
   FileWatcherService({
     required WatcherStatusNotifier watcherStatus,
-    required void Function(File file) onFileAdded,
-    required void Function(String path) onFileDeleted,
-    required void Function() onStructureChanged,
+    required FutureOr<void> Function(File file) onFileAdded,
+    required FutureOr<void> Function(String path) onFileDeleted,
+    required FutureOr<void> Function() onStructureChanged,
     Duration debounceDuration = const Duration(milliseconds: 250),
     Logger? logger,
   })  : _watcherStatus = watcherStatus,
@@ -23,9 +23,9 @@ class FileWatcherService {
         _logger = logger ?? Logger('FileWatcherService');
 
   final WatcherStatusNotifier _watcherStatus;
-  final void Function(File file) _onFileAdded;
-  final void Function(String path) _onFileDeleted;
-  final void Function() _onStructureChanged;
+  final FutureOr<void> Function(File file) _onFileAdded;
+  final FutureOr<void> Function(String path) _onFileDeleted;
+  final FutureOr<void> Function() _onStructureChanged;
   final Duration _debounceDuration;
   final Logger _logger;
 
@@ -121,7 +121,7 @@ class FileWatcherService {
         await _handleAddOrModify(eventPath);
         break;
       case ChangeType.REMOVE:
-        _handleRemove(eventPath);
+        await _handleRemove(eventPath);
         break;
     }
   }
@@ -139,11 +139,11 @@ class FileWatcherService {
     }
 
     final file = File(path);
-    _onFileAdded(file);
+    await Future.sync(() => _onFileAdded(file));
     _logger.fine('File event dispatched for $path');
   }
 
-  void _handleRemove(String path) {
+  Future<void> _handleRemove(String path) async {
     final lower = path.toLowerCase();
     if (lower.endsWith('/.clip_pix_write_test') ||
         lower.endsWith('\\\\.clip_pix_write_test')) {
@@ -152,13 +152,13 @@ class FileWatcherService {
 
     if (_watchers.containsKey(path)) {
       _cleanupWatcher(path);
-      _onStructureChanged();
+      await Future.sync(_onStructureChanged);
       _logger.info('Subdirectory watcher removed for $path');
       return;
     }
 
     if (_isSupportedFile(path)) {
-      _onFileDeleted(path);
+      await Future.sync(() => _onFileDeleted(path));
       _logger.fine('File deletion dispatched for $path');
     }
   }
@@ -171,7 +171,7 @@ class FileWatcherService {
 
     await _attachWatcher(directory);
     await _syncSubdirectoryWatchers();
-    _onStructureChanged();
+    await Future.sync(_onStructureChanged);
     _logger.info('Subdirectory watcher added for $path');
   }
 
@@ -212,7 +212,7 @@ class FileWatcherService {
   }
 
   bool _shouldEmit(String path, ChangeType type) {
-    final key = '$path-${type.name}';
+    final key = '$path-${type.toString()}';
     final now = DateTime.now();
     final last = _debounceTracker[key];
     if (last != null && now.difference(last) < _debounceDuration) {

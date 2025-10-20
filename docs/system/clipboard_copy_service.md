@@ -25,7 +25,7 @@ abstract class ClipboardMonitorGuard {
 ## 4. フロー
 1. UI から `copyImage` 呼び出し。サービス側は内部キューに積み、逐次処理する。
 2. 処理直前に `UUID` ベースのトークンを生成し、`guard.setGuardToken(token, ttl: 2秒)` を実行。
-3. 画像ファイルを `Uint8List` として読み込み、`win32` API (`OpenClipboard` → `EmptyClipboard` → `SetClipboardData`) で登録。
+3. 画像ファイルを `Uint8List` として読み込み、`RegisterClipboardFormat('PNG')` で PNG フォーマットを確保した上で `win32` API (`OpenClipboard` → `EmptyClipboard` → `SetClipboardData`) で登録。
 4. コピー完了後 1 秒のディレイで `guard.clearGuardToken()` を実行し、次のキューアイテムを処理。
 5. エラー発生時はトークンを即時解除し、例外を UI に伝搬。失敗したジョブはキューから除去し、再実行は UI に委譲。
 

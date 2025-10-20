@@ -5,7 +5,6 @@ import 'package:path/path.dart' as p;
 import 'package:logging/logging.dart';
 import 'package:state_notifier/state_notifier.dart';
 
-import '../../data/models/image_entry.dart';
 import 'folder_view_mode.dart';
 import 'selected_folder_state.dart';
 

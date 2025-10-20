@@ -1,6 +1,6 @@
 import 'package:hive/hive.dart';
-import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
+import 'package:flutter_state_notifier/flutter_state_notifier.dart';
 
 import 'image_history_notifier.dart';
 import 'image_history_state.dart';

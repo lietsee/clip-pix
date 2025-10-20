@@ -1,9 +1,8 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
-import 'dart:typed_data';
-
 import 'package:crypto/crypto.dart';
+import 'package:flutter/services.dart';
 import 'package:logging/logging.dart';
 
 import '../data/models/image_source_type.dart';
@@ -87,6 +86,7 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
   DateTime? _guardExpiry;
 
   Timer? _pollingTimer;
+  String? _lastPolledTextSignature;
 
   ClipboardMonitorMode get mode => _mode;
 
@@ -112,6 +112,7 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
     _pollingTimer?.cancel();
     _pollingTimer = null;
     _eventQueue.clear();
+    _lastPolledTextSignature = null;
   }
 
   Future<void> onFolderChanged(Directory? directory) async {
@@ -144,7 +145,8 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
 
   bool get _isGuardActive {
     final expiry = _guardExpiry;
-    if (expiry == null) {
+    final token = _guardToken;
+    if (expiry == null || token == null) {
       return false;
     }
     if (DateTime.now().isAfter(expiry)) {
@@ -163,7 +165,7 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
       return;
     }
     if (_isGuardActive) {
-      _logger.fine('Clipboard image ignored due to guard token');
+      _logger.fine('Clipboard image ignored due to guard token $_guardToken');
       return;
     }
 
@@ -189,7 +191,7 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
       return;
     }
     if (_isGuardActive) {
-      _logger.fine('Clipboard URL ignored due to guard token');
+      _logger.fine('Clipboard URL ignored due to guard token $_guardToken');
       return;
     }
 
@@ -219,19 +221,12 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
   }
 
   Future<void> _initializeHook() async {
-    try {
-      // TODO: Implement Win32 clipboard hook registration.
-      _mode = ClipboardMonitorMode.hook;
-      _logger.info('Clipboard hook initialized');
-    } catch (error, stackTrace) {
-      _logger.warning('Hook initialization failed, falling back to polling',
-          error, stackTrace);
-      _activatePollingFallback();
-    }
+    _logger.info('Clipboard hook not yet implemented; using polling fallback');
+    _activatePollingFallback();
   }
 
   void _disposeHook() {
-    // TODO: Release Win32 clipboard hook resources when implemented.
+    // Hook resources will be released once implemented.
   }
 
   void _activatePollingFallback() {
@@ -239,9 +234,7 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
     _pollingTimer?.cancel();
     _pollingTimer = Timer.periodic(
       const Duration(milliseconds: 500),
-      (_) {
-        // TODO: implement clipboard polling and dispatch events.
-      },
+      (_) => _pollClipboard(),
     );
   }
 
@@ -285,7 +278,11 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
           break;
         case _ClipboardEventType.url:
           final url = event.url!;
+          _isImageSaverBusy = true;
           await _onUrlCaptured(url);
+          if (_isImageSaverBusy) {
+            _isImageSaverBusy = false;
+          }
           break;
       }
     }
@@ -294,6 +291,24 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
     if (_eventQueue.isNotEmpty && !_isImageSaverBusy) {
       await Future<void>.delayed(_queueResumeDelay);
       _processQueue();
+    }
+  }
+
+  Future<void> _pollClipboard() async {
+    if (!_isRunning) {
+      return;
+    }
+    try {
+      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      final text = data?.text;
+      if (text != null && text.isNotEmpty) {
+        if (text != _lastPolledTextSignature) {
+          _lastPolledTextSignature = text;
+          await handleClipboardUrl(text);
+        }
+      }
+    } catch (error, stackTrace) {
+      _logger.fine('Clipboard poll failed', error, stackTrace);
     }
   }
 

@@ -4,8 +4,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
+import 'dart:ffi' as ffi;
 
+import 'package:ffi/ffi.dart';
 import 'package:logging/logging.dart';
+import 'package:win32/win32.dart';
 
 import '../data/models/image_item.dart';
 import 'clipboard_monitor.dart';
@@ -27,6 +30,7 @@ class ClipboardCopyService {
   final Queue<ImageItem> _queue = Queue<ImageItem>();
   bool _isProcessing = false;
   Timer? _guardClearTimer;
+  int? _pngClipboardFormat;
 
   void registerMonitor(ClipboardMonitorGuard guard) {
     _guard = guard;
@@ -63,7 +67,7 @@ class ClipboardCopyService {
     }
 
     final Uint8List bytes = await file.readAsBytes();
-    final token = _issueGuardToken();
+    _issueGuardToken();
 
     try {
       await _setClipboardImage(bytes);
@@ -93,8 +97,69 @@ class ClipboardCopyService {
   }
 
   Future<void> _setClipboardImage(Uint8List bytes) async {
-    // TODO: Implement Win32 clipboard integration using CF_DIB/CF_BITMAP.
-    throw UnimplementedError('Clipboard image copy is not implemented yet');
+    final format = _ensurePngFormat();
+    const maxAttempts = 3;
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      final opened = OpenClipboard(NULL);
+      if (opened != 0) {
+        try {
+          if (EmptyClipboard() == 0) {
+            final error = HRESULT_FROM_WIN32(GetLastError());
+            throw WindowsException(error);
+          }
+          final handle = _bytesToGlobal(bytes);
+          final result = SetClipboardData(format, handle.address);
+          if (result == 0) {
+            final error = HRESULT_FROM_WIN32(GetLastError());
+            GlobalFree(handle);
+            throw WindowsException(error);
+          }
+          return;
+        } finally {
+          CloseClipboard();
+        }
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+    }
+    final error = HRESULT_FROM_WIN32(GetLastError());
+    throw WindowsException(error);
+  }
+
+  ffi.Pointer<ffi.Void> _bytesToGlobal(Uint8List bytes) {
+    final handle = GlobalAlloc(GMEM_MOVEABLE, bytes.length).cast<ffi.Void>();
+    if (handle.address == 0) {
+      final error = HRESULT_FROM_WIN32(GetLastError());
+      throw WindowsException(error);
+    }
+    final pointer = GlobalLock(handle).cast<ffi.Uint8>();
+    if (pointer.address == 0) {
+      final error = HRESULT_FROM_WIN32(GetLastError());
+      GlobalFree(handle);
+      throw WindowsException(error);
+    }
+    final buffer = pointer.asTypedList(bytes.length);
+    buffer.setAll(0, bytes);
+    GlobalUnlock(handle);
+    return handle;
+  }
+
+  int _ensurePngFormat() {
+    final cached = _pngClipboardFormat;
+    if (cached != null) {
+      return cached;
+    }
+    final formatName = 'PNG'.toNativeUtf16();
+    try {
+      final format = RegisterClipboardFormat(formatName);
+      if (format == 0) {
+        final error = HRESULT_FROM_WIN32(GetLastError());
+        throw WindowsException(error);
+      }
+      _pngClipboardFormat = format;
+      return format;
+    } finally {
+      calloc.free(formatName);
+    }
   }
 
   String _generateToken() {

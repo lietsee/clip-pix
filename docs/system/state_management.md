@@ -8,7 +8,9 @@ Provider + StateNotifier を用いて、フォルダ選択・監視制御・UI �
 - `SelectedFolderNotifier` : 選択フォルダと履歴を管理。
 - `WatcherStatusNotifier` : FileWatcher / ClipboardMonitor の稼働状態を追跡。
 - `ImageHistoryNotifier` : 直近保存した画像のメタ情報を保持。
+- `ImageLibraryNotifier` : 表示中フォルダの画像一覧・読込状態を管理。
 - `ClipboardCopyService` : 画像コピー処理とガードトークンを管理。
+- `ImageRepository` : ファイルシステムからの画像/メタデータ復元を担当。
 
 ## 3. SelectedFolderState
 | フィールド | 型 | 説明 |
@@ -58,8 +60,24 @@ Provider + StateNotifier を用いて、フォルダ選択・監視制御・UI �
 - `addEntry(ImageEntry entry)` : 新規保存時に履歴へ追加し、Queue サイズを調整。
 - `clear()` : 初期化または設定リセット時に履歴を破棄。
 
+## 6. ImageLibraryState
+| フィールド | 型 | 説明 |
+|-----------|----|------|
+| `activeDirectory` | `Directory?` | 現在表示しているフォルダ |
+| `images` | `List<ImageItem>` | 表示対象の画像モデル |
+| `isLoading` | `bool` | 読み込み中フラグ |
+| `error` | `String?` | 直近のエラー |
+
+### 6.1 アクション
+- `loadForDirectory(Directory directory)` : フォルダ選択時に画像一覧をロード。
+- `refresh()` : FileWatcher からの通知やユーザー操作で再読込。
+- `addOrUpdate(File file)` : FileWatcher/ClipboardMonitor からの追加イベントで反映。
+- `remove(String path)` : 削除イベントを反映。
+- `clear()` : フォルダ解除時に状態を初期化。
+
 - `SelectedFolderNotifier` : `hive_box.put('selected_folder', {...})` でフォルダ・履歴・`viewMode`・`currentTab`・`rootScrollOffset` を保存。
 - `ImageHistoryNotifier` : オプションで `hive_box.put('image_history', ...)` 保存。既定はアプリ終了時のみ同期。
+- `ImageLibraryNotifier` : 表示フォルダ変更や FileWatcher 通知ごとに `ImageRepository` を介して再構築し、必要に応じて Hive 永続化は行わない。
 - Hive 初期化はアプリ起動時に `AppStateProvider` が実施し、復元時の例外はログに記録してデフォルト状態にフォールバック。
 
 ## 7. ClipboardCopyService 連携
@@ -75,5 +93,6 @@ Provider + StateNotifier を用いて、フォルダ選択・監視制御・UI �
 
 ## 9. テスト方針
 - StateNotifier のユニットテストで Hive モックを用い、履歴更新と復元を検証。
+- ImageLibraryNotifier については一時ディレクトリを用いて `loadForDirectory` / `addOrUpdate` / `remove` の動作を確認。
 - 監視フラグの切り替えは FileWatcher / ClipboardMonitor のスタブを使って `onFolderChanged` の呼び出し順序を確認。
 - ImageHistory のサイズ制限 (最大20件) と FIFO 振る舞いをテスト。
