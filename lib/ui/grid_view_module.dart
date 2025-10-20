@@ -151,6 +151,9 @@ class _GridViewModuleState extends State<GridViewModule> {
               }
 
               final key = ValueKey('${item.id}_${entry.version}');
+              debugPrint(
+                '[GridViewModule] build_child index=$index key=${key.value} removing=${entry.isRemoving} opacity=${entry.opacity.toStringAsFixed(2)}',
+              );
               return AnimatedOpacity(
                 key: key,
                 duration: _animationDuration,
