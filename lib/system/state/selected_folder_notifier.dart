@@ -1,8 +1,8 @@
 import 'dart:io';
 
 import 'package:hive/hive.dart';
-import 'package:path/path.dart' as p;
 import 'package:logging/logging.dart';
+import 'package:path/path.dart' as p;
 import 'package:state_notifier/state_notifier.dart';
 
 import 'folder_view_mode.dart';
@@ -58,10 +58,11 @@ class SelectedFolderNotifier extends StateNotifier<SelectedFolderState> {
   }
 
   Future<void> switchToRoot() async {
+    final current = state.current;
     state = state.copyWith(
       viewMode: FolderViewMode.root,
       currentTab: null,
-      viewDirectory: state.current,
+      viewDirectory: current,
     );
     await persist();
   }
@@ -88,15 +89,12 @@ class SelectedFolderNotifier extends StateNotifier<SelectedFolderState> {
   void _validateCurrentFolder() {
     final current = state.current;
     if (current == null) {
-      state = state.copyWith(isValid: false);
+      state = state.copyWith(isValid: false, viewDirectory: null);
       return;
     }
     final isValid = _isDirectoryWritable(current);
     final viewDirectory = state.viewDirectory ?? current;
-    state = state.copyWith(
-      isValid: isValid,
-      viewDirectory: viewDirectory,
-    );
+    state = state.copyWith(isValid: isValid, viewDirectory: viewDirectory);
   }
 
   List<Directory> _buildHistory(Directory newDirectory) {

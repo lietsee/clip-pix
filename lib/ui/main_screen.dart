@@ -16,6 +16,7 @@ import '../system/state/folder_view_mode.dart';
 import '../system/state/selected_folder_state.dart';
 import '../system/state/watcher_status_notifier.dart';
 import '../system/state/watcher_status_state.dart';
+import 'package:path/path.dart' as p;
 import 'grid_view_module.dart';
 
 class MainScreen extends StatefulWidget {
@@ -129,11 +130,19 @@ class _MainScreenState extends State<MainScreen> {
       return const <_FolderTab>[];
     }
 
+    final imageLibrary = context.read<ImageLibraryNotifier>();
+
     final tabs = <_FolderTab>[
       _FolderTab(
         label: 'ルート',
         isActive: state.viewMode == FolderViewMode.root,
-        onTap: () => context.read<SelectedFolderNotifier>().switchToRoot(),
+        onTap: () async {
+          await context.read<SelectedFolderNotifier>().switchToRoot();
+          final rootDir = state.current;
+          if (rootDir != null) {
+            await imageLibrary.loadForDirectory(rootDir);
+          }
+        },
       ),
     ];
 
@@ -144,17 +153,17 @@ class _MainScreenState extends State<MainScreen> {
       ..sort((a, b) => a.path.compareTo(b.path));
 
     for (final dir in subdirs) {
-      final name = dir.uri.pathSegments.isNotEmpty
-          ? dir.uri.pathSegments.lastWhere((_) => true)
-          : dir.path;
+      final name = p.basename(dir.path);
       tabs.add(
         _FolderTab(
           label: name,
           isActive: state.viewMode == FolderViewMode.subfolder &&
               state.currentTab == name,
           onTap: () async {
-            context.read<SelectedFolderNotifier>().switchToSubfolder(name);
-            await context.read<ImageLibraryNotifier>().loadForDirectory(dir);
+            await context
+                .read<SelectedFolderNotifier>()
+                .switchToSubfolder(name);
+            await imageLibrary.loadForDirectory(dir);
           },
         ),
       );
@@ -246,18 +255,18 @@ class _Breadcrumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final current = selectedState.current;
-    if (current == null) {
+    final directory = selectedState.viewDirectory ?? selectedState.current;
+    if (directory == null) {
       return const Text('ClipPix');
     }
-    final segments = current.path.split(Platform.pathSeparator);
+    final segments = directory.path.split(Platform.pathSeparator);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         for (var i = 0; i < segments.length; i++)
           if (segments[i].isNotEmpty) ...[
             InkWell(
-              onTap: () => _openInExplorer(current.path),
+              onTap: () => _openInExplorer(directory.path),
               child: Text(segments[i]),
             ),
             if (i < segments.length - 1)
