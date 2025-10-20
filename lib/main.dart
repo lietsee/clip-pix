@@ -51,7 +51,7 @@ Future<void> main() async {
 }
 
 void _configureLogging() {
-  Logger.root.level = Level.INFO;
+  Logger.root.level = Level.FINE;
   Logger.root.onRecord.listen(
     (record) => debugPrint(
       '[${record.level.name}] ${record.time.toIso8601String()} '
