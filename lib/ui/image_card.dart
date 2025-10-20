@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 
@@ -407,10 +408,26 @@ class _ImageCardState extends State<ImageCard> {
     if (!shouldUpdate) {
       return;
     }
-    setState(() {
-      _visualState = state;
-      _latestChunk = chunk;
-    });
+
+    void apply() {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _visualState = state;
+        _latestChunk = chunk;
+      });
+    }
+
+    final phase = WidgetsBinding.instance.schedulerPhase;
+    if (phase == SchedulerPhase.idle ||
+        phase == SchedulerPhase.postFrameCallbacks ||
+        phase == SchedulerPhase.persistentCallbacks) {
+      apply();
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) => apply());
   }
 
   void _attachImageStream(Size size, double scale) {
