@@ -225,11 +225,13 @@ class ClipPixApp extends StatelessWidget {
           FileWatcherService>(
         update: (context, watcherStatus, imageLibrary, previous) {
           previous?.stop();
+          final historyNotifier = context.read<ImageHistoryNotifier>();
           return FileWatcherService(
             watcherStatus: watcherStatus,
             onFileAdded: (file) => imageLibrary.addOrUpdate(file),
             onFileDeleted: (path) {
               imageLibrary.remove(path);
+              historyNotifier.removeEntry(path);
             },
             onStructureChanged: () => imageLibrary.refresh(),
           );
