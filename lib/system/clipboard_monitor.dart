@@ -27,9 +27,10 @@ enum ClipboardMonitorMode { hook, polling }
 
 enum _ClipboardEventType { image, url }
 
-const int _eventSystemClipboard = 0x0000800d;
+const int _eventObjectNameChange = 0x0000800c;
 const int _wineventOutOfContext = 0x0000;
 const int _wineventSkipOwnProcess = 0x0002;
+const int _objidClipboard = 0xFFFFFFFC;
 const int _wmQuit = 0x0012;
 
 class _ClipboardEvent {
@@ -272,12 +273,15 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
     );
   }
 
-  Future<void> _handleHookEvent(int eventCode) async {
+  Future<void> _handleHookEvent(int eventCode, int objectId) async {
     if (!_isRunning) {
       return;
     }
     try {
-      _logger.fine('WinEvent event=$eventCode received');
+      if (eventCode != _eventObjectNameChange || objectId != _objidClipboard) {
+        return;
+      }
+      _logger.fine('WinEvent event=$eventCode objectId=$objectId received');
       final snapshot = _readClipboardSnapshot();
       if (snapshot == null) {
         return;
@@ -620,7 +624,7 @@ class _ClipboardSnapshot {
 class _Win32ClipboardHook {
   _Win32ClipboardHook(this._onEvent, this._logger);
 
-  final FutureOr<void> Function(int eventCode) _onEvent;
+  final FutureOr<void> Function(int eventCode, int objectId) _onEvent;
   final Logger _logger;
 
   Isolate? _isolate;
@@ -654,7 +658,8 @@ class _Win32ClipboardHook {
             break;
           case 'event':
             final code = message.length > 1 ? message[1] as int : 0;
-            Future.microtask(() => _onEvent(code));
+            final objectId = message.length > 2 ? message[2] as int : 0;
+            Future.microtask(() => _onEvent(code, objectId));
             break;
           case 'error':
             final code = message.length > 1 ? message[1] : null;
@@ -784,8 +789,8 @@ void _clipboardHookIsolate(_HookInitMessage message) {
       threadId: GetCurrentThreadId());
 
   final hookHandle = setWinEventHook(
-    _eventSystemClipboard,
-    _eventSystemClipboard,
+    _eventObjectNameChange,
+    _eventObjectNameChange,
     ffi.Pointer.fromAddress(0),
     _callbackPointer,
     0,
@@ -847,7 +852,7 @@ void _winEventProc(
   int dwEventThread,
   int dwmsEventTime,
 ) {
-  if (event == _eventSystemClipboard) {
-    _HookState.instance?.mainPort.send(['event', event]);
+  if (event == _eventObjectNameChange) {
+    _HookState.instance?.mainPort.send(['event', event, idObject]);
   }
 }

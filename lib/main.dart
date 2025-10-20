@@ -24,6 +24,7 @@ import 'system/state/image_history_notifier.dart';
 import 'system/state/selected_folder_state.dart';
 import 'system/state/watcher_status_notifier.dart';
 import 'system/url_download_service.dart';
+import 'package:path/path.dart' as p;
 import 'ui/main_screen.dart';
 
 Future<void> main() async {
@@ -52,12 +53,25 @@ Future<void> main() async {
 
 void _configureLogging() {
   Logger.root.level = Level.FINE;
-  Logger.root.onRecord.listen(
-    (record) => debugPrint(
-      '[${record.level.name}] ${record.time.toIso8601String()} '
-      '${record.loggerName}: ${record.message}',
-    ),
-  );
+  IOSink? sink;
+  try {
+    final logsDir = Directory('logs');
+    logsDir.createSync(recursive: true);
+    final logFile = File(p.join(logsDir.path, 'app.log'));
+    sink = logFile.openWrite(mode: FileMode.append);
+  } catch (error, stackTrace) {
+    debugPrint('Failed to initialize log file: $error');
+    Logger('ClipPixLogging')
+        .warning('Failed to initialize log file', error, stackTrace);
+  }
+  Logger.root.onRecord.listen((record) {
+    final line =
+        '[${record.level.name}] ${record.time.toIso8601String()} ${record.loggerName}: ${record.message}';
+    debugPrint(line);
+    try {
+      sink?..writeln(line);
+    } catch (_) {}
+  });
 }
 
 void _registerHiveAdapters() {
