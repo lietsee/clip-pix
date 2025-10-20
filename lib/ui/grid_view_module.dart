@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -26,6 +27,8 @@ class GridViewModule extends StatefulWidget {
 
 class _GridViewModuleState extends State<GridViewModule> {
   static const Duration _animationDuration = Duration(milliseconds: 200);
+  static const double _spacing = 12;
+  static const double _minRowWidth = 200;
 
   late GridCardPreferencesRepository _preferences;
   bool _isInitialized = false;
@@ -35,6 +38,7 @@ class _GridViewModuleState extends State<GridViewModule> {
   final Map<String, Timer> _sizeDebounceTimers = {};
   final Map<String, Timer> _scaleDebounceTimers = {};
   final Map<String, ScrollController> _directoryControllers = {};
+  final Map<String, VoidCallback> _sizeListeners = {};
 
   List<_GridEntry> _entries = <_GridEntry>[];
   bool _loggedInitialBuild = false;
@@ -89,9 +93,14 @@ class _GridViewModuleState extends State<GridViewModule> {
     ]) {
       timer.cancel();
     }
-    for (final notifier in _sizeNotifiers.values) {
+    _sizeNotifiers.forEach((key, notifier) {
+      final listener = _sizeListeners[key];
+      if (listener != null) {
+        notifier.removeListener(listener);
+      }
       notifier.dispose();
-    }
+    });
+    _sizeListeners.clear();
     for (final notifier in _scaleNotifiers.values) {
       notifier.dispose();
     }
@@ -125,32 +134,50 @@ class _GridViewModuleState extends State<GridViewModule> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final controller = _resolveController(selectedState);
+          final availableWidth = constraints.maxWidth.isFinite
+              ? constraints.maxWidth - (_spacing * 2)
+              : MediaQuery.of(context).size.width - (_spacing * 2);
+          final rows = _buildRows(
+            availableWidth > 0 ? availableWidth : _minRowWidth,
+          );
           _currentBuildKeys.clear();
+
           return SingleChildScrollView(
             controller: controller,
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.only(
+            padding: EdgeInsets.only(
               bottom: 80,
-              left: 12,
-              right: 12,
-              top: 12,
+              left: _spacing,
+              right: _spacing,
+              top: _spacing,
             ),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: constraints.maxWidth),
-              child: Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                alignment: WrapAlignment.start,
-                children: [
-                  for (final entry in _entries)
-                    AnimatedOpacity(
-                      key: ObjectKey(entry),
-                      duration: _animationDuration,
-                      opacity: entry.opacity,
-                      child: _buildCard(entry),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var rowIndex = 0; rowIndex < rows.length; rowIndex++)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      bottom: rowIndex == rows.length - 1 ? 0 : _spacing,
                     ),
-                ],
-              ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (var itemIndex = 0;
+                            itemIndex < rows[rowIndex].items.length;
+                            itemIndex++)
+                          Padding(
+                            padding: EdgeInsets.only(
+                              right:
+                                  itemIndex == rows[rowIndex].items.length - 1
+                                      ? 0
+                                      : _spacing,
+                            ),
+                            child: _buildCard(rows[rowIndex].items[itemIndex]),
+                          ),
+                      ],
+                    ),
+                  ),
+              ],
             ),
           );
         },
@@ -158,7 +185,8 @@ class _GridViewModuleState extends State<GridViewModule> {
     );
   }
 
-  Widget _buildCard(_GridEntry entry) {
+  Widget _buildCard(_RowItem rowItem) {
+    final entry = rowItem.entry;
     final item = entry.item;
     final sizeNotifier = _sizeNotifiers[item.id]!;
     final scaleNotifier = _scaleNotifiers[item.id]!;
@@ -172,15 +200,23 @@ class _GridViewModuleState extends State<GridViewModule> {
         '[GridViewModule] duplicate_detected key=$animatedKey entryHash=$entryHash',
       );
     }
-    return ImageCard(
-      item: item,
-      sizeNotifier: sizeNotifier,
-      scaleNotifier: scaleNotifier,
-      onResize: _handleResize,
-      onZoom: _handleZoom,
-      onRetry: _handleRetry,
-      onOpenPreview: _showPreviewDialog,
-      onCopyImage: _handleCopy,
+    return SizedBox(
+      width: rowItem.width,
+      child: AnimatedOpacity(
+        key: animatedKey,
+        duration: _animationDuration,
+        opacity: entry.opacity,
+        child: ImageCard(
+          item: item,
+          sizeNotifier: sizeNotifier,
+          scaleNotifier: scaleNotifier,
+          onResize: _handleResize,
+          onZoom: _handleZoom,
+          onRetry: _handleRetry,
+          onOpenPreview: _showPreviewDialog,
+          onCopyImage: _handleCopy,
+        ),
+      ),
     );
   }
 
@@ -233,6 +269,41 @@ class _GridViewModuleState extends State<GridViewModule> {
     return _directoryControllers.putIfAbsent(key, () => ScrollController());
   }
 
+  List<_RowLayout> _buildRows(double maxWidth) {
+    final List<_RowLayout> rows = <_RowLayout>[];
+    if (maxWidth <= 0) {
+      return rows;
+    }
+
+    List<_RowItem> currentRow = <_RowItem>[];
+    double occupiedWidth = 0;
+
+    for (final entry in _entries) {
+      final size = _sizeNotifiers[entry.item.id]!.value;
+      final width = math.min(size.width, maxWidth);
+      final neededWidth =
+          currentRow.isEmpty ? width : occupiedWidth + _spacing + width;
+
+      if (currentRow.isNotEmpty && neededWidth > maxWidth) {
+        rows.add(_RowLayout(List<_RowItem>.from(currentRow)));
+        currentRow = <_RowItem>[];
+        occupiedWidth = 0;
+      }
+
+      if (currentRow.isNotEmpty) {
+        occupiedWidth += _spacing;
+      }
+      currentRow.add(_RowItem(entry: entry, width: width));
+      occupiedWidth += width;
+    }
+
+    if (currentRow.isNotEmpty) {
+      rows.add(_RowLayout(currentRow));
+    }
+
+    return rows;
+  }
+
   _GridEntry _createEntry(ImageItem item) {
     _ensureNotifiers(item);
     return _GridEntry(item: item, opacity: 0);
@@ -242,8 +313,13 @@ class _GridViewModuleState extends State<GridViewModule> {
     _sizeNotifiers.putIfAbsent(item.id, () {
       final pref =
           _preferences.get(item.id) ?? _preferences.getOrCreate(item.id);
-      return ValueNotifier<Size>(pref.size);
+      final notifier = ValueNotifier<Size>(pref.size);
+      _attachSizeListener(item.id, notifier);
+      return notifier;
     });
+    if (!_sizeListeners.containsKey(item.id)) {
+      _attachSizeListener(item.id, _sizeNotifiers[item.id]!);
+    }
     _scaleNotifiers.putIfAbsent(item.id, () {
       final pref =
           _preferences.get(item.id) ?? _preferences.getOrCreate(item.id);
@@ -339,8 +415,28 @@ class _GridViewModuleState extends State<GridViewModule> {
     final id = entry.item.id;
     _sizeDebounceTimers.remove(id)?.cancel();
     _scaleDebounceTimers.remove(id)?.cancel();
-    _sizeNotifiers.remove(id)?.dispose();
+    final sizeNotifier = _sizeNotifiers.remove(id);
+    final sizeListener = _sizeListeners.remove(id);
+    if (sizeNotifier != null && sizeListener != null) {
+      sizeNotifier.removeListener(sizeListener);
+    }
+    sizeNotifier?.dispose();
     _scaleNotifiers.remove(id)?.dispose();
+  }
+
+  void _attachSizeListener(String id, ValueNotifier<Size> notifier) {
+    final existing = _sizeListeners[id];
+    if (existing != null) {
+      notifier.removeListener(existing);
+    }
+    void listener() {
+      if (mounted) {
+        setState(() {});
+      }
+    }
+
+    notifier.addListener(listener);
+    _sizeListeners[id] = listener;
   }
 
   void _showPreviewDialog(ImageItem item) {
@@ -379,6 +475,19 @@ class _GridViewModuleState extends State<GridViewModule> {
     }
     return duplicates;
   }
+}
+
+class _RowLayout {
+  _RowLayout(this.items);
+
+  final List<_RowItem> items;
+}
+
+class _RowItem {
+  _RowItem({required this.entry, required this.width});
+
+  final _GridEntry entry;
+  final double width;
 }
 
 class _GridEntry {
