@@ -12,15 +12,17 @@ class SelectedFolderState {
     required this.currentTab,
     required this.rootScrollOffset,
     required this.isValid,
+    required this.viewDirectory,
   });
 
-  factory SelectedFolderState.initial() => SelectedFolderState(
+  factory SelectedFolderState.initial() => const SelectedFolderState(
         current: null,
-        history: const <Directory>[],
+        history: <Directory>[],
         viewMode: FolderViewMode.root,
         currentTab: null,
         rootScrollOffset: 0,
         isValid: false,
+        viewDirectory: null,
       );
 
   final Directory? current;
@@ -29,6 +31,7 @@ class SelectedFolderState {
   final String? currentTab;
   final double rootScrollOffset;
   final bool isValid;
+  final Directory? viewDirectory;
 
   SelectedFolderState copyWith({
     Directory? current,
@@ -37,6 +40,7 @@ class SelectedFolderState {
     String? currentTab,
     double? rootScrollOffset,
     bool? isValid,
+    Directory? viewDirectory,
   }) {
     return SelectedFolderState(
       current: current ?? this.current,
@@ -45,6 +49,7 @@ class SelectedFolderState {
       currentTab: currentTab ?? this.currentTab,
       rootScrollOffset: rootScrollOffset ?? this.rootScrollOffset,
       isValid: isValid ?? this.isValid,
+      viewDirectory: viewDirectory ?? this.viewDirectory,
     );
   }
 
@@ -56,6 +61,7 @@ class SelectedFolderState {
       'currentTab': currentTab,
       'rootScrollOffset': rootScrollOffset,
       'isValid': isValid,
+      'viewDirectory': viewDirectory?.path,
     };
   }
 
@@ -78,6 +84,9 @@ class SelectedFolderState {
       currentTab: json['currentTab'] as String?,
       rootScrollOffset: (json['rootScrollOffset'] as num?)?.toDouble() ?? 0,
       isValid: json['isValid'] as bool? ?? false,
+      viewDirectory: (json['viewDirectory'] as String?) != null
+          ? Directory(json['viewDirectory'] as String)
+          : (currentPath != null ? Directory(currentPath) : null),
     );
   }
 
@@ -93,7 +102,8 @@ class SelectedFolderState {
         other.viewMode == viewMode &&
         other.currentTab == currentTab &&
         other.rootScrollOffset == rootScrollOffset &&
-        other.isValid == isValid;
+        other.isValid == isValid &&
+        other.viewDirectory?.path == viewDirectory?.path;
   }
 
   @override
@@ -104,5 +114,6 @@ class SelectedFolderState {
         currentTab,
         rootScrollOffset,
         isValid,
+        viewDirectory?.path,
       );
 }

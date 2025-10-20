@@ -47,6 +47,7 @@ class SelectedFolderNotifier extends StateNotifier<SelectedFolderState> {
       currentTab: null,
       rootScrollOffset: 0,
       isValid: _isDirectoryWritable(directory),
+      viewDirectory: directory,
     );
     await persist();
   }
@@ -60,14 +61,21 @@ class SelectedFolderNotifier extends StateNotifier<SelectedFolderState> {
     state = state.copyWith(
       viewMode: FolderViewMode.root,
       currentTab: null,
+      viewDirectory: state.current,
     );
     await persist();
   }
 
   Future<void> switchToSubfolder(String name) async {
+    final base = state.current;
+    if (base == null) {
+      return;
+    }
+    final subfolder = Directory(p.join(base.path, name));
     state = state.copyWith(
       viewMode: FolderViewMode.subfolder,
       currentTab: name,
+      viewDirectory: subfolder,
     );
     await persist();
   }
@@ -84,7 +92,11 @@ class SelectedFolderNotifier extends StateNotifier<SelectedFolderState> {
       return;
     }
     final isValid = _isDirectoryWritable(current);
-    state = state.copyWith(isValid: isValid);
+    final viewDirectory = state.viewDirectory ?? current;
+    state = state.copyWith(
+      isValid: isValid,
+      viewDirectory: viewDirectory,
+    );
   }
 
   List<Directory> _buildHistory(Directory newDirectory) {

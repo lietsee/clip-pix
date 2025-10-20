@@ -130,7 +130,10 @@ class ClipPixApp extends StatelessWidget {
       ),
       Provider<ImageSaver>(
         create: (context) => ImageSaver(
-          getSelectedFolder: () => context.read<SelectedFolderState>().current,
+          getSelectedFolder: () {
+            final state = context.read<SelectedFolderState>();
+            return state.viewDirectory ?? state.current;
+          },
         ),
       ),
       ProxyProvider4<ImageSaver, ClipboardCopyService, UrlDownloadService,
