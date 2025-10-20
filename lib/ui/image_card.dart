@@ -185,14 +185,11 @@ class _ImageCardState extends State<ImageCard> {
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
               child: switch (_visualState) {
-                _CardVisualState.loading => _LoadingPlaceholder(
-                  key: const ValueKey('loading'),
-                  progress: _latestChunk,
-                ),
+                _CardVisualState.loading =>
+                    _LoadingPlaceholder(progress: _latestChunk),
                 _CardVisualState.error => _ErrorPlaceholder(
-                  key: const ValueKey('error'),
-                  onRetry: _retryCount < _maxRetryCount ? _handleRetry : null,
-                ),
+                    onRetry: _retryCount < _maxRetryCount ? _handleRetry : null,
+                  ),
                 _ => const SizedBox.shrink(),
               },
             ),
