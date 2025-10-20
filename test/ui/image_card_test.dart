@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -78,5 +79,73 @@ void main() {
 
     expect(cardSize().width, closeTo(360, 0.5));
     expect(sizeNotifier.value.width, closeTo(360, 0.5));
+  });
+
+  testWidgets('ImageCard suppresses scroll while zooming', (tester) async {
+    final sizeNotifier = ValueNotifier(const Size(200, 220));
+    final scaleNotifier = ValueNotifier(1.0);
+    final scrollController = ScrollController();
+
+    addTearDown(() {
+      sizeNotifier.dispose();
+      scaleNotifier.dispose();
+      scrollController.dispose();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            controller: scrollController,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 400),
+              child: ImageCard(
+                item: ImageItem(id: '1', filePath: imageFile.path),
+                sizeNotifier: sizeNotifier,
+                scaleNotifier: scaleNotifier,
+                onResize: (_, __) {},
+                onZoom: (_, __) {},
+                onRetry: (_) {},
+                onOpenPreview: (_) {},
+                onCopyImage: (_) {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    final center = tester.getCenter(find.byType(ImageCard));
+
+    await tester.sendEventToBinding(
+      PointerDownEvent(
+        pointer: 1,
+        position: center,
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryMouseButton,
+      ),
+    );
+
+    await tester.sendEventToBinding(
+      PointerScrollEvent(
+        position: center,
+        kind: PointerDeviceKind.mouse,
+        scrollDelta: const Offset(0, -40),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(scrollController.offset, closeTo(0, 0.01));
+
+    await tester.sendEventToBinding(
+      PointerUpEvent(
+        pointer: 1,
+        position: center,
+        kind: PointerDeviceKind.mouse,
+      ),
+    );
   });
 }

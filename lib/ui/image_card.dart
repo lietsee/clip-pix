@@ -359,9 +359,15 @@ class _ImageCardState extends State<ImageCard> {
 
   void _handlePointerSignal(PointerSignalEvent event) {
     if (event is PointerScrollEvent && _isRightButtonPressed) {
-      final delta = -event.scrollDelta.dy / _zoomFactor;
-      _applyZoom(delta);
-      _consumeScroll = true;
+      GestureBinding.instance.pointerSignalResolver.register(
+        event,
+        (resolvedEvent) {
+          final scrollEvent = resolvedEvent as PointerScrollEvent;
+          final delta = -scrollEvent.scrollDelta.dy / _zoomFactor;
+          _applyZoom(delta);
+          _consumeScroll = true;
+        },
+      );
     }
   }
 
