@@ -12,6 +12,7 @@ import 'package:clip_pix/system/state/image_library_state.dart';
 import 'package:clip_pix/system/state/selected_folder_state.dart';
 import 'package:clip_pix/ui/grid_view_module.dart';
 import 'package:clip_pix/ui/image_card.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -248,12 +249,26 @@ void main() {
 
     final cardFinder = find.byType(ImageCard);
     final cardRect = tester.getRect(cardFinder);
-    final dragStart = cardRect.bottomRight - const Offset(4, 4);
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(gesture.removePointer);
+    await gesture.addPointer(location: Offset.zero);
+    await gesture.moveTo(cardRect.center);
+    await tester.pump(const Duration(milliseconds: 150));
 
-    await tester.dragFrom(dragStart, const Offset(260, 140));
+    final handlePosition = cardRect.bottomRight - const Offset(12, 12);
+    final gestureDrag = await tester.startGesture(
+      handlePosition,
+      kind: PointerDeviceKind.mouse,
+    );
+    await gestureDrag.moveBy(const Offset(260, 140));
+    await gestureDrag.up();
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.pump(const Duration(milliseconds: 400));
 
     expect(tester.takeException(), isNull);
+
+    final pref = preferences.getOrCreate('item1');
+    expect(pref.columnSpan, greaterThanOrEqualTo(2));
   });
 }
