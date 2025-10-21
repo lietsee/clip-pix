@@ -10,6 +10,7 @@ import 'package:provider/single_child_widget.dart';
 
 import 'data/grid_card_preferences_repository.dart';
 import 'data/grid_layout_settings_repository.dart';
+import 'data/grid_order_repository.dart';
 import 'data/models/grid_card_pref.dart';
 import 'data/models/grid_layout_settings.dart';
 import 'data/models/image_entry.dart';

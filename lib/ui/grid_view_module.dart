@@ -13,6 +13,7 @@ import '../data/models/grid_layout_settings.dart';
 import '../data/models/image_item.dart';
 import '../system/clipboard_copy_service.dart';
 import '../system/state/folder_view_mode.dart';
+import '../system/state/grid_resize_controller.dart';
 import '../system/state/image_library_notifier.dart';
 import '../system/state/image_library_state.dart';
 import '../system/state/selected_folder_state.dart';
@@ -58,11 +59,6 @@ class _GridViewModuleState extends State<GridViewModule> {
   Size _draggedSize = Size.zero;
   int? _dragInitialIndex;
   int? _dragCurrentIndex;
-  GridResizeController? _resizeController;
-  GridResizeListener? _resizeListener;
-  double _lastViewportWidth = 0;
-  double _lastAvailableWidth = 0;
-  int _lastColumnCount = 1;
 
   List<_GridEntry> _entries = <_GridEntry>[];
   bool _loggedInitialBuild = false;
@@ -749,11 +745,11 @@ class _GridViewModuleState extends State<GridViewModule> {
       return;
     }
     final key = _cardKeys[id];
-    final context = key?.currentContext;
-    if (context == null) {
+    final cardContext = key?.currentContext;
+    if (cardContext == null) {
       return;
     }
-    final box = context.findRenderObject() as RenderBox?;
+    final box = cardContext.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) {
       return;
     }
@@ -778,7 +774,7 @@ class _GridViewModuleState extends State<GridViewModule> {
         ),
       ),
     );
-    Overlay.of(context).insert(_dragOverlay!);
+    Overlay.of(cardContext).insert(_dragOverlay!);
   }
 
   void _updateReorder(String id, Offset globalPosition) {

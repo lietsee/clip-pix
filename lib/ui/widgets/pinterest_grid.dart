@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -180,12 +182,13 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
       int bestStart = 0;
       double bestOffset = double.infinity;
 
+      const double epsilon = 0.001;
       for (int start = 0; start <= columnCount - span; start++) {
         double candidate = 0;
         for (int c = 0; c < span; c++) {
           candidate = math.max(candidate, columnHeights[start + c]);
         }
-        if (candidate < bestOffset - precisionErrorTolerance) {
+        if (candidate < bestOffset - epsilon) {
           bestOffset = candidate;
           bestStart = start;
         }
