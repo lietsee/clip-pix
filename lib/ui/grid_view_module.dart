@@ -708,8 +708,7 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   double _spanWidth(int span, double columnWidth) {
-    return columnWidth * span +
-        _gridGap * math.max(0.0, (span - 1).toDouble());
+    return columnWidth * span + _gridGap * math.max(0.0, (span - 1).toDouble());
   }
 
   List<ImageItem> _applyDirectoryOrder(List<ImageItem> items) {
@@ -718,8 +717,23 @@ class _GridViewModuleState extends State<GridViewModule> {
     if (path == null || repo == null) {
       return items;
     }
+    final stored = repo.getOrder(path);
     final ids = items.map((item) => item.id).toList();
-    final orderedIds = repo.sync(path, ids);
+    final currentSet = ids.toSet();
+    final orderedIds = <String>[];
+    for (final id in stored) {
+      if (currentSet.contains(id)) {
+        orderedIds.add(id);
+      }
+    }
+    for (final id in ids) {
+      if (!orderedIds.contains(id)) {
+        orderedIds.add(id);
+      }
+    }
+    if (!_listEquals(stored, orderedIds)) {
+      scheduleMicrotask(() => repo.save(path, orderedIds));
+    }
     final map = {for (final item in items) item.id: item};
     final orderedItems = <ImageItem>[];
     for (final id in orderedIds) {

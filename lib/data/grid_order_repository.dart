@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 
@@ -22,8 +24,7 @@ class GridOrderRepository extends ChangeNotifier {
       }
     }
     if (!_listEquals(stored, cleaned)) {
-      _box.put(path, cleaned);
-      notifyListeners();
+      scheduleMicrotask(() => save(path, cleaned));
     }
     return cleaned;
   }
