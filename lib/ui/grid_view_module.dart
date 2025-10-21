@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../data/grid_card_preferences_repository.dart';
+import '../data/grid_layout_settings_repository.dart';
+import '../data/models/grid_layout_settings.dart';
 import '../data/models/image_item.dart';
 import '../system/clipboard_copy_service.dart';
 import '../system/state/folder_view_mode.dart';
@@ -14,6 +16,7 @@ import '../system/state/image_library_notifier.dart';
 import '../system/state/image_library_state.dart';
 import '../system/state/selected_folder_state.dart';
 import 'image_card.dart';
+import 'widgets/pinterest_grid.dart';
 
 class GridViewModule extends StatefulWidget {
   const GridViewModule({super.key, required this.state, this.controller});
@@ -27,8 +30,8 @@ class GridViewModule extends StatefulWidget {
 
 class _GridViewModuleState extends State<GridViewModule> {
   static const Duration _animationDuration = Duration(milliseconds: 200);
-  static const double _spacing = 12;
-  static const double _minRowWidth = 200;
+  static const double _outerPadding = 12;
+  static const double _gridGap = 3;
 
   late GridCardPreferencesRepository _preferences;
   bool _isInitialized = false;
@@ -133,50 +136,66 @@ class _GridViewModuleState extends State<GridViewModule> {
       onRefresh: () => libraryNotifier.refresh(),
       child: LayoutBuilder(
         builder: (context, constraints) {
+          final settingsRepo = context.watch<GridLayoutSettingsRepository>();
+          final settings = settingsRepo.value;
           final controller = _resolveController(selectedState);
-          final availableWidth = constraints.maxWidth.isFinite
-              ? constraints.maxWidth - (_spacing * 2)
-              : MediaQuery.of(context).size.width - (_spacing * 2);
-          final rows = _buildRows(
-            availableWidth > 0 ? availableWidth : _minRowWidth,
+
+          final viewportWidth = constraints.maxWidth.isFinite
+              ? constraints.maxWidth
+              : MediaQuery.of(context).size.width;
+          final effectiveColumns = _resolveColumnCount(
+            viewportWidth - (_outerPadding * 2),
+            settings,
           );
+          final delegate = PinterestGridDelegate(
+            columnCount: effectiveColumns,
+            gap: _gridGap,
+          );
+          final backgroundColor = _backgroundForTone(settings.background);
           _currentBuildKeys.clear();
 
-          return SingleChildScrollView(
-            controller: controller,
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: EdgeInsets.only(
-              bottom: 80,
-              left: _spacing,
-              right: _spacing,
-              top: _spacing,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (var rowIndex = 0; rowIndex < rows.length; rowIndex++)
-                  Padding(
-                    padding: EdgeInsets.only(
-                      bottom: rowIndex == rows.length - 1 ? 0 : _spacing,
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        for (var itemIndex = 0;
-                            itemIndex < rows[rowIndex].items.length;
-                            itemIndex++)
-                          Padding(
-                            padding: EdgeInsets.only(
-                              right:
-                                  itemIndex == rows[rowIndex].items.length - 1
-                                      ? 0
-                                      : _spacing,
-                            ),
-                            child: _buildCard(rows[rowIndex].items[itemIndex]),
-                          ),
-                      ],
+          return Container(
+            color: backgroundColor,
+            child: CustomScrollView(
+              controller: controller,
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverPadding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: _outerPadding,
+                    vertical: _outerPadding,
+                  ).copyWith(bottom: _outerPadding + 68),
+                  sliver: PinterestSliverGrid(
+                    delegate: delegate,
+                    child: SliverChildBuilderDelegate(
+                      (context, index) {
+                        if (index >= _entries.length) {
+                          return null;
+                        }
+                        final entry = _entries[index];
+                        final item = entry.item;
+                        final sizeNotifier = _sizeNotifiers[item.id]!;
+                        final scaleNotifier = _scaleNotifiers[item.id]!;
+                        final span = _resolveSpan(
+                          sizeNotifier.value.width,
+                          viewportWidth - (_outerPadding * 2),
+                          delegate.columnCount,
+                        );
+
+                        final widget = _buildCard(
+                          entry: entry,
+                          sizeNotifier: sizeNotifier,
+                          scaleNotifier: scaleNotifier,
+                        );
+                        return PinterestGridTile(
+                          span: span,
+                          child: widget,
+                        );
+                      },
+                      childCount: _entries.length,
                     ),
                   ),
+                ),
               ],
             ),
           );
@@ -185,11 +204,12 @@ class _GridViewModuleState extends State<GridViewModule> {
     );
   }
 
-  Widget _buildCard(_RowItem rowItem) {
-    final entry = rowItem.entry;
+  Widget _buildCard({
+    required _GridEntry entry,
+    required ValueNotifier<Size> sizeNotifier,
+    required ValueNotifier<double> scaleNotifier,
+  }) {
     final item = entry.item;
-    final sizeNotifier = _sizeNotifiers[item.id]!;
-    final scaleNotifier = _scaleNotifiers[item.id]!;
     final animatedKey = ObjectKey(entry);
     final entryHash = identityHashCode(entry);
     debugPrint(
@@ -200,22 +220,19 @@ class _GridViewModuleState extends State<GridViewModule> {
         '[GridViewModule] duplicate_detected key=$animatedKey entryHash=$entryHash',
       );
     }
-    return SizedBox(
-      width: rowItem.width,
-      child: AnimatedOpacity(
-        key: animatedKey,
-        duration: _animationDuration,
-        opacity: entry.opacity,
-        child: ImageCard(
-          item: item,
-          sizeNotifier: sizeNotifier,
-          scaleNotifier: scaleNotifier,
-          onResize: _handleResize,
-          onZoom: _handleZoom,
-          onRetry: _handleRetry,
-          onOpenPreview: _showPreviewDialog,
-          onCopyImage: _handleCopy,
-        ),
+    return AnimatedOpacity(
+      key: animatedKey,
+      duration: _animationDuration,
+      opacity: entry.opacity,
+      child: ImageCard(
+        item: item,
+        sizeNotifier: sizeNotifier,
+        scaleNotifier: scaleNotifier,
+        onResize: _handleResize,
+        onZoom: _handleZoom,
+        onRetry: _handleRetry,
+        onOpenPreview: _showPreviewDialog,
+        onCopyImage: _handleCopy,
       ),
     );
   }
@@ -267,41 +284,6 @@ class _GridViewModuleState extends State<GridViewModule> {
     final directory = widget.state.activeDirectory;
     final key = directory?.path ?? '_root';
     return _directoryControllers.putIfAbsent(key, () => ScrollController());
-  }
-
-  List<_RowLayout> _buildRows(double maxWidth) {
-    final List<_RowLayout> rows = <_RowLayout>[];
-    if (maxWidth <= 0) {
-      return rows;
-    }
-
-    List<_RowItem> currentRow = <_RowItem>[];
-    double occupiedWidth = 0;
-
-    for (final entry in _entries) {
-      final size = _sizeNotifiers[entry.item.id]!.value;
-      final width = math.min(size.width, maxWidth);
-      final neededWidth =
-          currentRow.isEmpty ? width : occupiedWidth + _spacing + width;
-
-      if (currentRow.isNotEmpty && neededWidth > maxWidth) {
-        rows.add(_RowLayout(List<_RowItem>.from(currentRow)));
-        currentRow = <_RowItem>[];
-        occupiedWidth = 0;
-      }
-
-      if (currentRow.isNotEmpty) {
-        occupiedWidth += _spacing;
-      }
-      currentRow.add(_RowItem(entry: entry, width: width));
-      occupiedWidth += width;
-    }
-
-    if (currentRow.isNotEmpty) {
-      rows.add(_RowLayout(currentRow));
-    }
-
-    return rows;
   }
 
   _GridEntry _createEntry(ImageItem item) {
@@ -475,19 +457,44 @@ class _GridViewModuleState extends State<GridViewModule> {
     }
     return duplicates;
   }
-}
 
-class _RowLayout {
-  _RowLayout(this.items);
+  int _resolveColumnCount(double availableWidth, GridLayoutSettings settings) {
+    if (availableWidth <= 0) {
+      return 1;
+    }
+    final maxColumns = settings.maxColumns;
+    final preferred = settings.preferredColumns;
+    final target = preferred.clamp(1, maxColumns);
+    final minColumnWidth = 150.0;
+    final maxPossible = math.max(1, (availableWidth / minColumnWidth).floor());
+    return math.max(1, math.min(target, maxPossible));
+  }
 
-  final List<_RowItem> items;
-}
+  int _resolveSpan(double storedWidth, double availableWidth, int columnCount) {
+    if (columnCount <= 0) {
+      return 1;
+    }
+    final gapTotal = _gridGap * (columnCount - 1);
+    final columnWidth = (availableWidth - gapTotal) / columnCount;
+    if (columnWidth <= 0) {
+      return 1;
+    }
+    final rawSpan = (storedWidth / columnWidth).round();
+    return rawSpan.clamp(1, columnCount);
+  }
 
-class _RowItem {
-  _RowItem({required this.entry, required this.width});
-
-  final _GridEntry entry;
-  final double width;
+  Color _backgroundForTone(GridBackgroundTone tone) {
+    switch (tone) {
+      case GridBackgroundTone.white:
+        return Colors.white;
+      case GridBackgroundTone.lightGray:
+        return const Color(0xFFF0F0F0);
+      case GridBackgroundTone.darkGray:
+        return const Color(0xFF2E2E2E);
+      case GridBackgroundTone.black:
+        return Colors.black;
+    }
+  }
 }
 
 class _GridEntry {
