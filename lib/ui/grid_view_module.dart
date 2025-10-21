@@ -169,7 +169,7 @@ class _GridViewModuleState extends State<GridViewModule> {
               ? constraints.maxWidth
               : MediaQuery.of(context).size.width;
           final availableWidth =
-              math.max(0, viewportWidth - (_outerPadding * 2));
+              math.max(0.0, viewportWidth - (_outerPadding * 2));
           _lastViewportWidth = viewportWidth;
           _lastAvailableWidth = availableWidth;
           final effectiveColumns = _resolveColumnCount(
@@ -657,8 +657,8 @@ class _GridViewModuleState extends State<GridViewModule> {
       final ratio = currentSize.width > 0
           ? (currentSize.height / currentSize.width)
           : 1.0;
-      final width =
-          columnWidth * clampedSpan + _gridGap * math.max(0, clampedSpan - 1);
+      final width = columnWidth * clampedSpan +
+          _gridGap * math.max(0.0, (clampedSpan - 1).toDouble());
       final height = ratio.isFinite && ratio > 0 ? width * ratio : width;
       sizeNotifier.value = Size(width, height);
       futures.add(_preferences.saveSize(item.id, Size(width, height)));
@@ -708,7 +708,8 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   double _spanWidth(int span, double columnWidth) {
-    return columnWidth * span + _gridGap * math.max(0, span - 1);
+    return columnWidth * span +
+        _gridGap * math.max(0.0, (span - 1).toDouble());
   }
 
   List<ImageItem> _applyDirectoryOrder(List<ImageItem> items) {
