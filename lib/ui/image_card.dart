@@ -58,8 +58,10 @@ Offset clampPanOffset({
   if (!scale.isFinite || scale <= 1.0 || size.width <= 0 || size.height <= 0) {
     return Offset.zero;
   }
-  final minDx = size.width / scale - size.width;
-  final minDy = size.height / scale - size.height;
+  final scaledWidth = size.width * scale;
+  final scaledHeight = size.height * scale;
+  final minDx = size.width - scaledWidth;
+  final minDy = size.height - scaledHeight;
   return Offset(
     offset.dx.clamp(minDx, 0.0),
     offset.dy.clamp(minDy, 0.0),

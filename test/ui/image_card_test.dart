@@ -187,8 +187,8 @@ void main() {
         scale: 2.0,
       );
 
-      final minDx = size.width / 2 - size.width; // -150
-      final minDy = size.height / 2 - size.height; // -90
+      final minDx = size.width - size.width * 2.0; // -300
+      final minDy = size.height - size.height * 2.0; // -180
 
       expect(result.dx, closeTo(minDx, 0.001));
       expect(result.dy, closeTo(minDy, 0.001));
