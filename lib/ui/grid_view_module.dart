@@ -40,7 +40,6 @@ class _GridViewModuleState extends State<GridViewModule> {
 
   final Map<String, ValueNotifier<Size>> _sizeNotifiers = {};
   final Map<String, ValueNotifier<double>> _scaleNotifiers = {};
-  final Map<String, Timer> _sizeDebounceTimers = {};
   final Map<String, Timer> _scaleDebounceTimers = {};
   final Map<String, ScrollController> _directoryControllers = {};
   final Map<String, VoidCallback> _sizeListeners = {};
@@ -112,10 +111,7 @@ class _GridViewModuleState extends State<GridViewModule> {
     for (final controller in _directoryControllers.values) {
       controller.dispose();
     }
-    for (final timer in [
-      ..._sizeDebounceTimers.values,
-      ..._scaleDebounceTimers.values,
-    ]) {
+    for (final timer in _scaleDebounceTimers.values) {
       timer.cancel();
     }
     _sizeNotifiers.forEach((key, notifier) {
@@ -333,11 +329,7 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   void _handleResize(String id, Size newSize) {
-    _sizeDebounceTimers[id]?.cancel();
-    _sizeDebounceTimers[id] = Timer(const Duration(milliseconds: 200), () {
-      _sizeDebounceTimers.remove(id);
-      unawaited(_preferences.saveSize(id, newSize));
-    });
+    unawaited(_preferences.saveSize(id, newSize));
   }
 
   void _handleZoom(String id, double scale) {
@@ -348,7 +340,6 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   void _handleSpanChange(String id, int span) {
-    _sizeDebounceTimers[id]?.cancel();
     unawaited(_preferences.saveColumnSpan(id, span));
     if (mounted) {
       setState(() {});
@@ -475,7 +466,6 @@ class _GridViewModuleState extends State<GridViewModule> {
     entry.removalTimer?.cancel();
     entry.removalTimer = null;
     final id = entry.item.id;
-    _sizeDebounceTimers.remove(id)?.cancel();
     _scaleDebounceTimers.remove(id)?.cancel();
     final sizeNotifier = _sizeNotifiers.remove(id);
     final sizeListener = _sizeListeners.remove(id);

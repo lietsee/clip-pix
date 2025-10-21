@@ -32,6 +32,7 @@ import 'system/state/watcher_status_notifier.dart';
 import 'system/url_download_service.dart';
 import 'package:path/path.dart' as p;
 import 'ui/main_screen.dart';
+import 'system/window_bounds_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -180,6 +181,15 @@ class ClipPixApp extends StatelessWidget {
           },
         ),
       ),
+      if (Platform.isWindows)
+        Provider<WindowBoundsService>(
+          create: (_) {
+            final service = WindowBoundsService(appStateBox);
+            service.init();
+            return service;
+          },
+          dispose: (_, service) => service.dispose(),
+        ),
       ProxyProvider4<ImageSaver, ClipboardCopyService, UrlDownloadService,
           ImageLibraryNotifier, ClipboardMonitor>(
         update: (
