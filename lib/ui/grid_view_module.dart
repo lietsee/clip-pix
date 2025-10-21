@@ -208,17 +208,27 @@ class _GridViewModuleState extends State<GridViewModule> {
                         final sizeNotifier = _sizeNotifiers[item.id]!;
                         final scaleNotifier = _scaleNotifiers[item.id]!;
                         final pref = _preferences.getOrCreate(item.id);
-                        final span =
+                        final currentSize = sizeNotifier.value;
+                        final inferredSpan = _spanFromWidth(
+                          currentSize.width,
+                          columnWidth,
+                          gridDelegate.columnCount,
+                        );
+                        final storedSpan =
                             pref.columnSpan.clamp(1, gridDelegate.columnCount);
+                        final span = currentSize.width > 0
+                            ? inferredSpan.clamp(
+                                1,
+                                gridDelegate.columnCount,
+                              )
+                            : storedSpan;
                         final desiredWidth = _spanWidth(span, columnWidth);
                         final desiredHeight =
-                            pref.customHeight ?? sizeNotifier.value.height;
+                            pref.customHeight ?? currentSize.height;
 
-                        if ((sizeNotifier.value.width - desiredWidth).abs() >
-                                0.5 ||
+                        if ((currentSize.width - desiredWidth).abs() > 0.5 ||
                             pref.customHeight != null &&
-                                (sizeNotifier.value.height - desiredHeight)
-                                        .abs() >
+                                (currentSize.height - desiredHeight).abs() >
                                     0.5) {
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             if (!mounted) return;
@@ -241,6 +251,9 @@ class _GridViewModuleState extends State<GridViewModule> {
                         );
                       },
                       childCount: _entries.length,
+                      addAutomaticKeepAlives: false,
+                      addRepaintBoundaries: false,
+                      addSemanticIndexes: false,
                     ),
                   ),
                 ),
@@ -341,6 +354,9 @@ class _GridViewModuleState extends State<GridViewModule> {
   void _handleSpanChange(String id, int span) {
     _sizeDebounceTimers[id]?.cancel();
     unawaited(_preferences.saveColumnSpan(id, span));
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   ScrollController _resolveController(SelectedFolderState selectedState) {
@@ -709,6 +725,26 @@ class _GridViewModuleState extends State<GridViewModule> {
 
   double _spanWidth(int span, double columnWidth) {
     return columnWidth * span + _gridGap * math.max(0.0, (span - 1).toDouble());
+  }
+
+  int _spanFromWidth(
+    double width,
+    double columnWidth,
+    int columnCount,
+  ) {
+    if (columnWidth <= 0 || columnCount <= 0 || width <= 0) {
+      return 1;
+    }
+    final unit = columnWidth + _gridGap;
+    if (unit <= 0) {
+      return 1;
+    }
+    final normalized = (width + _gridGap) / unit;
+    if (!normalized.isFinite) {
+      return 1;
+    }
+    final rounded = normalized.round();
+    return rounded.clamp(1, columnCount);
   }
 
   List<ImageItem> _applyDirectoryOrder(List<ImageItem> items) {
