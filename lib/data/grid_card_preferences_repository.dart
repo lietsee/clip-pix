@@ -36,7 +36,12 @@ class GridCardPreferencesRepository {
   Future<void> saveSize(String id, Size size) async {
     final pref = getOrCreate(
       id,
-    ).copyWith(width: size.width, height: size.height, customHeight: size.height);
+    ).copyWith(
+      width: size.width,
+      height: size.height,
+      customHeight: size.height,
+      overrideCustomHeight: true,
+    );
     await _box.put(id, pref);
   }
 
@@ -51,7 +56,11 @@ class GridCardPreferencesRepository {
   }
 
   Future<void> saveCustomHeight(String id, double? height) async {
-    final pref = getOrCreate(id).copyWith(customHeight: height);
+    final current = getOrCreate(id);
+    final pref = current.copyWith(
+      customHeight: height,
+      overrideCustomHeight: true,
+    );
     await _box.put(id, pref);
   }
 

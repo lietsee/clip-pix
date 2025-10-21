@@ -42,6 +42,11 @@ class _GridViewModuleState extends State<GridViewModule> {
   final Map<String, Timer> _scaleDebounceTimers = {};
   final Map<String, ScrollController> _directoryControllers = {};
   final Map<String, VoidCallback> _sizeListeners = {};
+  GridResizeController? _resizeController;
+  GridResizeListener? _resizeListener;
+  double _lastViewportWidth = 0;
+  double _lastAvailableWidth = 0;
+  int _lastColumnCount = 1;
 
   List<_GridEntry> _entries = <_GridEntry>[];
   bool _loggedInitialBuild = false;
@@ -65,6 +70,7 @@ class _GridViewModuleState extends State<GridViewModule> {
         }
       });
     }
+    _attachResizeController();
   }
 
   @override
@@ -107,6 +113,7 @@ class _GridViewModuleState extends State<GridViewModule> {
     for (final notifier in _scaleNotifiers.values) {
       notifier.dispose();
     }
+    _detachResizeController();
     super.dispose();
   }
 
@@ -143,11 +150,16 @@ class _GridViewModuleState extends State<GridViewModule> {
           final viewportWidth = constraints.maxWidth.isFinite
               ? constraints.maxWidth
               : MediaQuery.of(context).size.width;
+          final availableWidth =
+              math.max(0, viewportWidth - (_outerPadding * 2));
+          _lastViewportWidth = viewportWidth;
+          _lastAvailableWidth = availableWidth;
           final effectiveColumns = _resolveColumnCount(
-            viewportWidth - (_outerPadding * 2),
+            availableWidth,
             settings,
           );
-          final delegate = PinterestGridDelegate(
+          _lastColumnCount = effectiveColumns;
+          final gridDelegate = PinterestGridDelegate(
             columnCount: effectiveColumns,
             gap: _gridGap,
           );
@@ -166,8 +178,8 @@ class _GridViewModuleState extends State<GridViewModule> {
                     vertical: _outerPadding,
                   ).copyWith(bottom: _outerPadding + 68),
                   sliver: PinterestSliverGrid(
-                    delegate: delegate,
-                    child: SliverChildBuilderDelegate(
+                    gridDelegate: gridDelegate,
+                    delegate: SliverChildBuilderDelegate(
                       (context, index) {
                         if (index >= _entries.length) {
                           return null;
@@ -178,8 +190,8 @@ class _GridViewModuleState extends State<GridViewModule> {
                         final scaleNotifier = _scaleNotifiers[item.id]!;
                         final span = _resolveSpan(
                           sizeNotifier.value.width,
-                          viewportWidth - (_outerPadding * 2),
-                          delegate.columnCount,
+                          availableWidth,
+                          gridDelegate.columnCount,
                         );
 
                         final widget = _buildCard(
@@ -494,6 +506,149 @@ class _GridViewModuleState extends State<GridViewModule> {
       case GridBackgroundTone.black:
         return Colors.black;
     }
+  }
+
+  void _attachResizeController() {
+    final controller = context.read<GridResizeController>();
+    if (_resizeController == controller) {
+      return;
+    }
+    _detachResizeController();
+    _resizeController = controller;
+    _resizeListener = _handleResizeCommand;
+    controller.attach(_resizeListener!);
+  }
+
+  void _detachResizeController() {
+    final controller = _resizeController;
+    final listener = _resizeListener;
+    if (controller != null && listener != null) {
+      controller.detach(listener);
+    }
+    _resizeController = null;
+    _resizeListener = null;
+  }
+
+  Future<GridResizeSnapshot?> _handleResizeCommand(
+    GridResizeCommand command,
+  ) async {
+    switch (command.type) {
+      case GridResizeCommandType.apply:
+        final span = command.span;
+        if (span == null || _entries.isEmpty) {
+          return null;
+        }
+        final snapshot = _captureSnapshot();
+        await _applyBulkSpan(span);
+        return snapshot;
+      case GridResizeCommandType.undo:
+        final snapshot = command.snapshot;
+        if (snapshot == null) {
+          return null;
+        }
+        final redoSnapshot = _captureSnapshot();
+        await _restoreSnapshot(snapshot);
+        return redoSnapshot;
+      case GridResizeCommandType.redo:
+        final snapshot = command.snapshot;
+        if (snapshot == null) {
+          return null;
+        }
+        final undoSnapshot = _captureSnapshot();
+        await _restoreSnapshot(snapshot);
+        return undoSnapshot;
+    }
+  }
+
+  GridResizeSnapshot _captureSnapshot() {
+    final values = <String, GridCardSizeSnapshot>{};
+    for (final entry in _entries) {
+      final item = entry.item;
+      final sizeNotifier = _sizeNotifiers[item.id];
+      if (sizeNotifier == null) {
+        continue;
+      }
+      final size = sizeNotifier.value;
+      final pref = _preferences.getOrCreate(item.id);
+      values[item.id] = GridCardSizeSnapshot(
+        width: size.width,
+        height: size.height,
+        columnSpan: pref.columnSpan,
+        customHeight: pref.customHeight,
+      );
+    }
+    return GridResizeSnapshot(
+      directoryPath: widget.state.activeDirectory?.path,
+      values: values,
+    );
+  }
+
+  Future<void> _applyBulkSpan(int span) async {
+    final columnCount = math.max(1, _lastColumnCount);
+    final clampedSpan = span.clamp(1, columnCount);
+    final columnWidth = _calculateColumnWidth(columnCount);
+    if (columnWidth <= 0) {
+      return;
+    }
+    final futures = <Future<void>>[];
+    for (final entry in _entries) {
+      final item = entry.item;
+      final sizeNotifier = _sizeNotifiers[item.id];
+      if (sizeNotifier == null) {
+        continue;
+      }
+      final currentSize = sizeNotifier.value;
+      final ratio = currentSize.width > 0
+          ? (currentSize.height / currentSize.width)
+          : 1.0;
+      final width =
+          columnWidth * clampedSpan + _gridGap * math.max(0, clampedSpan - 1);
+      final height = ratio.isFinite && ratio > 0 ? width * ratio : width;
+      sizeNotifier.value = Size(width, height);
+      futures.add(_preferences.saveSize(item.id, Size(width, height)));
+      futures.add(_preferences.saveColumnSpan(item.id, clampedSpan));
+    }
+    if (futures.isNotEmpty) {
+      await Future.wait(futures);
+    }
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _restoreSnapshot(GridResizeSnapshot snapshot) async {
+    final futures = <Future<void>>[];
+    for (final entry in _entries) {
+      final item = entry.item;
+      final saved = snapshot.values[item.id];
+      if (saved == null) {
+        continue;
+      }
+      final sizeNotifier = _sizeNotifiers[item.id];
+      sizeNotifier?.value = Size(saved.width, saved.height);
+      futures
+          .add(_preferences.saveSize(item.id, Size(saved.width, saved.height)));
+      futures.add(_preferences.saveColumnSpan(item.id, saved.columnSpan));
+      futures.add(_preferences.saveCustomHeight(item.id, saved.customHeight));
+    }
+    if (futures.isNotEmpty) {
+      await Future.wait(futures);
+    }
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  double _calculateColumnWidth(int columnCount) {
+    if (columnCount <= 0) {
+      return 0;
+    }
+    final totalGap = _gridGap * (columnCount - 1);
+    final width = _lastAvailableWidth - totalGap;
+    if (width <= 0) {
+      return 0;
+    }
+    return width / columnCount;
   }
 }
 

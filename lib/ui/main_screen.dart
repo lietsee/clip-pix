@@ -18,6 +18,7 @@ import '../system/state/watcher_status_notifier.dart';
 import '../system/state/watcher_status_state.dart';
 import 'package:path/path.dart' as p;
 import 'grid_view_module.dart';
+import 'widgets/grid_settings_dialog.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -69,6 +70,16 @@ class _MainScreenState extends State<MainScreen> {
             icon: const Icon(Icons.folder_open),
             tooltip: 'フォルダを選択',
             onPressed: () => _requestFolderSelection(context),
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: 'グリッド設定',
+            onPressed: () {
+              showDialog<void>(
+                context: context,
+                builder: (_) => const GridSettingsDialog(),
+              );
+            },
           ),
         ],
       ),

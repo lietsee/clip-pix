@@ -28,6 +28,7 @@ class GridCardPreference {
     double? scale,
     int? columnSpan,
     double? customHeight,
+    bool overrideCustomHeight = false,
   }) {
     return GridCardPreference(
       id: id ?? this.id,
@@ -35,7 +36,9 @@ class GridCardPreference {
       height: height ?? this.height,
       scale: scale ?? this.scale,
       columnSpan: columnSpan ?? this.columnSpan,
-      customHeight: customHeight ?? this.customHeight,
+      customHeight: overrideCustomHeight
+          ? customHeight
+          : (customHeight ?? this.customHeight),
     );
   }
 }

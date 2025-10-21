@@ -70,17 +70,17 @@ class PinterestSliverGrid extends SliverMultiBoxAdaptorWidget {
   const PinterestSliverGrid({
     super.key,
     required SliverChildDelegate delegate,
-    required this.delegate,
+    required this.gridDelegate,
   }) : super(delegate: delegate);
 
-  final PinterestGridDelegate delegate;
+  final PinterestGridDelegate gridDelegate;
 
   @override
   RenderSliverPinterestGrid createRenderObject(BuildContext context) {
     return RenderSliverPinterestGrid(
       childManager: context as SliverMultiBoxAdaptorElement,
-      columnCount: delegate.columnCount,
-      gap: delegate.gap,
+      columnCount: gridDelegate.columnCount,
+      gap: gridDelegate.gap,
     );
   }
 
@@ -90,8 +90,8 @@ class PinterestSliverGrid extends SliverMultiBoxAdaptorWidget {
     RenderSliverPinterestGrid renderObject,
   ) {
     renderObject
-      ..columnCount = delegate.columnCount
-      ..gap = delegate.gap;
+      ..columnCount = gridDelegate.columnCount
+      ..gap = gridDelegate.gap;
   }
 }
 

@@ -22,6 +22,7 @@ import 'system/folder_picker_service.dart';
 import 'system/file_watcher.dart';
 import 'system/image_saver.dart';
 import 'system/state/app_state_provider.dart';
+import 'system/state/grid_resize_controller.dart';
 import 'system/state/image_library_notifier.dart';
 import 'system/state/image_library_state.dart';
 import 'system/state/image_history_notifier.dart';
@@ -146,6 +147,9 @@ class ClipPixApp extends StatelessWidget {
       ),
       ChangeNotifierProvider<GridLayoutSettingsRepository>(
         create: (_) => GridLayoutSettingsRepository(gridLayoutBox),
+      ),
+      ChangeNotifierProvider<GridResizeController>(
+        create: (_) => GridResizeController(),
       ),
       Provider<ImageRepository>(create: (_) => ImageRepository()),
       StateNotifierProvider<ImageLibraryNotifier, ImageLibraryState>(
