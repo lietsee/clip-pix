@@ -1,9 +1,10 @@
 import 'dart:io';
+import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/gestures.dart';
 
 import '../data/models/image_item.dart';
 
@@ -14,20 +15,30 @@ class ImageCard extends StatefulWidget {
     required this.sizeNotifier,
     required this.scaleNotifier,
     required this.onResize,
+    required this.onSpanChange,
     required this.onZoom,
     required this.onRetry,
     required this.onOpenPreview,
     required this.onCopyImage,
+    required this.columnWidth,
+    required this.columnCount,
+    required this.columnGap,
+    this.onStartReorder,
   });
 
   final ImageItem item;
   final ValueNotifier<Size> sizeNotifier;
   final ValueNotifier<double> scaleNotifier;
   final void Function(String id, Size newSize) onResize;
+  final void Function(String id, int span) onSpanChange;
   final void Function(String id, double scale) onZoom;
   final void Function(String id) onRetry;
   final void Function(ImageItem item) onOpenPreview;
   final void Function(ImageItem item) onCopyImage;
+  final double columnWidth;
+  final int columnCount;
+  final double columnGap;
+  final void Function(String id, Offset globalPosition)? onStartReorder;
 
   @override
   State<ImageCard> createState() => _ImageCardState();
@@ -50,9 +61,16 @@ class _ImageCardState extends State<ImageCard> {
   bool _consumeScroll = false;
   bool _isRightButtonPressed = false;
   bool _isResizing = false;
+  bool _showControls = false;
+  bool _isPanning = false;
   int _retryCount = 0;
+  int _currentSpan = 1;
   Size? _resizeStartSize;
   Offset? _resizeStartGlobalPosition;
+  int _resizeStartSpan = 1;
+  Offset? _panStartLocal;
+  Offset? _panStartOffset;
+  Offset _imageOffset = Offset.zero;
   ImageChunkEvent? _latestChunk;
   Key _imageKey = UniqueKey();
   ImageStream? _imageStream;
@@ -64,6 +82,7 @@ class _ImageCardState extends State<ImageCard> {
     super.initState();
     widget.sizeNotifier.addListener(_handleSizeExternalChange);
     widget.scaleNotifier.addListener(_handleScaleExternalChange);
+    _currentSpan = _computeSpan(widget.sizeNotifier.value.width);
   }
 
   @override
@@ -79,6 +98,11 @@ class _ImageCardState extends State<ImageCard> {
     }
     if (oldWidget.item.filePath != widget.item.filePath) {
       _reloadImage();
+    }
+    if (oldWidget.columnWidth != widget.columnWidth ||
+        oldWidget.columnGap != widget.columnGap ||
+        oldWidget.columnCount != widget.columnCount) {
+      _currentSpan = _computeSpan(widget.sizeNotifier.value.width);
     }
   }
 
@@ -96,6 +120,7 @@ class _ImageCardState extends State<ImageCard> {
     if (size != widget.sizeNotifier.value) {
       widget.sizeNotifier.value = size;
     }
+    _currentSpan = _computeSpan(size.width);
   }
 
   void _handleScaleExternalChange() {
@@ -131,11 +156,16 @@ class _ImageCardState extends State<ImageCard> {
         child: Listener(
           onPointerDown: _handlePointerDown,
           onPointerUp: _handlePointerUp,
+          onPointerMove: _handlePointerMove,
           onPointerSignal: _handlePointerSignal,
           child: MouseRegion(
+            onEnter: (_) => _setControlsVisible(true),
+            onExit: (_) => _setControlsVisible(false),
             cursor: _isResizing
                 ? SystemMouseCursors.resizeUpLeftDownRight
-                : SystemMouseCursors.basic,
+                : _isPanning
+                    ? SystemMouseCursors.grabbing
+                    : SystemMouseCursors.basic,
             child: ValueListenableBuilder<Size>(
               valueListenable: widget.sizeNotifier,
               builder: (context, size, _) {
@@ -145,60 +175,23 @@ class _ImageCardState extends State<ImageCard> {
                     widget.sizeNotifier.value = clampedSize;
                   });
                 }
-                return LayoutBuilder(
-                  builder: (context, constraints) {
-                    final availableWidth = constraints.maxWidth.isFinite
-                        ? constraints.maxWidth
-                        : clampedSize.width;
-                    final desiredWidth = clampedSize.width;
-                    final adjustedWidth = availableWidth.isFinite
-                        ? desiredWidth
-                            .clamp(_minWidth, availableWidth)
-                            .toDouble()
-                        : desiredWidth;
-
-                    if ((adjustedWidth - desiredWidth).abs() > 0.5) {
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        final currentSize = widget.sizeNotifier.value;
-                        if (!mounted ||
-                            (widget.sizeNotifier.value.width - adjustedWidth)
-                                    .abs() <=
-                                0.5) {
-                          return;
-                        }
-                        widget.sizeNotifier.value =
-                            Size(adjustedWidth, currentSize.height);
-                      });
-                    }
-
-                    final widthFactor =
-                        availableWidth.isFinite && availableWidth > 0
-                            ? (adjustedWidth / availableWidth).clamp(0.0, 1.0)
-                            : 1.0;
-
-                    return Align(
-                      alignment: Alignment.topLeft,
-                      widthFactor: widthFactor == 0 ? null : widthFactor,
-                      child: SizedBox(
-                        width: adjustedWidth,
-                        height: clampedSize.height,
-                        child: Card(
-                          clipBehavior: Clip.antiAlias,
-                          elevation: 2,
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              _buildImageContent(
-                                context,
-                                Size(adjustedWidth, clampedSize.height),
-                              ),
-                              _buildResizeHandle(),
-                            ],
-                          ),
+                return SizedBox(
+                  width: clampedSize.width,
+                  height: clampedSize.height,
+                  child: Card(
+                    clipBehavior: Clip.antiAlias,
+                    elevation: 2,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        _buildImageContent(
+                          context,
+                          Size(clampedSize.width, clampedSize.height),
                         ),
-                      ),
-                    );
-                  },
+                        _buildHoverControls(),
+                      ],
+                    ),
+                  ),
                 );
               },
             ),
@@ -243,22 +236,6 @@ class _ImageCardState extends State<ImageCard> {
                 ),
               ),
             ),
-            Positioned(
-              top: 12,
-              right: 12,
-              child: Tooltip(
-                message: 'コピー',
-                child: ElevatedButton(
-                  onPressed: () => widget.onCopyImage(widget.item),
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.zero,
-                    shape: const CircleBorder(),
-                    minimumSize: const Size(32, 32),
-                  ),
-                  child: const Icon(Icons.copy, size: 18),
-                ),
-              ),
-            ),
           ],
         );
       },
@@ -271,46 +248,122 @@ class _ImageCardState extends State<ImageCard> {
     final cacheWidth =
         (size.width * scale * pixelRatio).clamp(64, 4096).round();
 
+    final matrix = Matrix4.identity()
+      ..scale(scale, scale)
+      ..translate(_imageOffset.dx, _imageOffset.dy);
+
     return Positioned.fill(
-      child: Transform.scale(
-        scale: scale,
-        child: Image.file(
-          File(widget.item.filePath),
-          key: ValueKey('${widget.item.filePath}_${_imageKey}_$cacheWidth'),
-          fit: BoxFit.contain,
-          cacheWidth: cacheWidth,
+      child: ClipRect(
+        child: Transform(
+          alignment: Alignment.topLeft,
+          transform: matrix,
+          child: Image.file(
+            File(widget.item.filePath),
+            key: ValueKey('${widget.item.filePath}_${_imageKey}_$cacheWidth'),
+            fit: BoxFit.contain,
+            cacheWidth: cacheWidth,
+            gaplessPlayback: true,
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildResizeHandle() {
-    return Positioned(
-      right: 0,
-      bottom: 0,
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onPanStart: _onResizeStart,
-        onPanUpdate: _onResizeUpdate,
-        onPanEnd: _onResizeEnd,
-        child: Semantics(
-          label: 'サイズ変更ハンドル',
-          button: true,
-          child: Container(
-            width: 24,
-            height: 24,
-            decoration: const BoxDecoration(
-              color: Color(0x33000000),
-              borderRadius: BorderRadius.only(topLeft: Radius.circular(12)),
-            ),
-            alignment: Alignment.bottomRight,
-            child: const Icon(
-              Icons.open_in_full,
-              size: 16,
-              color: Colors.white,
+  Widget _buildHoverControls() {
+    return Stack(
+      children: [
+        Positioned(
+          top: 12,
+          right: 12,
+          child: _fadeChild(
+            child: Tooltip(
+              message: 'コピー',
+              child: ElevatedButton(
+                onPressed: () => widget.onCopyImage(widget.item),
+                style: ElevatedButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  shape: const CircleBorder(),
+                  minimumSize: const Size(32, 32),
+                ),
+                child: const Icon(Icons.copy, size: 18),
+              ),
             ),
           ),
         ),
+        Positioned(
+          right: 0,
+          bottom: 0,
+          child: _fadeChild(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onPanStart: _onResizeStart,
+              onPanUpdate: _onResizeUpdate,
+              onPanEnd: _onResizeEnd,
+              child: Semantics(
+                label: 'サイズ変更ハンドル',
+                button: true,
+                child: Container(
+                  width: 24,
+                  height: 24,
+                  decoration: const BoxDecoration(
+                    color: Color(0x44000000),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(12),
+                    ),
+                  ),
+                  alignment: Alignment.bottomRight,
+                  child: const Icon(
+                    Icons.open_in_full,
+                    size: 16,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 8,
+          child: Center(
+            child: _fadeChild(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onPanStart: (details) {
+                  widget.onStartReorder?.call(
+                    widget.item.id,
+                    details.globalPosition,
+                  );
+                },
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0x33000000),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.drag_indicator,
+                    size: 18,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _fadeChild({required Widget child}) {
+    return AnimatedOpacity(
+      opacity: _showControls ? 1 : 0,
+      duration: const Duration(milliseconds: 150),
+      child: IgnorePointer(
+        ignoring: !_showControls,
+        child: child,
       ),
     );
   }
@@ -320,6 +373,7 @@ class _ImageCardState extends State<ImageCard> {
       _isResizing = true;
       _resizeStartSize = widget.sizeNotifier.value;
       _resizeStartGlobalPosition = details.globalPosition;
+      _resizeStartSpan = _currentSpan;
     });
   }
 
@@ -328,12 +382,21 @@ class _ImageCardState extends State<ImageCard> {
       return;
     }
     final delta = details.globalPosition - _resizeStartGlobalPosition!;
-    final newSize = Size(
-      _resizeStartSize!.width + delta.dx,
-      _resizeStartSize!.height + delta.dy,
-    );
-    final clamped = _clampSize(newSize);
-    widget.sizeNotifier.value = clamped;
+    final targetWidth =
+        (_resizeStartSize!.width + delta.dx).clamp(_minWidth, _maxWidth);
+    final snappedSpan = _snapSpan(targetWidth);
+    final snappedWidth = _widthForSpan(snappedSpan);
+    final newHeight =
+        (_resizeStartSize!.height + delta.dy).clamp(_minHeight, _maxHeight);
+    final newSize = Size(snappedWidth, newHeight);
+    if (widget.sizeNotifier.value != newSize) {
+      widget.sizeNotifier.value = newSize;
+    }
+    if (snappedSpan != _currentSpan) {
+      setState(() {
+        _currentSpan = snappedSpan;
+      });
+    }
   }
 
   void _onResizeEnd(DragEndDetails details) {
@@ -343,18 +406,57 @@ class _ImageCardState extends State<ImageCard> {
       _resizeStartGlobalPosition = null;
     });
     widget.onResize(widget.item.id, widget.sizeNotifier.value);
+    if (_currentSpan != _resizeStartSpan) {
+      widget.onSpanChange(widget.item.id, _currentSpan);
+    }
   }
 
   void _handlePointerDown(PointerDownEvent event) {
     if (event.kind == PointerDeviceKind.mouse) {
       _isRightButtonPressed = event.buttons & kSecondaryMouseButton != 0;
+      final shiftPressed = _isShiftPressed();
+      if (shiftPressed && event.buttons & kPrimaryMouseButton != 0) {
+        final box = context.findRenderObject() as RenderBox?;
+        if (box != null) {
+          final local = box.globalToLocal(event.position);
+          _isPanning = true;
+          _panStartLocal = local;
+          _panStartOffset = _imageOffset;
+        }
+      }
     }
   }
 
   void _handlePointerUp(PointerUpEvent event) {
     if (event.kind == PointerDeviceKind.mouse) {
       _isRightButtonPressed = false;
+      if (_isPanning) {
+        _isPanning = false;
+        _panStartLocal = null;
+        _panStartOffset = null;
+      }
     }
+  }
+
+  void _handlePointerMove(PointerMoveEvent event) {
+    if (!_isPanning || _panStartLocal == null || _panStartOffset == null) {
+      return;
+    }
+    if (!_isShiftPressed()) {
+      _isPanning = false;
+      _panStartLocal = null;
+      _panStartOffset = null;
+      return;
+    }
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null) {
+      return;
+    }
+    final local = box.globalToLocal(event.position);
+    final delta = local - _panStartLocal!;
+    setState(() {
+      _imageOffset = _panStartOffset! + delta;
+    });
   }
 
   void _handlePointerSignal(PointerSignalEvent event) {
@@ -363,8 +465,10 @@ class _ImageCardState extends State<ImageCard> {
         event,
         (resolvedEvent) {
           final scrollEvent = resolvedEvent as PointerScrollEvent;
+          final box = context.findRenderObject() as RenderBox?;
+          final local = box?.globalToLocal(scrollEvent.position);
           final delta = -scrollEvent.scrollDelta.dy / _zoomFactor;
-          _applyZoom(delta);
+          _applyZoom(delta, focalPoint: local);
           _consumeScroll = true;
         },
       );
@@ -409,8 +513,20 @@ class _ImageCardState extends State<ImageCard> {
     return KeyEventResult.ignored;
   }
 
-  void _applyZoom(double delta) {
-    final newScale = _clampScale(widget.scaleNotifier.value + delta);
+  void _applyZoom(double delta, {Offset? focalPoint}) {
+    final currentScale = widget.scaleNotifier.value;
+    final newScale = _clampScale(currentScale + delta);
+    if (newScale == currentScale) {
+      return;
+    }
+    if (focalPoint != null) {
+      final localPoint =
+          (focalPoint - _imageOffset) / (currentScale == 0 ? 1 : currentScale);
+      final newOffset = focalPoint - localPoint * newScale;
+      setState(() {
+        _imageOffset = newOffset;
+      });
+    }
     widget.scaleNotifier.value = newScale;
     widget.onZoom(widget.item.id, newScale);
   }
@@ -517,6 +633,48 @@ class _ImageCardState extends State<ImageCard> {
         _visualState = _CardVisualState.loading;
         _latestChunk = null;
       });
+    });
+  }
+
+  int _computeSpan(double width) {
+    return _snapSpan(width);
+  }
+
+  int _snapSpan(double targetWidth) {
+    if (widget.columnCount <= 1) {
+      return 1;
+    }
+    int bestSpan = 1;
+    double bestDiff = double.infinity;
+    for (int span = 1; span <= widget.columnCount; span++) {
+      final width = _widthForSpan(span);
+      final diff = (width - targetWidth).abs();
+      if (diff < bestDiff - 0.1) {
+        bestDiff = diff;
+        bestSpan = span;
+      }
+    }
+    return bestSpan.clamp(1, widget.columnCount);
+  }
+
+  double _widthForSpan(int span) {
+    final clamped = span.clamp(1, widget.columnCount);
+    return widget.columnWidth * clamped +
+        widget.columnGap * math.max(0, clamped - 1);
+  }
+
+  bool _isShiftPressed() {
+    final pressed = HardwareKeyboard.instance.logicalKeysPressed;
+    return pressed.contains(LogicalKeyboardKey.shiftLeft) ||
+        pressed.contains(LogicalKeyboardKey.shiftRight);
+  }
+
+  void _setControlsVisible(bool visible) {
+    if (_showControls == visible) {
+      return;
+    }
+    setState(() {
+      _showControls = visible;
     });
   }
 }

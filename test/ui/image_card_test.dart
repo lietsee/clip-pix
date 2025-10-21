@@ -9,6 +9,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:clip_pix/data/models/image_item.dart';
 import 'package:clip_pix/ui/image_card.dart';
 
+double _spanWidth(int span, double columnWidth, double gap) =>
+    columnWidth * span + gap * (span - 1);
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -29,9 +32,16 @@ void main() {
     }
   });
 
-  testWidgets('ImageCard clamps and applies horizontal resize', (tester) async {
-    final sizeNotifier = ValueNotifier(const Size(200, 220));
+  testWidgets('ImageCard snaps width to nearest column span', (tester) async {
+    const columnWidth = 120.0;
+    const columnGap = 3.0;
+    const columnCount = 4;
+
+    final sizeNotifier = ValueNotifier(
+      Size(_spanWidth(2, columnWidth, columnGap), 220),
+    );
     final scaleNotifier = ValueNotifier(1.0);
+    final recordedSpans = <int>[];
 
     addTearDown(() {
       sizeNotifier.dispose();
@@ -44,16 +54,20 @@ void main() {
           body: Align(
             alignment: Alignment.topLeft,
             child: SizedBox(
-              width: 360,
+              width: 600,
               child: ImageCard(
                 item: ImageItem(id: '1', filePath: imageFile.path),
                 sizeNotifier: sizeNotifier,
                 scaleNotifier: scaleNotifier,
                 onResize: (_, __) {},
+                onSpanChange: (_, span) => recordedSpans.add(span),
                 onZoom: (_, __) {},
                 onRetry: (_) {},
                 onOpenPreview: (_) {},
                 onCopyImage: (_) {},
+                columnWidth: columnWidth,
+                columnCount: columnCount,
+                columnGap: columnGap,
               ),
             ),
           ),
@@ -62,29 +76,32 @@ void main() {
     );
 
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 250));
 
-    Size cardSize() => tester.getSize(find.byType(Card));
+    expect(
+      sizeNotifier.value.width,
+      closeTo(_spanWidth(2, columnWidth, columnGap), 0.5),
+    );
 
-    expect(cardSize().width, closeTo(200, 0.5));
-
-    sizeNotifier.value = const Size(140, 220);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 250));
-    expect(cardSize().width, closeTo(140, 0.5));
-
-    sizeNotifier.value = const Size(500, 220);
-    await tester.pump();
+    sizeNotifier.value = Size(
+      _spanWidth(3, columnWidth, columnGap),
+      260,
+    );
     await tester.pump();
 
-    expect(cardSize().width, closeTo(360, 0.5));
-    expect(sizeNotifier.value.width, closeTo(360, 0.5));
+    expect(
+      sizeNotifier.value.width,
+      closeTo(_spanWidth(3, columnWidth, columnGap), 0.5),
+    );
+    expect(recordedSpans.contains(3), isFalse);
   });
 
   testWidgets('ImageCard suppresses scroll while zooming', (tester) async {
     final sizeNotifier = ValueNotifier(const Size(200, 220));
     final scaleNotifier = ValueNotifier(1.0);
     final scrollController = ScrollController();
+    const columnWidth = 150.0;
+    const columnGap = 3.0;
+    const columnCount = 4;
 
     addTearDown(() {
       sizeNotifier.dispose();
@@ -104,10 +121,14 @@ void main() {
                 sizeNotifier: sizeNotifier,
                 scaleNotifier: scaleNotifier,
                 onResize: (_, __) {},
+                onSpanChange: (_, __) {},
                 onZoom: (_, __) {},
                 onRetry: (_) {},
                 onOpenPreview: (_) {},
                 onCopyImage: (_) {},
+                columnWidth: columnWidth,
+                columnCount: columnCount,
+                columnGap: columnGap,
               ),
             ),
           ),
@@ -141,9 +162,8 @@ void main() {
     expect(scrollController.offset, closeTo(0, 0.01));
 
     await tester.sendEventToBinding(
-      PointerUpEvent(
+      const PointerUpEvent(
         pointer: 1,
-        position: center,
         kind: PointerDeviceKind.mouse,
       ),
     );

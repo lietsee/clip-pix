@@ -163,6 +163,7 @@ class _GridViewModuleState extends State<GridViewModule> {
             columnCount: effectiveColumns,
             gap: _gridGap,
           );
+          final columnWidth = _calculateColumnWidth(effectiveColumns);
           final backgroundColor = _backgroundForTone(settings.background);
           _currentBuildKeys.clear();
 
@@ -188,20 +189,37 @@ class _GridViewModuleState extends State<GridViewModule> {
                         final item = entry.item;
                         final sizeNotifier = _sizeNotifiers[item.id]!;
                         final scaleNotifier = _scaleNotifiers[item.id]!;
-                        final span = _resolveSpan(
-                          sizeNotifier.value.width,
-                          availableWidth,
-                          gridDelegate.columnCount,
-                        );
+                        final pref = _preferences.getOrCreate(item.id);
+                        final span =
+                            pref.columnSpan.clamp(1, gridDelegate.columnCount);
+                        final desiredWidth = _spanWidth(span, columnWidth);
+                        final desiredHeight =
+                            pref.customHeight ?? sizeNotifier.value.height;
 
-                        final widget = _buildCard(
+                        if ((sizeNotifier.value.width - desiredWidth).abs() >
+                                0.5 ||
+                            pref.customHeight != null &&
+                                (sizeNotifier.value.height - desiredHeight)
+                                        .abs() >
+                                    0.5) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (!mounted) return;
+                            sizeNotifier.value =
+                                Size(desiredWidth, desiredHeight);
+                          });
+                        }
+
+                        final cardWidget = _buildCard(
                           entry: entry,
                           sizeNotifier: sizeNotifier,
                           scaleNotifier: scaleNotifier,
+                          columnWidth: columnWidth,
+                          columnCount: gridDelegate.columnCount,
+                          span: span,
                         );
                         return PinterestGridTile(
                           span: span,
-                          child: widget,
+                          child: cardWidget,
                         );
                       },
                       childCount: _entries.length,
@@ -220,6 +238,9 @@ class _GridViewModuleState extends State<GridViewModule> {
     required _GridEntry entry,
     required ValueNotifier<Size> sizeNotifier,
     required ValueNotifier<double> scaleNotifier,
+    required double columnWidth,
+    required int columnCount,
+    required int span,
   }) {
     final item = entry.item;
     final animatedKey = ObjectKey(entry);
@@ -241,10 +262,15 @@ class _GridViewModuleState extends State<GridViewModule> {
         sizeNotifier: sizeNotifier,
         scaleNotifier: scaleNotifier,
         onResize: _handleResize,
+        onSpanChange: _handleSpanChange,
         onZoom: _handleZoom,
         onRetry: _handleRetry,
         onOpenPreview: _showPreviewDialog,
         onCopyImage: _handleCopy,
+        columnWidth: columnWidth,
+        columnCount: columnCount,
+        columnGap: _gridGap,
+        onStartReorder: null,
       ),
     );
   }
@@ -286,6 +312,11 @@ class _GridViewModuleState extends State<GridViewModule> {
     _scaleDebounceTimers[id] = Timer(const Duration(milliseconds: 150), () {
       unawaited(_preferences.saveScale(id, scale));
     });
+  }
+
+  void _handleSpanChange(String id, int span) {
+    _sizeDebounceTimers[id]?.cancel();
+    unawaited(_preferences.saveColumnSpan(id, span));
   }
 
   ScrollController _resolveController(SelectedFolderState selectedState) {
@@ -649,6 +680,10 @@ class _GridViewModuleState extends State<GridViewModule> {
       return 0;
     }
     return width / columnCount;
+  }
+
+  double _spanWidth(int span, double columnWidth) {
+    return columnWidth * span + _gridGap * math.max(0, span - 1);
   }
 }
 
