@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:meta/meta.dart';
 
 import '../data/models/image_item.dart';
 
@@ -46,6 +47,23 @@ class ImageCard extends StatefulWidget {
 
   @override
   State<ImageCard> createState() => _ImageCardState();
+}
+
+@visibleForTesting
+Offset clampPanOffset({
+  required Offset offset,
+  required Size size,
+  required double scale,
+}) {
+  if (!scale.isFinite || scale <= 1.0 || size.width <= 0 || size.height <= 0) {
+    return Offset.zero;
+  }
+  final minDx = size.width / scale - size.width;
+  final minDy = size.height / scale - size.height;
+  return Offset(
+    offset.dx.clamp(minDx, 0.0),
+    offset.dy.clamp(minDy, 0.0),
+  );
 }
 
 enum _CardVisualState { loading, ready, error }
@@ -125,12 +143,32 @@ class _ImageCardState extends State<ImageCard> {
       widget.sizeNotifier.value = size;
     }
     _currentSpan = _computeSpan(size.width);
+    final constrained = clampPanOffset(
+      offset: _imageOffset,
+      size: size,
+      scale: widget.scaleNotifier.value,
+    );
+    if (constrained != _imageOffset) {
+      setState(() {
+        _imageOffset = constrained;
+      });
+    }
   }
 
   void _handleScaleExternalChange() {
     final scale = _clampScale(widget.scaleNotifier.value);
     if (scale != widget.scaleNotifier.value) {
       widget.scaleNotifier.value = scale;
+    }
+    final constrained = clampPanOffset(
+      offset: _imageOffset,
+      size: widget.sizeNotifier.value,
+      scale: scale,
+    );
+    if (constrained != _imageOffset) {
+      setState(() {
+        _imageOffset = constrained;
+      });
     }
   }
 
@@ -467,7 +505,11 @@ class _ImageCardState extends State<ImageCard> {
     final local = box.globalToLocal(event.position);
     final delta = local - _panStartLocal!;
     setState(() {
-      _imageOffset = _panStartOffset! + delta;
+      _imageOffset = clampPanOffset(
+        offset: _panStartOffset! + delta,
+        size: widget.sizeNotifier.value,
+        scale: widget.scaleNotifier.value,
+      );
     });
   }
 
@@ -531,14 +573,24 @@ class _ImageCardState extends State<ImageCard> {
     if (newScale == currentScale) {
       return;
     }
-    if (focalPoint != null) {
-      final localPoint =
-          (focalPoint - _imageOffset) / (currentScale == 0 ? 1 : currentScale);
-      final newOffset = focalPoint - localPoint * newScale;
-      setState(() {
-        _imageOffset = newOffset;
-      });
-    }
+    final nextOffset = focalPoint != null
+        ? () {
+            final localPoint = (focalPoint - _imageOffset) /
+                (currentScale == 0 ? 1 : currentScale);
+            return clampPanOffset(
+              offset: focalPoint - localPoint * newScale,
+              size: widget.sizeNotifier.value,
+              scale: newScale,
+            );
+          }()
+        : clampPanOffset(
+            offset: _imageOffset,
+            size: widget.sizeNotifier.value,
+            scale: newScale,
+          );
+    setState(() {
+      _imageOffset = nextOffset;
+    });
     widget.scaleNotifier.value = newScale;
     widget.onZoom(widget.item.id, newScale);
   }

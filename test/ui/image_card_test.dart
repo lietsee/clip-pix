@@ -168,4 +168,41 @@ void main() {
       ),
     );
   });
+
+  group('clampPanOffset', () {
+    test('returns zero when scale is <= 1', () {
+      const offset = Offset(50, -30);
+      const size = Size(200, 220);
+
+      final result = clampPanOffset(offset: offset, size: size, scale: 1.0);
+
+      expect(result, Offset.zero);
+    });
+
+    test('clamps offset within horizontal and vertical bounds', () {
+      const size = Size(300, 180);
+      final result = clampPanOffset(
+        offset: const Offset(-500, -400),
+        size: size,
+        scale: 2.0,
+      );
+
+      final minDx = size.width / 2 - size.width; // -150
+      final minDy = size.height / 2 - size.height; // -90
+
+      expect(result.dx, closeTo(minDx, 0.001));
+      expect(result.dy, closeTo(minDy, 0.001));
+    });
+
+    test('handles non-finite scale gracefully', () {
+      const size = Size(200, 200);
+      final result = clampPanOffset(
+        offset: const Offset(-20, -20),
+        size: size,
+        scale: double.nan,
+      );
+
+      expect(result, Offset.zero);
+    });
+  });
 }
