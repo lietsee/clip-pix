@@ -8,9 +8,16 @@ class GridOrderRepository extends ChangeNotifier {
 
   final Box<dynamic> _box;
 
+  List<String> getOrder(String path) {
+    final stored = _box.get(path);
+    if (stored is List) {
+      return List<String>.from(stored);
+    }
+    return const <String>[];
+  }
+
   List<String> sync(String path, List<String> currentIds) {
-    final stored = List<String>.from(
-        _box.get(path, defaultValue: const <String>[]) as List);
+    final stored = getOrder(path);
     final currentSet = currentIds.toSet();
     final cleaned = <String>[];
     for (final id in stored) {

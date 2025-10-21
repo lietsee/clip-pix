@@ -731,7 +731,7 @@ class _GridViewModuleState extends State<GridViewModule> {
         orderedIds.add(id);
       }
     }
-    if (!_listEquals(stored, orderedIds)) {
+    if (!listEquals(stored, orderedIds)) {
       scheduleMicrotask(() => repo.save(path, orderedIds));
     }
     final map = {for (final item in items) item.id: item};
