@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../data/grid_card_preferences_repository.dart';
 import '../data/grid_layout_settings_repository.dart';
+import '../data/grid_order_repository.dart';
 import '../data/models/grid_layout_settings.dart';
 import '../data/models/image_item.dart';
 import '../system/clipboard_copy_service.dart';
@@ -42,6 +43,21 @@ class _GridViewModuleState extends State<GridViewModule> {
   final Map<String, Timer> _scaleDebounceTimers = {};
   final Map<String, ScrollController> _directoryControllers = {};
   final Map<String, VoidCallback> _sizeListeners = {};
+  final Map<String, GlobalKey> _cardKeys = {};
+  GridLayoutSettingsRepository? _layoutSettingsRepository;
+  GridOrderRepository? _orderRepository;
+  GridResizeController? _resizeController;
+  GridResizeListener? _resizeListener;
+  double _lastViewportWidth = 0;
+  double _lastAvailableWidth = 0;
+  int _lastColumnCount = 1;
+  OverlayEntry? _dragOverlay;
+  String? _draggingId;
+  Offset _dragOverlayOffset = Offset.zero;
+  Offset _dragPointerOffset = Offset.zero;
+  Size _draggedSize = Size.zero;
+  int? _dragInitialIndex;
+  int? _dragCurrentIndex;
   GridResizeController? _resizeController;
   GridResizeListener? _resizeListener;
   double _lastViewportWidth = 0;
@@ -57,8 +73,11 @@ class _GridViewModuleState extends State<GridViewModule> {
     super.didChangeDependencies();
     if (!_isInitialized) {
       _preferences = context.read<GridCardPreferencesRepository>();
-      _entries = widget.state.images.map(_createEntry).toList(growable: true);
-      for (final item in widget.state.images) {
+      _layoutSettingsRepository = context.read<GridLayoutSettingsRepository>();
+      _orderRepository = context.read<GridOrderRepository>();
+      final orderedImages = _applyDirectoryOrder(widget.state.images);
+      _entries = orderedImages.map(_createEntry).toList(growable: true);
+      for (final item in orderedImages) {
         _ensureNotifiers(item);
       }
       setState(() {
@@ -82,7 +101,8 @@ class _GridViewModuleState extends State<GridViewModule> {
     if (!listEquals(oldWidget.state.images, widget.state.images)) {
       _reconcileEntries(widget.state.images);
     } else {
-      for (final item in widget.state.images) {
+      final orderedImages = _applyDirectoryOrder(widget.state.images);
+      for (final item in orderedImages) {
         _ensureNotifiers(item);
       }
     }
@@ -114,6 +134,7 @@ class _GridViewModuleState extends State<GridViewModule> {
       notifier.dispose();
     }
     _detachResizeController();
+    _detachResizeController();
     super.dispose();
   }
 
@@ -143,6 +164,7 @@ class _GridViewModuleState extends State<GridViewModule> {
       onRefresh: () => libraryNotifier.refresh(),
       child: LayoutBuilder(
         builder: (context, constraints) {
+          _orderRepository = context.watch<GridOrderRepository>();
           final settingsRepo = context.watch<GridLayoutSettingsRepository>();
           final settings = settingsRepo.value;
           final controller = _resolveController(selectedState);
@@ -253,24 +275,30 @@ class _GridViewModuleState extends State<GridViewModule> {
         '[GridViewModule] duplicate_detected key=$animatedKey entryHash=$entryHash',
       );
     }
-    return AnimatedOpacity(
-      key: animatedKey,
-      duration: _animationDuration,
-      opacity: entry.opacity,
-      child: ImageCard(
-        item: item,
-        sizeNotifier: sizeNotifier,
-        scaleNotifier: scaleNotifier,
-        onResize: _handleResize,
-        onSpanChange: _handleSpanChange,
-        onZoom: _handleZoom,
-        onRetry: _handleRetry,
-        onOpenPreview: _showPreviewDialog,
-        onCopyImage: _handleCopy,
-        columnWidth: columnWidth,
-        columnCount: columnCount,
-        columnGap: _gridGap,
-        onStartReorder: null,
+    final cardKey = _cardKeys.putIfAbsent(item.id, () => GlobalKey());
+    return SizedBox(
+      key: cardKey,
+      child: AnimatedOpacity(
+        key: animatedKey,
+        duration: _animationDuration,
+        opacity: entry.opacity,
+        child: ImageCard(
+          item: item,
+          sizeNotifier: sizeNotifier,
+          scaleNotifier: scaleNotifier,
+          onResize: _handleResize,
+          onSpanChange: _handleSpanChange,
+          onZoom: _handleZoom,
+          onRetry: _handleRetry,
+          onOpenPreview: _showPreviewDialog,
+          onCopyImage: _handleCopy,
+          columnWidth: columnWidth,
+          columnCount: columnCount,
+          columnGap: _gridGap,
+          onStartReorder: _startReorder,
+          onReorderUpdate: _updateReorder,
+          onReorderEnd: _endReorder,
+        ),
       ),
     );
   }
@@ -353,16 +381,17 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   void _reconcileEntries(List<ImageItem> newItems) {
+    final orderedItems = _applyDirectoryOrder(newItems);
     _logEntries('reconcile_before', _entries);
     final duplicateIncoming = _findDuplicateIds(
-      newItems.map((item) => item.id),
+      orderedItems.map((item) => item.id),
     );
     if (duplicateIncoming.isNotEmpty) {
       debugPrint(
         '[GridViewModule] incoming duplicates detected: $duplicateIncoming',
       );
     }
-    final newIds = newItems.map((item) => item.id).toSet();
+    final newIds = orderedItems.map((item) => item.id).toSet();
     final existingMap = {for (final entry in _entries) entry.item.id: entry};
 
     for (final entry in _entries) {
@@ -382,7 +411,7 @@ class _GridViewModuleState extends State<GridViewModule> {
     }
 
     final List<_GridEntry> reordered = <_GridEntry>[];
-    for (final item in newItems) {
+    for (final item in orderedItems) {
       final existing = existingMap[item.id];
       if (existing != null) {
         existing.item = item;
@@ -684,6 +713,170 @@ class _GridViewModuleState extends State<GridViewModule> {
 
   double _spanWidth(int span, double columnWidth) {
     return columnWidth * span + _gridGap * math.max(0, span - 1);
+  }
+
+  List<ImageItem> _applyDirectoryOrder(List<ImageItem> items) {
+    final path = widget.state.activeDirectory?.path;
+    final repo = _orderRepository;
+    if (path == null || repo == null) {
+      return items;
+    }
+    final ids = items.map((item) => item.id).toList();
+    final orderedIds = repo.sync(path, ids);
+    final map = {for (final item in items) item.id: item};
+    final orderedItems = <ImageItem>[];
+    for (final id in orderedIds) {
+      final item = map[id];
+      if (item != null) {
+        orderedItems.add(item);
+      }
+    }
+    return orderedItems;
+  }
+
+  void _persistOrder() {
+    final path = widget.state.activeDirectory?.path;
+    final repo = _orderRepository;
+    if (path == null || repo == null) {
+      return;
+    }
+    final order = _entries.map((entry) => entry.item.id).toList();
+    unawaited(repo.save(path, order));
+  }
+
+  void _startReorder(String id, Offset globalPosition) {
+    if (_draggingId != null) {
+      return;
+    }
+    final key = _cardKeys[id];
+    final context = key?.currentContext;
+    if (context == null) {
+      return;
+    }
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) {
+      return;
+    }
+    final origin = box.localToGlobal(Offset.zero);
+    _dragPointerOffset = globalPosition - origin;
+    _dragOverlayOffset = origin;
+    _draggedSize = box.size;
+    _draggingId = id;
+    _dragInitialIndex = _entries.indexWhere((entry) => entry.item.id == id);
+    _dragCurrentIndex = _dragInitialIndex;
+    if (_dragInitialIndex != null) {
+      setState(() {
+        _entries[_dragInitialIndex!].opacity = 0.0;
+      });
+    }
+    _dragOverlay = OverlayEntry(
+      builder: (context) => Positioned(
+        left: _dragOverlayOffset.dx,
+        top: _dragOverlayOffset.dy,
+        child: IgnorePointer(
+          child: _buildDragPreview(),
+        ),
+      ),
+    );
+    Overlay.of(context).insert(_dragOverlay!);
+  }
+
+  void _updateReorder(String id, Offset globalPosition) {
+    if (_draggingId != id || _dragOverlay == null) {
+      return;
+    }
+    _dragOverlayOffset = globalPosition - _dragPointerOffset;
+    _dragOverlay!.markNeedsBuild();
+
+    final targetIndex = _hitTestIndex(globalPosition);
+    if (_dragCurrentIndex == null || targetIndex == null) {
+      return;
+    }
+    if (targetIndex == _dragCurrentIndex) {
+      return;
+    }
+    setState(() {
+      final entry = _entries.removeAt(_dragCurrentIndex!);
+      final clampedIndex = targetIndex.clamp(0, _entries.length);
+      _entries.insert(clampedIndex, entry);
+      _dragCurrentIndex = clampedIndex;
+    });
+  }
+
+  void _endReorder(String id) {
+    if (_draggingId != id) {
+      return;
+    }
+    final overlay = _dragOverlay;
+    if (overlay != null) {
+      overlay.remove();
+    }
+    _dragOverlay = null;
+    if (_dragCurrentIndex != null &&
+        _dragCurrentIndex! >= 0 &&
+        _dragCurrentIndex! < _entries.length) {
+      setState(() {
+        _entries[_dragCurrentIndex!].opacity = 1;
+      });
+    }
+    _persistOrder();
+    _draggingId = null;
+    _dragCurrentIndex = null;
+    _dragInitialIndex = null;
+  }
+
+  Widget _buildDragPreview() {
+    final id = _draggingId;
+    if (id == null) {
+      return const SizedBox.shrink();
+    }
+    final entry = _entries.firstWhere((element) => element.item.id == id);
+    return Material(
+      elevation: 12,
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        width: _draggedSize.width,
+        height: _draggedSize.height,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.file(
+            File(entry.item.filePath),
+            fit: BoxFit.cover,
+          ),
+        ),
+      ),
+    );
+  }
+
+  int? _hitTestIndex(Offset globalPosition) {
+    int? target;
+    double bestDistance = double.infinity;
+    for (var i = 0; i < _entries.length; i++) {
+      final entry = _entries[i];
+      if (entry.item.id == _draggingId) {
+        continue;
+      }
+      final key = _cardKeys[entry.item.id];
+      final context = key?.currentContext;
+      if (context == null) {
+        continue;
+      }
+      final box = context.findRenderObject() as RenderBox?;
+      if (box == null || !box.hasSize) {
+        continue;
+      }
+      final origin = box.localToGlobal(Offset.zero);
+      final rect = origin & box.size;
+      if (rect.contains(globalPosition)) {
+        return i;
+      }
+      final distance = (rect.center.dy - globalPosition.dy).abs();
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        target = i;
+      }
+    }
+    return target ?? (_entries.length - 1);
   }
 }
 

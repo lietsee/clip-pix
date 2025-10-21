@@ -48,6 +48,7 @@ Future<void> main() async {
         imageHistoryBox: boxes.imageHistoryBox,
         gridCardPrefBox: boxes.gridCardPrefBox,
         gridLayoutBox: boxes.gridLayoutBox,
+        gridOrderBox: boxes.gridOrderBox,
       ),
     ),
     (error, stackTrace) =>
@@ -106,6 +107,7 @@ Future<
       Box<dynamic> imageHistoryBox,
       Box<GridCardPreference> gridCardPrefBox,
       Box<dynamic> gridLayoutBox,
+      Box<dynamic> gridOrderBox,
     })> _openCoreBoxes() async {
   final appStateBox = await Hive.openBox<dynamic>('app_state');
   final imageHistoryBox = await Hive.openBox<dynamic>('image_history');
@@ -113,11 +115,13 @@ Future<
     'grid_card_prefs',
   );
   final gridLayoutBox = await Hive.openBox<dynamic>('grid_layout');
+  final gridOrderBox = await Hive.openBox<dynamic>('grid_order');
   return (
     appStateBox: appStateBox,
     imageHistoryBox: imageHistoryBox,
     gridCardPrefBox: gridCardPrefBox,
     gridLayoutBox: gridLayoutBox,
+    gridOrderBox: gridOrderBox,
   );
 }
 
@@ -128,12 +132,14 @@ class ClipPixApp extends StatelessWidget {
     required this.imageHistoryBox,
     required this.gridCardPrefBox,
     required this.gridLayoutBox,
+    required this.gridOrderBox,
   });
 
   final Box<dynamic> appStateBox;
   final Box<dynamic> imageHistoryBox;
   final Box<GridCardPreference> gridCardPrefBox;
   final Box<dynamic> gridLayoutBox;
+  final Box<dynamic> gridOrderBox;
 
   @override
   Widget build(BuildContext context) {
@@ -147,6 +153,9 @@ class ClipPixApp extends StatelessWidget {
       ),
       ChangeNotifierProvider<GridLayoutSettingsRepository>(
         create: (_) => GridLayoutSettingsRepository(gridLayoutBox),
+      ),
+      ChangeNotifierProvider<GridOrderRepository>(
+        create: (_) => GridOrderRepository(gridOrderBox),
       ),
       ChangeNotifierProvider<GridResizeController>(
         create: (_) => GridResizeController(),

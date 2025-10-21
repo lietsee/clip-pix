@@ -24,6 +24,8 @@ class ImageCard extends StatefulWidget {
     required this.columnCount,
     required this.columnGap,
     this.onStartReorder,
+    this.onReorderUpdate,
+    this.onReorderEnd,
   });
 
   final ImageItem item;
@@ -39,6 +41,8 @@ class ImageCard extends StatefulWidget {
   final int columnCount;
   final double columnGap;
   final void Function(String id, Offset globalPosition)? onStartReorder;
+  final void Function(String id, Offset globalPosition)? onReorderUpdate;
+  final void Function(String id)? onReorderEnd;
 
   @override
   State<ImageCard> createState() => _ImageCardState();
@@ -336,6 +340,14 @@ class _ImageCardState extends State<ImageCard> {
                     details.globalPosition,
                   );
                 },
+                onPanUpdate: (details) {
+                  widget.onReorderUpdate?.call(
+                    widget.item.id,
+                    details.globalPosition,
+                  );
+                },
+                onPanEnd: (_) => widget.onReorderEnd?.call(widget.item.id),
+                onPanCancel: () => widget.onReorderEnd?.call(widget.item.id),
                 child: Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
