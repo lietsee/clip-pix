@@ -223,17 +223,12 @@ class _GridViewModuleState extends State<GridViewModule> {
                               )
                             : storedSpan;
                         final desiredWidth = _spanWidth(span, columnWidth);
-                        final desiredHeight =
-                            pref.customHeight ?? currentSize.height;
 
-                        if ((currentSize.width - desiredWidth).abs() > 0.5 ||
-                            pref.customHeight != null &&
-                                (currentSize.height - desiredHeight).abs() >
-                                    0.5) {
+                        if ((currentSize.width - desiredWidth).abs() > 0.5) {
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             if (!mounted) return;
                             sizeNotifier.value =
-                                Size(desiredWidth, desiredHeight);
+                                Size(desiredWidth, currentSize.height);
                           });
                         }
 
@@ -340,6 +335,7 @@ class _GridViewModuleState extends State<GridViewModule> {
   void _handleResize(String id, Size newSize) {
     _sizeDebounceTimers[id]?.cancel();
     _sizeDebounceTimers[id] = Timer(const Duration(milliseconds: 200), () {
+      _sizeDebounceTimers.remove(id);
       unawaited(_preferences.saveSize(id, newSize));
     });
   }
