@@ -298,7 +298,9 @@ class _ImageCardState extends State<ImageCard> {
   }
 
   Widget _buildImageLayer(Size size, double scale) {
-    _attachImageStream(size, scale);
+    if (!_isResizing) {
+      _attachImageStream(size, scale);
+    }
     final pixelRatio = MediaQuery.of(context).devicePixelRatio;
     final cacheWidth =
         (size.width * scale * pixelRatio).clamp(64, 4096).round();
@@ -490,6 +492,7 @@ class _ImageCardState extends State<ImageCard> {
       _resizeStartSize = null;
       _resizeStartGlobalPosition = null;
     });
+    _attachImageStream(widget.sizeNotifier.value, _currentScale);
     widget.onResize(widget.item.id, widget.sizeNotifier.value);
     if (_currentSpan != _resizeStartSpan) {
       widget.onSpanChange(widget.item.id, _currentSpan);
