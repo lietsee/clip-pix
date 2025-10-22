@@ -206,19 +206,7 @@ class WindowBoundsService with WidgetsBindingObserver {
   }
 
   String _resolveConfigPath() {
-    final buffer = wsalloc(MAX_PATH);
-    try {
-      final length = GetModuleFileName(0, buffer, MAX_PATH);
-      String exePath;
-      if (length > 0) {
-        exePath = buffer.toDartString();
-      } else {
-        exePath = Platform.resolvedExecutable;
-      }
-      final exeDir = p.dirname(exePath);
-      return p.join(exeDir, _configFileName);
-    } finally {
-      calloc.free(buffer);
-    }
+    final baseDir = Directory.current.path;
+    return p.join(baseDir, _configFileName);
   }
 }
