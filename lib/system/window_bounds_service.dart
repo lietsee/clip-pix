@@ -193,7 +193,7 @@ class WindowBoundsService with WidgetsBindingObserver {
 
   int _resolveWindowHandle() {
     final className = TEXT('FLUTTER_RUNNER_WIN32_WINDOW');
-    final hwnd = FindWindow(className, Pointer<Utf16>.fromAddress(0));
+    final hwnd = FindWindow(className, nullptr.cast<Utf16>());
     calloc.free(className);
     if (hwnd != 0) {
       return hwnd;
@@ -208,7 +208,7 @@ class WindowBoundsService with WidgetsBindingObserver {
   String _resolveConfigPath() {
     final buffer = wsalloc(MAX_PATH);
     try {
-      final length = GetModuleFileName(nullptr, buffer, MAX_PATH);
+      final length = GetModuleFileName(0, buffer, MAX_PATH);
       String exePath;
       if (length > 0) {
         exePath = buffer.toDartString();
