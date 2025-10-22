@@ -193,7 +193,7 @@ class WindowBoundsService with WidgetsBindingObserver {
 
   int _resolveWindowHandle() {
     final className = TEXT('FLUTTER_RUNNER_WIN32_WINDOW');
-    final hwnd = FindWindow(className, nullptr);
+    final hwnd = FindWindow(className, Pointer<Utf16>.fromAddress(0));
     calloc.free(className);
     if (hwnd != 0) {
       return hwnd;
