@@ -714,12 +714,17 @@ class _ImageCardState extends State<ImageCard> {
     _streamListener = ImageStreamListener(
       (image, synchronousCall) {
         _retryCount = 0;
+        debugPrint(
+            '[ImageCard] image_ready id=${widget.item.id} size=${size.width}x${size.height} scale=$scale');
         _updateVisualState(_CardVisualState.ready);
       },
       onChunk: (event) {
+        debugPrint(
+            '[ImageCard] image_chunk id=${widget.item.id} loaded=${event.cumulativeBytesLoaded} expected=${event.expectedTotalBytes}');
         _updateVisualState(_CardVisualState.loading, chunk: event);
       },
       onError: (error, stackTrace) {
+        debugPrint('[ImageCard] image_error id=${widget.item.id} error=$error');
         _updateVisualState(_CardVisualState.error);
       },
     );

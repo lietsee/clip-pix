@@ -9,7 +9,7 @@ import 'models/image_source_type.dart';
 
 class ImageRepository {
   ImageRepository({Logger? logger})
-    : _logger = logger ?? Logger('ImageRepository');
+      : _logger = logger ?? Logger('ImageRepository');
 
   final Logger _logger;
 
@@ -60,6 +60,8 @@ class ImageRepository {
     try {
       final metadata = await _readMetadata(file);
       final stat = await file.stat();
+      _logger.fine(
+          'build_image_item path=${file.path} savedAt=${metadata?.savedAt ?? stat.modified.toUtc()} metadata=${metadata?.metadataPath}');
       return ImageItem(
         id: file.path,
         filePath: file.path,
