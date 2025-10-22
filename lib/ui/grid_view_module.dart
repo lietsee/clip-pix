@@ -58,6 +58,7 @@ class _GridViewModuleState extends State<GridViewModule> {
   Size _draggedSize = Size.zero;
   int? _dragInitialIndex;
   int? _dragCurrentIndex;
+  _GridEntry? _draggedEntry;
 
   List<_GridEntry> _entries = <_GridEntry>[];
   bool _loggedInitialBuild = false;
@@ -276,6 +277,12 @@ class _GridViewModuleState extends State<GridViewModule> {
       );
     }
     final cardKey = _cardKeys.putIfAbsent(item.id, () => GlobalKey());
+    if (entry.isPlaceholder) {
+      return SizedBox(
+        key: cardKey,
+        child: const SizedBox.expand(),
+      );
+    }
     return SizedBox(
       key: cardKey,
       child: AnimatedOpacity(
@@ -804,8 +811,9 @@ class _GridViewModuleState extends State<GridViewModule> {
     _dragInitialIndex = _entries.indexWhere((entry) => entry.item.id == id);
     _dragCurrentIndex = _dragInitialIndex;
     if (_dragInitialIndex != null) {
+      _draggedEntry = _entries[_dragInitialIndex!];
       setState(() {
-        _entries[_dragInitialIndex!].opacity = 0.0;
+        _entries[_dragInitialIndex!] = _draggedEntry!.asPlaceholder();
       });
     }
     _dragOverlay = OverlayEntry(
@@ -835,9 +843,10 @@ class _GridViewModuleState extends State<GridViewModule> {
       return;
     }
     setState(() {
-      final entry = _entries.removeAt(_dragCurrentIndex!);
+      final placeholderIndex = _dragCurrentIndex!;
+      final placeholder = _entries.removeAt(placeholderIndex);
       final clampedIndex = targetIndex.clamp(0, _entries.length);
-      _entries.insert(clampedIndex, entry);
+      _entries.insert(clampedIndex, placeholder);
       _dragCurrentIndex = clampedIndex;
     });
   }
@@ -853,23 +862,24 @@ class _GridViewModuleState extends State<GridViewModule> {
     _dragOverlay = null;
     if (_dragCurrentIndex != null &&
         _dragCurrentIndex! >= 0 &&
-        _dragCurrentIndex! < _entries.length) {
+        _dragCurrentIndex! < _entries.length &&
+        _draggedEntry != null) {
       setState(() {
-        _entries[_dragCurrentIndex!].opacity = 1;
+        _entries[_dragCurrentIndex!] = _draggedEntry!;
       });
     }
     unawaited(_persistOrder());
     _draggingId = null;
     _dragCurrentIndex = null;
     _dragInitialIndex = null;
+    _draggedEntry = null;
   }
 
   Widget _buildDragPreview() {
-    final id = _draggingId;
-    if (id == null) {
+    final entry = _draggedEntry;
+    if (entry == null) {
       return const SizedBox.shrink();
     }
-    final entry = _entries.firstWhere((element) => element.item.id == id);
     return Material(
       elevation: 12,
       borderRadius: BorderRadius.circular(12),
@@ -892,7 +902,7 @@ class _GridViewModuleState extends State<GridViewModule> {
     double bestDistance = double.infinity;
     for (var i = 0; i < _entries.length; i++) {
       final entry = _entries[i];
-      if (entry.item.id == _draggingId) {
+      if (entry.item.id == _draggingId || entry.isPlaceholder) {
         continue;
       }
       final key = _cardKeys[entry.item.id];
@@ -919,12 +929,24 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 }
 
+
 class _GridEntry {
-  _GridEntry({required this.item, required this.opacity, this.version = 0});
+  _GridEntry({required this.item, required this.opacity, this.version = 0, this.isPlaceholder = false});
 
   ImageItem item;
   double opacity;
   bool isRemoving = false;
   Timer? removalTimer;
   int version;
+
+  bool isPlaceholder;
+
+  _GridEntry asPlaceholder() {
+    return _GridEntry(
+      item: item,
+      opacity: 0,
+      version: version,
+      isPlaceholder: true,
+    );
+  }
 }
