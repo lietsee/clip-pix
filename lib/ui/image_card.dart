@@ -622,6 +622,9 @@ class _ImageCardState extends State<ImageCard> with SingleTickerProviderStateMix
     ).animate(
       CurvedAnimation(parent: _zoomController, curve: Curves.easeOutCubic),
     );
+    debugPrint(
+      '[ImageCard] zoom start id=${widget.item.id} current=${_currentScale.toStringAsFixed(3)} target=${targetScale.toStringAsFixed(3)} focal=$focalPoint',
+    );
     _zoomController.forward(from: 0);
   }
 
@@ -644,6 +647,9 @@ class _ImageCardState extends State<ImageCard> with SingleTickerProviderStateMix
       offset: newOffset,
       size: size,
       scale: newScale,
+    );
+    debugPrint(
+      '[ImageCard] zoom frame id=${widget.item.id} old=${oldScale.toStringAsFixed(3)} new=${newScale.toStringAsFixed(3)} offset=$newOffset focal=$focalPoint',
     );
     setState(() {
       _imageOffset = newOffset;
