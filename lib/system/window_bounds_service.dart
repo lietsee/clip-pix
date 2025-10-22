@@ -28,7 +28,7 @@ class WindowBoundsService with WidgetsBindingObserver {
       return;
     }
     _configPath = _resolveConfigPath();
-    _logger.fine('Window bounds config path: $_configPath');
+    _logger.info('Window bounds config path: $_configPath');
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_restoreBounds());
@@ -42,7 +42,7 @@ class WindowBoundsService with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _debounce?.cancel();
     _debounce = null;
-    // Flush synchronously on shutdown.
+    _logger.info('Window bounds service disposed; persisting final bounds');
     try {
       _persistCurrentBounds(sync: true);
     } catch (error, stackTrace) {
@@ -55,6 +55,7 @@ class WindowBoundsService with WidgetsBindingObserver {
     if (!_isSupported) {
       return;
     }
+    _logger.info('Window metrics changed; scheduling bounds persist');
     _debounce?.cancel();
     _debounce = Timer(_debounceDuration, () {
       _debounce = null;
@@ -64,9 +65,9 @@ class WindowBoundsService with WidgetsBindingObserver {
 
   Future<void> _restoreBounds() async {
     final file = File(_configPath);
-    _logger.fine('Restoring window bounds from $_configPath');
+    _logger.info('Restoring window bounds from $_configPath');
     if (!await file.exists()) {
-      _logger.fine('No window bounds file found');
+      _logger.info('No window bounds file found');
       return;
     }
     try {
@@ -91,10 +92,10 @@ class WindowBoundsService with WidgetsBindingObserver {
         return;
       }
       final desired = Rect.fromLTWH(left, top, width, height);
-      _logger.fine('Attempting to restore window bounds: $desired');
+      _logger.info('Attempting to restore window bounds: $desired');
       for (var attempt = 0; attempt < 5; attempt++) {
         if (_applyBounds(desired)) {
-          _logger.fine('Bounds restored on attempt ${attempt + 1}');
+          _logger.info('Bounds restored on attempt ${attempt + 1}');
           _restoredBounds = desired;
           return;
         }
@@ -118,7 +119,7 @@ class WindowBoundsService with WidgetsBindingObserver {
       'width': rect.width,
       'height': rect.height,
     };
-    _logger.finer('Persisting bounds map: $map');
+    _logger.info('Persisting window bounds: $map');
     final file = File(_configPath);
     try {
       final jsonString = const JsonEncoder.withIndent('  ').convert(map);
@@ -127,7 +128,7 @@ class WindowBoundsService with WidgetsBindingObserver {
       } else {
         await file.writeAsString(jsonString, flush: true);
       }
-      _logger.fine('Persisted window bounds: $map');
+      _logger.info('Persisted window bounds: $map');
       _restoredBounds = rect;
     } catch (error, stackTrace) {
       _logger.warning('Failed to persist window bounds', error, stackTrace);
