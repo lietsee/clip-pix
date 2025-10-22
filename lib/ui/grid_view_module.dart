@@ -767,14 +767,14 @@ class _GridViewModuleState extends State<GridViewModule> {
     return orderedItems;
   }
 
-  void _persistOrder() {
+  Future<void> _persistOrder() async {
     final path = widget.state.activeDirectory?.path;
     final repo = _orderRepository;
     if (path == null || repo == null) {
       return;
     }
     final order = _entries.map((entry) => entry.item.id).toList();
-    unawaited(repo.save(path, order));
+    await repo.save(path, order);
   }
 
   void _startReorder(String id, Offset globalPosition) {
@@ -852,7 +852,7 @@ class _GridViewModuleState extends State<GridViewModule> {
         _entries[_dragCurrentIndex!].opacity = 1;
       });
     }
-    _persistOrder();
+    unawaited(_persistOrder());
     _draggingId = null;
     _dragCurrentIndex = null;
     _dragInitialIndex = null;
