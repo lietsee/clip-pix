@@ -70,13 +70,13 @@ Offset clampPanOffset({
 
 enum _CardVisualState { loading, ready, error }
 
-class _ImageCardState extends State<ImageCard> {
+class _ImageCardState extends State<ImageCard> with SingleTickerProviderStateMixin {
   static const double _minWidth = 100;
   static const double _minHeight = 100;
   static const double _maxWidth = 1920;
   static const double _maxHeight = 1080;
   static const double _minScale = 0.5;
-  static const double _maxScale = 3.0;
+  static const double _maxScale = 15.0;
   static const int _maxRetryCount = 3;
 
   final FocusNode _focusNode = FocusNode(debugLabel: 'ImageCardFocus');
@@ -99,6 +99,9 @@ class _ImageCardState extends State<ImageCard> {
   ImageStream? _imageStream;
   ImageStreamListener? _streamListener;
   String? _resolvedSignature;
+  late final AnimationController _zoomController;
+  Animation<double>? _zoomAnimation;
+  Offset? _pendingZoomFocalPoint;
   double _currentScale = 1.0;
   bool _suppressScaleListener = false;
 
@@ -109,6 +112,23 @@ class _ImageCardState extends State<ImageCard> {
     widget.scaleNotifier.addListener(_handleScaleExternalChange);
     _currentSpan = _computeSpan(widget.sizeNotifier.value.width);
     _currentScale = widget.scaleNotifier.value;
+    _zoomController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 120),
+    )
+      ..addListener(() {
+        final animation = _zoomAnimation;
+        if (animation != null) {
+          _applyZoomWithMatrices(animation.value, focalPoint: _pendingZoomFocalPoint);
+        }
+      })
+      ..addStatusListener((status) {
+        if (status == AnimationStatus.completed ||
+            status == AnimationStatus.dismissed) {
+          _zoomAnimation = null;
+          _pendingZoomFocalPoint = null;
+        }
+      });
   }
 
   @override
@@ -139,6 +159,7 @@ class _ImageCardState extends State<ImageCard> {
     widget.sizeNotifier.removeListener(_handleSizeExternalChange);
     widget.scaleNotifier.removeListener(_handleScaleExternalChange);
     _detachImageStream();
+    _zoomController.dispose();
     super.dispose();
   }
 
@@ -579,13 +600,29 @@ class _ImageCardState extends State<ImageCard> {
 
   void _applyZoom(double delta, {Offset? focalPoint}) {
     final newScale = _clampScale(_currentScale + delta);
-    _applyZoomImmediate(newScale, focalPoint: focalPoint);
+    _startZoomAnimation(newScale, focalPoint: focalPoint);
   }
 
   void _handleWheelZoom(double scrollDeltaY, {Offset? focalPoint}) {
     final zoomFactor = math.exp(-scrollDeltaY / 300.0);
     final targetScale = _clampScale(_currentScale * zoomFactor);
-    _applyZoomImmediate(targetScale, focalPoint: focalPoint);
+    _startZoomAnimation(targetScale, focalPoint: focalPoint);
+  }
+
+  void _startZoomAnimation(double targetScale, {Offset? focalPoint}) {
+    targetScale = _clampScale(targetScale);
+    if ((targetScale - _currentScale).abs() < 0.0001) {
+      return;
+    }
+    _pendingZoomFocalPoint = focalPoint;
+    _zoomController.stop();
+    _zoomAnimation = Tween<double>(
+      begin: _currentScale,
+      end: targetScale,
+    ).animate(
+      CurvedAnimation(parent: _zoomController, curve: Curves.easeOutCubic),
+    );
+    _zoomController.forward(from: 0);
   }
 
   void _applyZoomImmediate(double targetScale, {Offset? focalPoint}) {
@@ -593,15 +630,19 @@ class _ImageCardState extends State<ImageCard> {
     if ((targetScale - _currentScale).abs() < 0.0001) {
       return;
     }
+    _applyZoomWithMatrices(targetScale, focalPoint: focalPoint);
+  }
+
+  void _applyZoomWithMatrices(double targetScale, {Offset? focalPoint}) {
     final size = widget.sizeNotifier.value;
     final center = Offset(size.width / 2, size.height / 2);
     Offset newOffset;
+    final scaleRatio = targetScale / (_currentScale == 0 ? 1 : _currentScale);
     if (focalPoint != null) {
       final focalVector = focalPoint - center;
-      final scaleRatio = targetScale / _currentScale;
-      newOffset = _imageOffset + (focalVector - _imageOffset) * (1 - scaleRatio);
+      newOffset = focalVector * (1 - scaleRatio) + _imageOffset * scaleRatio;
     } else {
-      newOffset = _imageOffset;
+      newOffset = _imageOffset * scaleRatio;
     }
     newOffset = clampPanOffset(
       offset: newOffset,
