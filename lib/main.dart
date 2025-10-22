@@ -185,6 +185,7 @@ class ClipPixApp extends StatelessWidget {
       ),
       if (Platform.isWindows)
         Provider<WindowBoundsService>(
+          lazy: false,
           create: (_) {
             debugPrint('[ClipPixApp] Initializing WindowBoundsService');
             final service = WindowBoundsService();
