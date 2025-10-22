@@ -24,9 +24,11 @@ class ImageCard extends StatefulWidget {
     required this.columnWidth,
     required this.columnCount,
     required this.columnGap,
+    this.onReorderPointerDown,
     this.onStartReorder,
     this.onReorderUpdate,
     this.onReorderEnd,
+    this.onReorderCancel,
   });
 
   final ImageItem item;
@@ -41,9 +43,11 @@ class ImageCard extends StatefulWidget {
   final double columnWidth;
   final int columnCount;
   final double columnGap;
+  final void Function(String id, int pointer)? onReorderPointerDown;
   final void Function(String id, Offset globalPosition)? onStartReorder;
   final void Function(String id, Offset globalPosition)? onReorderUpdate;
   final void Function(String id)? onReorderEnd;
+  final void Function(String id)? onReorderCancel;
 
   @override
   State<ImageCard> createState() => _ImageCardState();
@@ -381,47 +385,53 @@ class _ImageCardState extends State<ImageCard> {
           bottom: 8,
           child: Center(
             child: _fadeChild(
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onPanStart: (details) {
-                  debugPrint(
-                    '[ImageCard] reorder_pan_start id=${widget.item.id} global=${details.globalPosition}',
-                  );
-                  widget.onStartReorder?.call(
-                    widget.item.id,
-                    details.globalPosition,
-                  );
+              child: Listener(
+                onPointerDown: (event) {
+                  widget.onReorderPointerDown
+                      ?.call(widget.item.id, event.pointer);
                 },
-                onPanUpdate: (details) {
-                  debugPrint(
-                    '[ImageCard] reorder_pan_update id=${widget.item.id} global=${details.globalPosition}',
-                  );
-                  widget.onReorderUpdate?.call(
-                    widget.item.id,
-                    details.globalPosition,
-                  );
-                },
-                onPanEnd: (_) {
-                  debugPrint(
-                      '[ImageCard] reorder_pan_end id=${widget.item.id}');
-                  widget.onReorderEnd?.call(widget.item.id);
-                },
-                onPanCancel: () {
-                  debugPrint(
-                      '[ImageCard] reorder_pan_cancel id=${widget.item.id}');
-                  widget.onReorderEnd?.call(widget.item.id);
-                },
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0x33000000),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.drag_indicator,
-                    size: 18,
-                    color: Colors.white,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onPanStart: (details) {
+                    debugPrint(
+                      '[ImageCard] reorder_pan_start id=${widget.item.id} global=${details.globalPosition}',
+                    );
+                    widget.onStartReorder?.call(
+                      widget.item.id,
+                      details.globalPosition,
+                    );
+                  },
+                  onPanUpdate: (details) {
+                    debugPrint(
+                      '[ImageCard] reorder_pan_update id=${widget.item.id} global=${details.globalPosition}',
+                    );
+                    widget.onReorderUpdate?.call(
+                      widget.item.id,
+                      details.globalPosition,
+                    );
+                  },
+                  onPanEnd: (_) {
+                    debugPrint(
+                        '[ImageCard] reorder_pan_end id=${widget.item.id}');
+                    widget.onReorderEnd?.call(widget.item.id);
+                  },
+                  onPanCancel: () {
+                    debugPrint(
+                        '[ImageCard] reorder_pan_cancel id=${widget.item.id}');
+                    widget.onReorderCancel?.call(widget.item.id);
+                  },
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0x33000000),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.drag_indicator,
+                      size: 18,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
