@@ -321,10 +321,10 @@ class _ImageCardState extends State<ImageCard> with SingleTickerProviderStateMix
         (size.width * scale * pixelRatio).clamp(64, 4096).round();
 
     final matrix = Matrix4.identity()
-      ..translate(_imageOffset.dx, _imageOffset.dy)
       ..translate(size.width / 2, size.height / 2)
       ..scale(scale)
-      ..translate(-size.width / 2, -size.height / 2);
+      ..translate(-size.width / 2, -size.height / 2)
+      ..translate(_imageOffset.dx, _imageOffset.dy);
 
     return Positioned.fill(
       child: ClipRect(
@@ -633,15 +633,12 @@ class _ImageCardState extends State<ImageCard> with SingleTickerProviderStateMix
     final size = widget.sizeNotifier.value;
     final center = Offset(size.width / 2, size.height / 2);
     Offset newOffset;
-    if (oldScale <= 0) {
-      newOffset = Offset.zero;
-    } else if (focalPoint != null) {
+    if (focalPoint != null) {
       final ratio = newScale / oldScale;
       final focalVector = focalPoint - center;
-      newOffset = focalPoint - center - (focalVector - _imageOffset) * ratio;
+      newOffset = focalVector * (1 - ratio) + _imageOffset * ratio;
     } else {
-      final ratio = newScale / oldScale;
-      newOffset = _imageOffset * ratio;
+      newOffset = _imageOffset;
     }
     newOffset = clampPanOffset(
       offset: newOffset,
