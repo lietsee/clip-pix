@@ -97,8 +97,8 @@ class WindowBoundsService with WidgetsBindingObserver {
       }
       final desired = Rect.fromLTWH(left, top, width, height);
       _logger.info('Attempting to restore window bounds: $desired');
-      debugPrint('[WindowBoundsService] apply attempt $attempt -> $desired');
       for (var attempt = 0; attempt < 5; attempt++) {
+        debugPrint('[WindowBoundsService] apply attempt ${attempt + 1} -> $desired');
         if (_applyBounds(desired)) {
           _logger.info('Bounds restored on attempt ${attempt + 1}');
           debugPrint('[WindowBoundsService] applied bounds');
