@@ -29,9 +29,11 @@ class WindowBoundsService with WidgetsBindingObserver {
     }
     _configPath = _resolveConfigPath();
     _logger.info('Window bounds config path: $_configPath');
+    debugPrint('[WindowBoundsService] init -> $_configPath');
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_restoreBounds());
+      unawaited(_persistCurrentBounds());
     });
   }
 
@@ -43,6 +45,7 @@ class WindowBoundsService with WidgetsBindingObserver {
     _debounce?.cancel();
     _debounce = null;
     _logger.info('Window bounds service disposed; persisting final bounds');
+    debugPrint('[WindowBoundsService] dispose -> flushing');
     try {
       _persistCurrentBounds(sync: true);
     } catch (error, stackTrace) {
@@ -66,6 +69,7 @@ class WindowBoundsService with WidgetsBindingObserver {
   Future<void> _restoreBounds() async {
     final file = File(_configPath);
     _logger.info('Restoring window bounds from $_configPath');
+    debugPrint('[WindowBoundsService] restore from $_configPath');
     if (!await file.exists()) {
       _logger.info('No window bounds file found');
       return;
@@ -93,9 +97,11 @@ class WindowBoundsService with WidgetsBindingObserver {
       }
       final desired = Rect.fromLTWH(left, top, width, height);
       _logger.info('Attempting to restore window bounds: $desired');
+      debugPrint('[WindowBoundsService] apply attempt $attempt -> $desired');
       for (var attempt = 0; attempt < 5; attempt++) {
         if (_applyBounds(desired)) {
           _logger.info('Bounds restored on attempt ${attempt + 1}');
+          debugPrint('[WindowBoundsService] applied bounds');
           _restoredBounds = desired;
           return;
         }
@@ -111,6 +117,7 @@ class WindowBoundsService with WidgetsBindingObserver {
     final rect = _readWindowRect();
     if (rect == null) {
       _logger.finer('Skipping persist; could not read window rect');
+      debugPrint('[WindowBoundsService] skip persist; rect null');
       return;
     }
     final map = <String, double>{
@@ -129,6 +136,7 @@ class WindowBoundsService with WidgetsBindingObserver {
         await file.writeAsString(jsonString, flush: true);
       }
       _logger.info('Persisted window bounds: $map');
+      debugPrint('[WindowBoundsService] persisted bounds $map');
       _restoredBounds = rect;
     } catch (error, stackTrace) {
       _logger.warning('Failed to persist window bounds', error, stackTrace);
@@ -170,6 +178,7 @@ class WindowBoundsService with WidgetsBindingObserver {
     final hwnd = _resolveWindowHandle();
     if (hwnd == 0) {
       _logger.finer('Cannot apply bounds; window handle missing');
+      debugPrint('[WindowBoundsService] apply bounds failed; hwnd=0');
       return false;
     }
     _logger.finer('Applying bounds to handle 0x${hwnd.toRadixString(16)}: $rect');
@@ -197,12 +206,15 @@ class WindowBoundsService with WidgetsBindingObserver {
     final hwnd = FindWindow(className, nullptr.cast<Utf16>());
     calloc.free(className);
     if (hwnd != 0) {
+      debugPrint('[WindowBoundsService] found hwnd via class: 0x${hwnd.toRadixString(16)}');
       return hwnd;
     }
     final fallback = GetForegroundWindow();
     if (fallback == 0) {
       _logger.finer('FindWindow and GetForegroundWindow both failed');
+      debugPrint('[WindowBoundsService] hwnd fallback failed');
     }
+    debugPrint('[WindowBoundsService] fallback hwnd 0x${fallback.toRadixString(16)}');
     return fallback;
   }
 
