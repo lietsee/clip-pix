@@ -105,6 +105,7 @@ class _ImageCardState extends State<ImageCard> {
   String? _resolvedSignature;
   double _currentScale = 1.0;
   bool _suppressScaleListener = false;
+  Timer? _loadingTimeout;
 
   @override
   void initState() {
@@ -143,6 +144,7 @@ class _ImageCardState extends State<ImageCard> {
     widget.sizeNotifier.removeListener(_handleSizeExternalChange);
     widget.scaleNotifier.removeListener(_handleScaleExternalChange);
     _detachImageStream();
+    _cancelLoadingTimeout();
     super.dispose();
   }
 
@@ -668,6 +670,7 @@ class _ImageCardState extends State<ImageCard> {
       _resolvedSignature = null;
     });
     _detachImageStream();
+    _scheduleLoadingTimeout();
     widget.onRetry(widget.item.id);
   }
 
@@ -690,6 +693,11 @@ class _ImageCardState extends State<ImageCard> {
         _visualState = state;
         _latestChunk = chunk;
       });
+      if (state == _CardVisualState.ready || state == _CardVisualState.error) {
+        _cancelLoadingTimeout();
+      } else if (state == _CardVisualState.loading) {
+        _scheduleLoadingTimeout();
+      }
     }
 
     final binding = WidgetsBinding.instance;
@@ -729,14 +737,17 @@ class _ImageCardState extends State<ImageCard> {
         debugPrint(
             '[ImageCard] image_chunk id=${widget.item.id} loaded=${event.cumulativeBytesLoaded} expected=${event.expectedTotalBytes}');
         _updateVisualState(_CardVisualState.loading, chunk: event);
+        _scheduleLoadingTimeout();
       },
       onError: (error, stackTrace) {
         debugPrint('[ImageCard] image_error id=${widget.item.id} error=$error');
         _updateVisualState(_CardVisualState.error);
+        _cancelLoadingTimeout();
       },
     );
     _imageStream = stream;
     _imageStream?.addListener(_streamListener!);
+    _scheduleLoadingTimeout();
   }
 
   void _detachImageStream() {
@@ -745,6 +756,7 @@ class _ImageCardState extends State<ImageCard> {
     }
     _imageStream = null;
     _streamListener = null;
+    _cancelLoadingTimeout();
   }
 
   void _setLoadingDeferred() {
@@ -761,7 +773,28 @@ class _ImageCardState extends State<ImageCard> {
           _latestChunk = null;
         });
       }
+      _scheduleLoadingTimeout();
     });
+  }
+
+  void _scheduleLoadingTimeout() {
+    _loadingTimeout?.cancel();
+    _loadingTimeout = Timer(const Duration(milliseconds: 800), () {
+      if (!mounted) {
+        return;
+      }
+      if (_visualState == _CardVisualState.loading) {
+        debugPrint(
+          '[ImageCard] loading_timeout id=${widget.item.id} size=${widget.sizeNotifier.value} scale=$_currentScale retry=$_retryCount',
+        );
+        _handleRetry();
+      }
+    });
+  }
+
+  void _cancelLoadingTimeout() {
+    _loadingTimeout?.cancel();
+    _loadingTimeout = null;
   }
 
   int _computeSpan(double width) {
