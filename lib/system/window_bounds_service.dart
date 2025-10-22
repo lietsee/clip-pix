@@ -24,6 +24,7 @@ class WindowBoundsService with WidgetsBindingObserver {
     if (!_isSupported) {
       return;
     }
+    _logger.fine('Initializing window bounds service');
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_restoreBounds());
@@ -37,6 +38,7 @@ class WindowBoundsService with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _debounce?.cancel();
     _debounce = null;
+    _logger.fine('Disposing window bounds service');
     // Persist any final bounds synchronously.
     unawaited(_persistCurrentBounds());
   }
@@ -46,6 +48,7 @@ class WindowBoundsService with WidgetsBindingObserver {
     if (!_isSupported) {
       return;
     }
+    _logger.finer('Metrics changed; scheduling bounds persist');
     _debounce?.cancel();
     _debounce = Timer(_debounceDuration, () {
       _debounce = null;
@@ -58,6 +61,7 @@ class WindowBoundsService with WidgetsBindingObserver {
   Future<void> _restoreBounds() async {
     final stored = _box.get(_storageKey);
     if (stored is! Map) {
+      _logger.fine('No stored window bounds');
       return;
     }
     final left = (stored['left'] as num?)?.toDouble();
@@ -70,26 +74,33 @@ class WindowBoundsService with WidgetsBindingObserver {
         height == null ||
         width <= 0 ||
         height <= 0) {
+      _logger.warning('Stored bounds invalid: $stored');
       return;
     }
     final desired = Rect.fromLTWH(left, top, width, height);
+    _logger.fine('Attempting to restore window bounds: $desired');
     // Attempt several times in case the native window isn't ready yet.
     for (var attempt = 0; attempt < 5; attempt++) {
       if (_applyBounds(desired)) {
+        _logger.fine('Bounds restored on attempt ${attempt + 1}');
         _restoredBounds = desired;
         return;
       }
+      _logger.finer('Bounds restore attempt ${attempt + 1} failed');
       await Future<void>.delayed(const Duration(milliseconds: 80));
     }
+    _logger.warning('Failed to apply stored bounds after retries');
   }
 
   Future<void> _persistCurrentBounds() async {
     final rect = _readWindowRect();
     if (rect == null) {
+      _logger.finer('Skipping persist; unable to read window rect');
       return;
     }
     if (_restoredBounds != null &&
         (rect.width <= 0 || rect.height <= 0)) {
+      _logger.warning('Skipping persist due to zero-sized rect: $rect');
       return;
     }
     final map = <String, double>{
@@ -100,6 +111,7 @@ class WindowBoundsService with WidgetsBindingObserver {
     };
     try {
       await _box.put(_storageKey, map);
+      _logger.fine('Persisted window bounds: $map');
       _restoredBounds = rect;
     } catch (error, stackTrace) {
       _logger.warning('Failed to persist window bounds', error, stackTrace);
@@ -109,17 +121,20 @@ class WindowBoundsService with WidgetsBindingObserver {
   Rect? _readWindowRect() {
     final hwnd = GetActiveWindow();
     if (hwnd == 0) {
+      _logger.finer('GetActiveWindow returned null handle');
       return null;
     }
     final rectPointer = calloc<RECT>();
     try {
       if (GetWindowRect(hwnd, rectPointer) == 0) {
+        _logger.finer('GetWindowRect failed for handle $hwnd');
         return null;
       }
       final rect = rectPointer.ref;
       final width = rect.right - rect.left;
       final height = rect.bottom - rect.top;
       if (width <= 0 || height <= 0) {
+        _logger.finer('Read rect has non-positive dimensions: $rect');
         return null;
       }
       return Rect.fromLTWH(
@@ -136,6 +151,7 @@ class WindowBoundsService with WidgetsBindingObserver {
   bool _applyBounds(Rect rect) {
     final hwnd = GetActiveWindow();
     if (hwnd == 0) {
+      _logger.finer('Cannot apply bounds; window handle missing');
       return false;
     }
     final width = rect.width.round();
@@ -151,6 +167,9 @@ class WindowBoundsService with WidgetsBindingObserver {
       height,
       SWP_NOZORDER | SWP_NOACTIVATE,
     );
+    if (result == 0) {
+      _logger.finer('SetWindowPos failed with error ${GetLastError()}');
+    }
     return result != 0;
   }
 }
