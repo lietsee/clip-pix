@@ -599,30 +599,14 @@ class _ImageCardState extends State<ImageCard> with SingleTickerProviderStateMix
   }
 
   void _applyZoom(double delta, {Offset? focalPoint}) {
-    final newScale = _clampScale(_currentScale + delta);
-    _startZoomAnimation(newScale, focalPoint: focalPoint);
+    final target = _clampScale(_currentScale + delta);
+    _applyZoomImmediate(target, focalPoint: focalPoint);
   }
 
   void _handleWheelZoom(double scrollDeltaY, {Offset? focalPoint}) {
     final zoomFactor = math.exp(-scrollDeltaY / 300.0);
     final targetScale = _clampScale(_currentScale * zoomFactor);
-    _startZoomAnimation(targetScale, focalPoint: focalPoint);
-  }
-
-  void _startZoomAnimation(double targetScale, {Offset? focalPoint}) {
-    targetScale = _clampScale(targetScale);
-    if ((targetScale - _currentScale).abs() < 0.0001) {
-      return;
-    }
-    _pendingZoomFocalPoint = focalPoint;
-    _zoomController.stop();
-    _zoomAnimation = Tween<double>(
-      begin: _currentScale,
-      end: targetScale,
-    ).animate(
-      CurvedAnimation(parent: _zoomController, curve: Curves.easeOutCubic),
-    );
-    _zoomController.forward(from: 0);
+    _applyZoomImmediate(targetScale, focalPoint: focalPoint);
   }
 
   void _applyZoomImmediate(double targetScale, {Offset? focalPoint}) {
