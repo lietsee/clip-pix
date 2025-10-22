@@ -283,9 +283,7 @@ class _GridViewModuleState extends State<GridViewModule> {
         key: cardKey,
         width: placeholderSize.width,
         height: placeholderSize.height,
-        child: const DecoratedBox(
-          decoration: BoxDecoration(color: Colors.transparent),
-        ),
+        child: const Opacity(opacity: 0.0, child: SizedBox.expand()),
       );
     }
     return SizedBox(
