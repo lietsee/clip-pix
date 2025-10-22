@@ -157,7 +157,7 @@ void main() {
       ),
     );
 
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
 
     expect(scrollController.offset, closeTo(0, 0.01));
 
@@ -187,11 +187,11 @@ void main() {
         scale: 2.0,
       );
 
-      final minDx = size.width - size.width * 2.0; // -300
-      final minDy = size.height - size.height * 2.0; // -180
+      final maxDx = (size.width * (2.0 - 1)) / 2; // 150
+      final maxDy = (size.height * (2.0 - 1)) / 2; // 90
 
-      expect(result.dx, closeTo(minDx, 0.001));
-      expect(result.dy, closeTo(minDy, 0.001));
+      expect(result.dx, closeTo(-maxDx, 0.001));
+      expect(result.dy, closeTo(-maxDy, 0.001));
     });
 
     test('handles non-finite scale gracefully', () {
