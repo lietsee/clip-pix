@@ -25,6 +25,7 @@ class WindowBoundsService with WidgetsBindingObserver {
 
   void init() {
     if (!_isSupported) {
+      debugPrint('[WindowBoundsService] init skipped; platform unsupported');
       return;
     }
     _configPath = _resolveConfigPath();
