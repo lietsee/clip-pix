@@ -740,6 +740,7 @@ class _GridViewModuleState extends State<GridViewModule> {
       return items;
     }
     final stored = repo.getOrder(path);
+    debugPrint('[GridViewModule] apply order path=$path stored=$stored incoming=${items.map((e) => e.id).toList()}');
     final ids = items.map((item) => item.id).toList();
     final currentSet = ids.toSet();
     final orderedIds = <String>[];
@@ -774,6 +775,7 @@ class _GridViewModuleState extends State<GridViewModule> {
       return;
     }
     final order = _entries.map((entry) => entry.item.id).toList();
+    debugPrint('[GridViewModule] persist order path=$path order=$order');
     await repo.save(path, order);
   }
 

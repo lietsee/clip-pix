@@ -11,8 +11,11 @@ class GridOrderRepository extends ChangeNotifier {
   List<String> getOrder(String path) {
     final stored = _box.get(path);
     if (stored is List) {
+      // Log retrieval for debugging order persistence.
+      debugPrint('[GridOrderRepository] getOrder path=$path order=$stored');
       return List<String>.from(stored);
     }
+    debugPrint('[GridOrderRepository] getOrder path=$path order=[] (not found)');
     return const <String>[];
   }
 
@@ -37,11 +40,13 @@ class GridOrderRepository extends ChangeNotifier {
   }
 
   Future<void> save(String path, List<String> order) async {
+    debugPrint('[GridOrderRepository] save path=$path order=$order');
     await _box.put(path, order);
     notifyListeners();
   }
 
   Future<void> remove(String path) async {
+    debugPrint('[GridOrderRepository] remove path=$path');
     await _box.delete(path);
     notifyListeners();
   }
