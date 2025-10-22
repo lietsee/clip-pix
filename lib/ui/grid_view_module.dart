@@ -750,7 +750,8 @@ class _GridViewModuleState extends State<GridViewModule> {
       return items;
     }
     final stored = repo.getOrder(path);
-    debugPrint('[GridViewModule] apply order path=$path stored=$stored incoming=${items.map((e) => e.id).toList()}');
+    debugPrint(
+        '[GridViewModule] apply order path=$path stored=$stored incoming=${items.map((e) => e.id).toList()}');
     if (items.isEmpty) {
       debugPrint('[GridViewModule] incoming empty; skip reorder');
       return items;
@@ -794,16 +795,25 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   void _startReorder(String id, Offset globalPosition) {
+    debugPrint(
+      '[GridViewModule] reorder_start request id=$id global=${globalPosition.dx.toStringAsFixed(1)},${globalPosition.dy.toStringAsFixed(1)} dragging=$_draggingId overlay=${_dragOverlay != null}',
+    );
     if (_draggingId != null) {
+      debugPrint(
+        '[GridViewModule] reorder_start ignored reason=already_dragging active=$_draggingId',
+      );
       return;
     }
     final key = _cardKeys[id];
     final cardContext = key?.currentContext;
     if (cardContext == null) {
+      debugPrint(
+          '[GridViewModule] reorder_start abort reason=no_context id=$id');
       return;
     }
     final box = cardContext.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) {
+      debugPrint('[GridViewModule] reorder_start abort reason=no_size id=$id');
       return;
     }
     final origin = box.localToGlobal(Offset.zero);
@@ -813,6 +823,9 @@ class _GridViewModuleState extends State<GridViewModule> {
     _draggingId = id;
     _dragInitialIndex = _entries.indexWhere((entry) => entry.item.id == id);
     _dragCurrentIndex = _dragInitialIndex;
+    debugPrint(
+      '[GridViewModule] reorder_start metrics id=$id origin=${origin.dx.toStringAsFixed(1)},${origin.dy.toStringAsFixed(1)} pointerOffset=${_dragPointerOffset.dx.toStringAsFixed(1)},${_dragPointerOffset.dy.toStringAsFixed(1)} size=${_draggedSize.width.toStringAsFixed(1)}x${_draggedSize.height.toStringAsFixed(1)} initialIndex=$_dragInitialIndex',
+    );
     if (_dragInitialIndex != null) {
       _draggedEntry = _entries[_dragInitialIndex!];
       setState(() {
@@ -829,16 +842,23 @@ class _GridViewModuleState extends State<GridViewModule> {
       ),
     );
     Overlay.of(cardContext).insert(_dragOverlay!);
+    debugPrint('[GridViewModule] reorder_start overlay_inserted id=$id');
   }
 
   void _updateReorder(String id, Offset globalPosition) {
     if (_draggingId != id || _dragOverlay == null) {
+      debugPrint(
+        '[GridViewModule] reorder_update ignored id=$id active=$_draggingId overlay=${_dragOverlay != null}',
+      );
       return;
     }
     _dragOverlayOffset = globalPosition - _dragPointerOffset;
     _dragOverlay!.markNeedsBuild();
 
     final targetIndex = _hitTestIndex(globalPosition);
+    debugPrint(
+      '[GridViewModule] reorder_update hit id=$id global=${globalPosition.dx.toStringAsFixed(1)},${globalPosition.dy.toStringAsFixed(1)} target=$targetIndex current=$_dragCurrentIndex entries=${_entries.length}',
+    );
     if (_dragCurrentIndex == null || targetIndex == null) {
       return;
     }
@@ -851,13 +871,21 @@ class _GridViewModuleState extends State<GridViewModule> {
       final clampedIndex = targetIndex.clamp(0, _entries.length);
       _entries.insert(clampedIndex, placeholder);
       _dragCurrentIndex = clampedIndex;
+      debugPrint(
+        '[GridViewModule] reorder_update move id=$id from=$placeholderIndex to=$clampedIndex length=${_entries.length}',
+      );
     });
   }
 
   void _endReorder(String id) {
     if (_draggingId != id) {
+      debugPrint(
+          '[GridViewModule] reorder_end ignored id=$id active=$_draggingId');
       return;
     }
+    debugPrint(
+      '[GridViewModule] reorder_end id=$id finalIndex=$_dragCurrentIndex overlay=${_dragOverlay != null}',
+    );
     final overlay = _dragOverlay;
     if (overlay != null) {
       overlay.remove();
@@ -872,6 +900,9 @@ class _GridViewModuleState extends State<GridViewModule> {
       });
     }
     unawaited(_persistOrder());
+    debugPrint(
+      '[GridViewModule] reorder_end reset id=$id entries=${_entries.length}',
+    );
     _draggingId = null;
     _dragCurrentIndex = null;
     _dragInitialIndex = null;
@@ -928,13 +959,20 @@ class _GridViewModuleState extends State<GridViewModule> {
         target = i;
       }
     }
-    return target ?? (_entries.length - 1);
+    final fallback = target ?? (_entries.length - 1);
+    debugPrint(
+      '[GridViewModule] reorder_hit_test global=${globalPosition.dx.toStringAsFixed(1)},${globalPosition.dy.toStringAsFixed(1)} result=$fallback dragging=$_draggingId placeholderCount=${_entries.where((e) => e.isPlaceholder).length}',
+    );
+    return fallback;
   }
 }
 
-
 class _GridEntry {
-  _GridEntry({required this.item, required this.opacity, this.version = 0, this.isPlaceholder = false});
+  _GridEntry(
+      {required this.item,
+      required this.opacity,
+      this.version = 0,
+      this.isPlaceholder = false});
 
   ImageItem item;
   double opacity;

@@ -384,19 +384,33 @@ class _ImageCardState extends State<ImageCard> {
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 onPanStart: (details) {
+                  debugPrint(
+                    '[ImageCard] reorder_pan_start id=${widget.item.id} global=${details.globalPosition}',
+                  );
                   widget.onStartReorder?.call(
                     widget.item.id,
                     details.globalPosition,
                   );
                 },
                 onPanUpdate: (details) {
+                  debugPrint(
+                    '[ImageCard] reorder_pan_update id=${widget.item.id} global=${details.globalPosition}',
+                  );
                   widget.onReorderUpdate?.call(
                     widget.item.id,
                     details.globalPosition,
                   );
                 },
-                onPanEnd: (_) => widget.onReorderEnd?.call(widget.item.id),
-                onPanCancel: () => widget.onReorderEnd?.call(widget.item.id),
+                onPanEnd: (_) {
+                  debugPrint(
+                      '[ImageCard] reorder_pan_end id=${widget.item.id}');
+                  widget.onReorderEnd?.call(widget.item.id);
+                },
+                onPanCancel: () {
+                  debugPrint(
+                      '[ImageCard] reorder_pan_cancel id=${widget.item.id}');
+                  widget.onReorderEnd?.call(widget.item.id);
+                },
                 child: Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
