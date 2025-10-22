@@ -704,8 +704,12 @@ class _ImageCardState extends State<ImageCard> {
     final signature =
         '${widget.item.filePath}_${_imageKey}_${size.width.toStringAsFixed(2)}_${size.height.toStringAsFixed(2)}_${scale.toStringAsFixed(2)}';
     if (_resolvedSignature == signature) {
+      debugPrint(
+          '[ImageCard] stream_skip id=${widget.item.id} signature=$signature');
       return;
     }
+    debugPrint(
+        '[ImageCard] stream_update id=${widget.item.id} signature=$signature prev=$_resolvedSignature');
     _resolvedSignature = signature;
     _setLoadingDeferred();
     _detachImageStream();
