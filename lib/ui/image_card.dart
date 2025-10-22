@@ -70,7 +70,7 @@ Offset clampPanOffset({
 
 enum _CardVisualState { loading, ready, error }
 
-class _ImageCardState extends State<ImageCard> with SingleTickerProviderStateMixin {
+class _ImageCardState extends State<ImageCard> {
   static const double _minWidth = 100;
   static const double _minHeight = 100;
   static const double _maxWidth = 1920;
@@ -99,9 +99,6 @@ class _ImageCardState extends State<ImageCard> with SingleTickerProviderStateMix
   ImageStream? _imageStream;
   ImageStreamListener? _streamListener;
   String? _resolvedSignature;
-  late final AnimationController _zoomController;
-  Animation<double>? _zoomAnimation;
-  Offset? _pendingZoomFocalPoint;
   double _currentScale = 1.0;
   bool _suppressScaleListener = false;
 
@@ -112,23 +109,6 @@ class _ImageCardState extends State<ImageCard> with SingleTickerProviderStateMix
     widget.scaleNotifier.addListener(_handleScaleExternalChange);
     _currentSpan = _computeSpan(widget.sizeNotifier.value.width);
     _currentScale = widget.scaleNotifier.value;
-    _zoomController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 120),
-    )
-      ..addListener(() {
-        final animation = _zoomAnimation;
-        if (animation != null) {
-          _applyZoomWithMatrices(animation.value, focalPoint: _pendingZoomFocalPoint);
-        }
-      })
-      ..addStatusListener((status) {
-        if (status == AnimationStatus.completed ||
-            status == AnimationStatus.dismissed) {
-          _zoomAnimation = null;
-          _pendingZoomFocalPoint = null;
-        }
-      });
   }
 
   @override
@@ -159,7 +139,6 @@ class _ImageCardState extends State<ImageCard> with SingleTickerProviderStateMix
     widget.sizeNotifier.removeListener(_handleSizeExternalChange);
     widget.scaleNotifier.removeListener(_handleScaleExternalChange);
     _detachImageStream();
-    _zoomController.dispose();
     super.dispose();
   }
 
@@ -321,10 +300,10 @@ class _ImageCardState extends State<ImageCard> with SingleTickerProviderStateMix
         (size.width * scale * pixelRatio).clamp(64, 4096).round();
 
     final matrix = Matrix4.identity()
+      ..translate(_imageOffset.dx, _imageOffset.dy)
       ..translate(size.width / 2, size.height / 2)
       ..scale(scale)
-      ..translate(-size.width / 2, -size.height / 2)
-      ..translate(_imageOffset.dx, _imageOffset.dy);
+      ..translate(-size.width / 2, -size.height / 2);
 
     return Positioned.fill(
       child: ClipRect(
