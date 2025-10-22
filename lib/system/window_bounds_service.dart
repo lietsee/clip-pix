@@ -64,12 +64,14 @@ class WindowBoundsService with WidgetsBindingObserver {
 
   Future<void> _restoreBounds() async {
     final file = File(_configPath);
+    _logger.fine('Restoring window bounds from $_configPath');
     if (!await file.exists()) {
       _logger.fine('No window bounds file found');
       return;
     }
     try {
       final jsonString = await file.readAsString();
+      _logger.finer('Bounds file contents: $jsonString');
       final data = jsonDecode(jsonString);
       if (data is! Map) {
         _logger.warning('Window bounds file had unexpected format');
@@ -116,6 +118,7 @@ class WindowBoundsService with WidgetsBindingObserver {
       'width': rect.width,
       'height': rect.height,
     };
+    _logger.finer('Persisting bounds map: $map');
     final file = File(_configPath);
     try {
       final jsonString = const JsonEncoder.withIndent('  ').convert(map);
@@ -137,6 +140,7 @@ class WindowBoundsService with WidgetsBindingObserver {
       _logger.finer('Window handle not available for bounds read');
       return null;
     }
+    _logger.finer('Reading window rect for handle 0x${hwnd.toRadixString(16)}');
     final rectPointer = calloc<RECT>();
     try {
       if (GetWindowRect(hwnd, rectPointer) == 0) {
