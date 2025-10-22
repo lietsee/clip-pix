@@ -18,7 +18,7 @@ class WindowBoundsService with WidgetsBindingObserver {
   Rect? _restoredBounds;
   late final String _configPath;
 
-  static const _configFileName = 'clip_pix_window.json';
+  static const _configFileName = 'clip_pix_settings.json';
   static const _debounceDuration = Duration(milliseconds: 200);
 
   bool get _isSupported => Platform.isWindows;
