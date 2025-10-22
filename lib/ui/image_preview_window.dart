@@ -116,17 +116,16 @@ class _ImagePreviewWindowState extends State<ImagePreviewWindow> {
       title: Text(title, overflow: TextOverflow.ellipsis),
       actions: [
         IconButton(
-          tooltip: _isAlwaysOnTop ? '最前面表示を解除 (Ctrl+Shift+F)' : '最前面表示 (Ctrl+Shift+F)',
+          tooltip: _isAlwaysOnTop
+              ? '最前面表示を解除 (Ctrl+Shift+F)'
+              : '最前面表示 (Ctrl+Shift+F)',
           onPressed: _toggleAlwaysOnTop,
           icon: Icon(
             _isAlwaysOnTop ? Icons.push_pin : Icons.push_pin_outlined,
-            color: _isAlwaysOnTop
-                ? Theme.of(context).colorScheme.onPrimary
-                : null,
+            color:
+                _isAlwaysOnTop ? Theme.of(context).colorScheme.onPrimary : null,
           ),
-          color: _isAlwaysOnTop
-              ? Theme.of(context).colorScheme.primary
-              : null,
+          color: _isAlwaysOnTop ? Theme.of(context).colorScheme.primary : null,
         ),
         IconButton(
           tooltip: '閉じる (Esc)',

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -21,6 +22,7 @@ import '../system/state/selected_folder_state.dart';
 import 'image_card.dart';
 import 'image_preview_window.dart';
 import 'widgets/pinterest_grid.dart';
+import 'package:path/path.dart' as p;
 
 class GridViewModule extends StatefulWidget {
   const GridViewModule({super.key, required this.state, this.controller});
@@ -502,16 +504,88 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   void _showPreviewDialog(ImageItem item) {
-    final copyService = context.read<ClipboardCopyService>();
-    Navigator.of(context, rootNavigator: true).push(
-      MaterialPageRoute<void>(
-        fullscreenDialog: true,
-        builder: (routeContext) => ImagePreviewWindow(
-          item: item,
-          initialAlwaysOnTop: false,
-          onClose: () {},
-          onToggleAlwaysOnTop: (_) {},
-          onCopyImage: (image) => copyService.copyImage(image),
+    if (Platform.isWindows) {
+      final launched = _launchPreviewWindowProcess(item);
+      if (launched) {
+        return;
+      }
+    }
+    _showFallbackPreview(item);
+  }
+
+  bool _launchPreviewWindowProcess(ImageItem item) {
+    final exePath = _resolveExecutablePath();
+    if (exePath == null) {
+      debugPrint('[GridViewModule] preview exe not found');
+      return false;
+    }
+    final payload = jsonEncode({
+      'item': {
+        'id': item.id,
+        'filePath': item.filePath,
+        'metadataPath': item.metadataPath,
+        'sourceType': item.sourceType.index,
+        'savedAt': item.savedAt.toIso8601String(),
+        'source': item.source,
+      },
+      'alwaysOnTop': false,
+    });
+    try {
+      Process.start(
+        exePath,
+        ['--preview', payload],
+        mode: ProcessStartMode.detached,
+      );
+      return true;
+    } catch (error, stackTrace) {
+      debugPrint('[GridViewModule] failed to launch preview: $error');
+      Logger('GridViewModule').warning(
+        'Failed to launch preview window',
+        error,
+        stackTrace,
+      );
+      return false;
+    }
+  }
+
+  String? _resolveExecutablePath() {
+    final exe = Platform.resolvedExecutable;
+    if (exe.toLowerCase().contains('clip_pix')) {
+      return exe;
+    }
+    final debugCandidate = p.join(
+      Directory.current.path,
+      'build',
+      'windows',
+      'x64',
+      'runner',
+      'Debug',
+      'clip_pix.exe',
+    );
+    if (File(debugCandidate).existsSync()) {
+      return debugCandidate;
+    }
+    final releaseCandidate = p.join(
+      Directory.current.path,
+      'build',
+      'windows',
+      'x64',
+      'runner',
+      'Release',
+      'clip_pix.exe',
+    );
+    if (File(releaseCandidate).existsSync()) {
+      return releaseCandidate;
+    }
+    return null;
+  }
+
+  void _showFallbackPreview(ImageItem item) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => Dialog(
+        child: InteractiveViewer(
+          child: Image.file(File(item.filePath), fit: BoxFit.contain),
         ),
       ),
     );

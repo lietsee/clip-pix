@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -32,10 +33,17 @@ import 'system/state/watcher_status_notifier.dart';
 import 'system/url_download_service.dart';
 import 'package:path/path.dart' as p;
 import 'ui/main_screen.dart';
+import 'ui/image_preview_window.dart';
 import 'system/window_bounds_service.dart';
 
-Future<void> main() async {
+Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  final previewIndex = args.indexOf('--preview');
+  if (previewIndex != -1 && previewIndex + 1 < args.length) {
+    await _launchPreviewMode(args[previewIndex + 1]);
+    return;
+  }
 
   debugPrint('main start; Platform.isWindows=${Platform.isWindows}');
   _configureLogging();
@@ -126,6 +134,76 @@ Future<
     gridLayoutBox: gridLayoutBox,
     gridOrderBox: gridOrderBox,
   );
+}
+
+Future<void> _launchPreviewMode(String payload) async {
+  _configureLogging();
+  Map<String, dynamic> data;
+  try {
+    data = jsonDecode(payload) as Map<String, dynamic>;
+  } catch (error) {
+    Logger('ImagePreviewWindow').severe('Invalid preview payload', error);
+    return;
+  }
+
+  final itemMap = (data['item'] as Map<String, dynamic>?);
+  if (itemMap == null) {
+    Logger('ImagePreviewWindow').warning('Preview payload missing item');
+    return;
+  }
+
+  final savedAtString = itemMap['savedAt'] as String?;
+  DateTime? savedAt;
+  if (savedAtString != null) {
+    savedAt = DateTime.tryParse(savedAtString)?.toUtc();
+  }
+
+  final item = ImageItem(
+    id: itemMap['id'] as String,
+    filePath: itemMap['filePath'] as String,
+    metadataPath: itemMap['metadataPath'] as String?,
+    sourceType: ImageSourceType.values[(itemMap['sourceType'] as int?) ?? 0],
+    savedAt: savedAt,
+    source: itemMap['source'] as String?,
+  );
+
+  final initialTop = data['alwaysOnTop'] as bool? ?? false;
+  final copyService = ClipboardCopyService();
+
+  runApp(
+    _PreviewApp(
+      item: item,
+      copyService: copyService,
+      initialAlwaysOnTop: initialTop,
+    ),
+  );
+}
+
+class _PreviewApp extends StatelessWidget {
+  const _PreviewApp({
+    required this.item,
+    required this.copyService,
+    required this.initialAlwaysOnTop,
+  });
+
+  final ImageItem item;
+  final ClipboardCopyService copyService;
+  final bool initialAlwaysOnTop;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(useMaterial3: true),
+      home: ImagePreviewWindow(
+        item: item,
+        initialAlwaysOnTop: initialAlwaysOnTop,
+        onCopyImage: (image) => copyService.copyImage(image),
+        onClose: () => exit(0),
+        onToggleAlwaysOnTop: (_) {},
+      ),
+    );
+  }
 }
 
 class ClipPixApp extends StatelessWidget {
