@@ -742,7 +742,6 @@ class _ImageCardState extends State<ImageCard> {
     }
     _imageStream = null;
     _streamListener = null;
-    _resolvedSignature = null;
   }
 
   void _setLoadingDeferred() {
