@@ -19,6 +19,7 @@ import '../system/state/image_library_notifier.dart';
 import '../system/state/image_library_state.dart';
 import '../system/state/selected_folder_state.dart';
 import 'image_card.dart';
+import 'image_preview_window.dart';
 import 'widgets/pinterest_grid.dart';
 
 class GridViewModule extends StatefulWidget {
@@ -501,11 +502,16 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   void _showPreviewDialog(ImageItem item) {
-    showDialog<void>(
-      context: context,
-      builder: (_) => Dialog(
-        child: InteractiveViewer(
-          child: Image.file(File(item.filePath), fit: BoxFit.contain),
+    final copyService = context.read<ClipboardCopyService>();
+    Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (routeContext) => ImagePreviewWindow(
+          item: item,
+          initialAlwaysOnTop: false,
+          onClose: () {},
+          onToggleAlwaysOnTop: (_) {},
+          onCopyImage: (image) => copyService.copyImage(image),
         ),
       ),
     );
