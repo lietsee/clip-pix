@@ -741,6 +741,10 @@ class _GridViewModuleState extends State<GridViewModule> {
     }
     final stored = repo.getOrder(path);
     debugPrint('[GridViewModule] apply order path=$path stored=$stored incoming=${items.map((e) => e.id).toList()}');
+    if (items.isEmpty) {
+      debugPrint('[GridViewModule] incoming empty; skip reorder');
+      return items;
+    }
     final ids = items.map((item) => item.id).toList();
     final currentSet = ids.toSet();
     final orderedIds = <String>[];
