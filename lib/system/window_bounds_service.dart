@@ -105,6 +105,7 @@ class WindowBoundsService with WidgetsBindingObserver {
           _restoredBounds = desired;
           return;
         }
+        debugPrint('[WindowBoundsService] apply attempt ${attempt + 1} failed');
         await Future<void>.delayed(const Duration(milliseconds: 80));
       }
       _logger.warning('Failed to apply stored window bounds after retries');
