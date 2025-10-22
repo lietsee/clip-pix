@@ -37,6 +37,7 @@ import 'system/window_bounds_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  debugPrint('main start; Platform.isWindows=${Platform.isWindows}');
   _configureLogging();
 
   await Hive.initFlutter();
@@ -145,6 +146,7 @@ class ClipPixApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('[ClipPixApp] building; isWindows=${Platform.isWindows}');
     final List<SingleChildWidget> providersList = <SingleChildWidget>[
       ...AppStateProvider.providers(
         appStateBox: appStateBox,
