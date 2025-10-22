@@ -579,7 +579,7 @@ class _ImageCardState extends State<ImageCard> {
 
   void _applyZoom(double delta, {Offset? focalPoint}) {
     final newScale = _clampScale(_currentScale + delta);
-    _startZoomAnimation(newScale, focalPoint: focalPoint);
+    _applyZoomImmediate(newScale, focalPoint: focalPoint);
   }
 
   void _handleWheelZoom(double scrollDeltaY, {Offset? focalPoint}) {
