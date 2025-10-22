@@ -34,7 +34,6 @@ class WindowBoundsService with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_restoreBounds());
-      unawaited(_persistCurrentBounds());
     });
   }
 
