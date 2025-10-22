@@ -278,9 +278,14 @@ class _GridViewModuleState extends State<GridViewModule> {
     }
     final cardKey = _cardKeys.putIfAbsent(item.id, () => GlobalKey());
     if (entry.isPlaceholder) {
+      final placeholderSize = sizeNotifier.value;
       return SizedBox(
         key: cardKey,
-        child: const SizedBox.expand(),
+        width: placeholderSize.width,
+        height: placeholderSize.height,
+        child: const DecoratedBox(
+          decoration: BoxDecoration(color: Colors.transparent),
+        ),
       );
     }
     return SizedBox(
