@@ -752,10 +752,12 @@ class _ImageCardState extends State<ImageCard> {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _visualState = _CardVisualState.loading;
-        _latestChunk = null;
-      });
+      if (_visualState != _CardVisualState.loading) {
+        setState(() {
+          _visualState = _CardVisualState.loading;
+          _latestChunk = null;
+        });
+      }
     });
   }
 
