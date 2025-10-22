@@ -1,30 +1,34 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
 import 'dart:ui';
 
 import 'package:ffi/ffi.dart';
 import 'package:flutter/widgets.dart';
-import 'package:hive/hive.dart';
 import 'package:logging/logging.dart';
+import 'package:path/path.dart' as p;
 import 'package:win32/win32.dart';
 
 class WindowBoundsService with WidgetsBindingObserver {
-  WindowBoundsService(this._box) : _logger = Logger('WindowBoundsService');
+  WindowBoundsService() : _logger = Logger('WindowBoundsService');
 
-  final Box<dynamic> _box;
   final Logger _logger;
   Timer? _debounce;
   Rect? _restoredBounds;
+  late final String _configPath;
 
-  static const _storageKey = 'window_bounds';
+  static const _configFileName = 'clip_pix_window.json';
   static const _debounceDuration = Duration(milliseconds: 200);
+
+  bool get _isSupported => Platform.isWindows;
 
   void init() {
     if (!_isSupported) {
       return;
     }
-    _logger.fine('Initializing window bounds service');
+    _configPath = _resolveConfigPath();
+    _logger.fine('Window bounds config path: $_configPath');
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_restoreBounds());
@@ -38,9 +42,12 @@ class WindowBoundsService with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _debounce?.cancel();
     _debounce = null;
-    _logger.fine('Disposing window bounds service');
-    // Persist any final bounds synchronously.
-    unawaited(_persistCurrentBounds());
+    // Flush synchronously on shutdown.
+    try {
+      _persistCurrentBounds(sync: true);
+    } catch (error, stackTrace) {
+      _logger.warning('Failed to persist bounds during dispose', error, stackTrace);
+    }
   }
 
   @override
@@ -48,7 +55,6 @@ class WindowBoundsService with WidgetsBindingObserver {
     if (!_isSupported) {
       return;
     }
-    _logger.finer('Metrics changed; scheduling bounds persist');
     _debounce?.cancel();
     _debounce = Timer(_debounceDuration, () {
       _debounce = null;
@@ -56,51 +62,52 @@ class WindowBoundsService with WidgetsBindingObserver {
     });
   }
 
-  bool get _isSupported => Platform.isWindows;
-
   Future<void> _restoreBounds() async {
-    final stored = _box.get(_storageKey);
-    if (stored is! Map) {
-      _logger.fine('No stored window bounds');
+    final file = File(_configPath);
+    if (!await file.exists()) {
+      _logger.fine('No window bounds file found');
       return;
     }
-    final left = (stored['left'] as num?)?.toDouble();
-    final top = (stored['top'] as num?)?.toDouble();
-    final width = (stored['width'] as num?)?.toDouble();
-    final height = (stored['height'] as num?)?.toDouble();
-    if (left == null ||
-        top == null ||
-        width == null ||
-        height == null ||
-        width <= 0 ||
-        height <= 0) {
-      _logger.warning('Stored bounds invalid: $stored');
-      return;
-    }
-    final desired = Rect.fromLTWH(left, top, width, height);
-    _logger.fine('Attempting to restore window bounds: $desired');
-    // Attempt several times in case the native window isn't ready yet.
-    for (var attempt = 0; attempt < 5; attempt++) {
-      if (_applyBounds(desired)) {
-        _logger.fine('Bounds restored on attempt ${attempt + 1}');
-        _restoredBounds = desired;
+    try {
+      final jsonString = await file.readAsString();
+      final data = jsonDecode(jsonString);
+      if (data is! Map) {
+        _logger.warning('Window bounds file had unexpected format');
         return;
       }
-      _logger.finer('Bounds restore attempt ${attempt + 1} failed');
-      await Future<void>.delayed(const Duration(milliseconds: 80));
+      final left = (data['left'] as num?)?.toDouble();
+      final top = (data['top'] as num?)?.toDouble();
+      final width = (data['width'] as num?)?.toDouble();
+      final height = (data['height'] as num?)?.toDouble();
+      if (left == null ||
+          top == null ||
+          width == null ||
+          height == null ||
+          width <= 0 ||
+          height <= 0) {
+        _logger.warning('Stored window bounds invalid: $data');
+        return;
+      }
+      final desired = Rect.fromLTWH(left, top, width, height);
+      _logger.fine('Attempting to restore window bounds: $desired');
+      for (var attempt = 0; attempt < 5; attempt++) {
+        if (_applyBounds(desired)) {
+          _logger.fine('Bounds restored on attempt ${attempt + 1}');
+          _restoredBounds = desired;
+          return;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 80));
+      }
+      _logger.warning('Failed to apply stored window bounds after retries');
+    } catch (error, stackTrace) {
+      _logger.warning('Failed to restore window bounds', error, stackTrace);
     }
-    _logger.warning('Failed to apply stored bounds after retries');
   }
 
-  Future<void> _persistCurrentBounds() async {
+  Future<void> _persistCurrentBounds({bool sync = false}) async {
     final rect = _readWindowRect();
     if (rect == null) {
-      _logger.finer('Skipping persist; unable to read window rect');
-      return;
-    }
-    if (_restoredBounds != null &&
-        (rect.width <= 0 || rect.height <= 0)) {
-      _logger.warning('Skipping persist due to zero-sized rect: $rect');
+      _logger.finer('Skipping persist; could not read window rect');
       return;
     }
     final map = <String, double>{
@@ -109,8 +116,14 @@ class WindowBoundsService with WidgetsBindingObserver {
       'width': rect.width,
       'height': rect.height,
     };
+    final file = File(_configPath);
     try {
-      await _box.put(_storageKey, map);
+      final jsonString = const JsonEncoder.withIndent('  ').convert(map);
+      if (sync) {
+        file.writeAsStringSync(jsonString, flush: true);
+      } else {
+        await file.writeAsString(jsonString, flush: true);
+      }
       _logger.fine('Persisted window bounds: $map');
       _restoredBounds = rect;
     } catch (error, stackTrace) {
@@ -124,7 +137,6 @@ class WindowBoundsService with WidgetsBindingObserver {
       _logger.finer('Window handle not available for bounds read');
       return null;
     }
-    _logger.finer('Reading window rect for handle: 0x${hwnd.toRadixString(16)}');
     final rectPointer = calloc<RECT>();
     try {
       if (GetWindowRect(hwnd, rectPointer) == 0) {
@@ -167,7 +179,7 @@ class WindowBoundsService with WidgetsBindingObserver {
       top,
       width,
       height,
-      SWP_NOZORDER | SWP_NOACTIVATE,
+      SWP_NOZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW,
     );
     if (result == 0) {
       _logger.finer('SetWindowPos failed with error ${GetLastError()}');
@@ -179,9 +191,30 @@ class WindowBoundsService with WidgetsBindingObserver {
     final className = TEXT('FLUTTER_RUNNER_WIN32_WINDOW');
     final hwnd = FindWindow(className, nullptr);
     calloc.free(className);
-    if (hwnd == 0) {
-      _logger.finer('FindWindow failed for FLUTTER_RUNNER_WIN32_WINDOW');
+    if (hwnd != 0) {
+      return hwnd;
     }
-    return hwnd;
+    final fallback = GetForegroundWindow();
+    if (fallback == 0) {
+      _logger.finer('FindWindow and GetForegroundWindow both failed');
+    }
+    return fallback;
+  }
+
+  String _resolveConfigPath() {
+    final buffer = wsalloc(MAX_PATH);
+    try {
+      final length = GetModuleFileName(nullptr, buffer, MAX_PATH);
+      String exePath;
+      if (length > 0) {
+        exePath = buffer.toDartString();
+      } else {
+        exePath = Platform.resolvedExecutable;
+      }
+      final exeDir = p.dirname(exePath);
+      return p.join(exeDir, _configFileName);
+    } finally {
+      calloc.free(buffer);
+    }
   }
 }
