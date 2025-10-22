@@ -119,15 +119,16 @@ class WindowBoundsService with WidgetsBindingObserver {
   }
 
   Rect? _readWindowRect() {
-    final hwnd = GetActiveWindow();
+    final hwnd = _resolveWindowHandle();
     if (hwnd == 0) {
-      _logger.finer('GetActiveWindow returned null handle');
+      _logger.finer('Window handle not available for bounds read');
       return null;
     }
+    _logger.finer('Reading window rect for handle: 0x${hwnd.toRadixString(16)}');
     final rectPointer = calloc<RECT>();
     try {
       if (GetWindowRect(hwnd, rectPointer) == 0) {
-        _logger.finer('GetWindowRect failed for handle $hwnd');
+        _logger.finer('GetWindowRect failed for handle 0x${hwnd.toRadixString(16)}');
         return null;
       }
       final rect = rectPointer.ref;
@@ -149,11 +150,12 @@ class WindowBoundsService with WidgetsBindingObserver {
   }
 
   bool _applyBounds(Rect rect) {
-    final hwnd = GetActiveWindow();
+    final hwnd = _resolveWindowHandle();
     if (hwnd == 0) {
       _logger.finer('Cannot apply bounds; window handle missing');
       return false;
     }
+    _logger.finer('Applying bounds to handle 0x${hwnd.toRadixString(16)}: $rect');
     final width = rect.width.round();
     final height = rect.height.round();
     final left = rect.left.round();
@@ -171,5 +173,15 @@ class WindowBoundsService with WidgetsBindingObserver {
       _logger.finer('SetWindowPos failed with error ${GetLastError()}');
     }
     return result != 0;
+  }
+
+  int _resolveWindowHandle() {
+    final className = TEXT('FLUTTER_RUNNER_WIN32_WINDOW');
+    final hwnd = FindWindow(className, nullptr);
+    calloc.free(className);
+    if (hwnd == 0) {
+      _logger.finer('FindWindow failed for FLUTTER_RUNNER_WIN32_WINDOW');
+    }
+    return hwnd;
   }
 }
