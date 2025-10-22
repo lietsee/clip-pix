@@ -70,7 +70,7 @@ Offset clampPanOffset({
 
 enum _CardVisualState { loading, ready, error }
 
-class _ImageCardState extends State<ImageCard> with SingleTickerProviderStateMixin {
+class _ImageCardState extends State<ImageCard> {
   static const double _minWidth = 100;
   static const double _minHeight = 100;
   static const double _maxWidth = 1920;
@@ -99,9 +99,6 @@ class _ImageCardState extends State<ImageCard> with SingleTickerProviderStateMix
   ImageStream? _imageStream;
   ImageStreamListener? _streamListener;
   String? _resolvedSignature;
-  late final AnimationController _zoomController;
-  Animation<double>? _zoomAnimation;
-  Offset? _pendingZoomFocalPoint;
   double _currentScale = 1.0;
   bool _suppressScaleListener = false;
 
@@ -112,23 +109,6 @@ class _ImageCardState extends State<ImageCard> with SingleTickerProviderStateMix
     widget.scaleNotifier.addListener(_handleScaleExternalChange);
     _currentSpan = _computeSpan(widget.sizeNotifier.value.width);
     _currentScale = widget.scaleNotifier.value;
-    _zoomController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 120),
-    )
-      ..addListener(() {
-        final animation = _zoomAnimation;
-        if (animation != null) {
-          _applyZoomInternal(animation.value, focalPoint: _pendingZoomFocalPoint);
-        }
-      })
-      ..addStatusListener((status) {
-        if (status == AnimationStatus.completed ||
-            status == AnimationStatus.dismissed) {
-          _zoomAnimation = null;
-          _pendingZoomFocalPoint = null;
-        }
-      });
   }
 
   @override
@@ -159,7 +139,6 @@ class _ImageCardState extends State<ImageCard> with SingleTickerProviderStateMix
     widget.sizeNotifier.removeListener(_handleSizeExternalChange);
     widget.scaleNotifier.removeListener(_handleScaleExternalChange);
     _detachImageStream();
-    _zoomController.dispose();
     super.dispose();
   }
 
@@ -606,59 +585,37 @@ class _ImageCardState extends State<ImageCard> with SingleTickerProviderStateMix
   void _handleWheelZoom(double scrollDeltaY, {Offset? focalPoint}) {
     final zoomFactor = math.exp(-scrollDeltaY / 300.0);
     final targetScale = _clampScale(_currentScale * zoomFactor);
-    _startZoomAnimation(targetScale, focalPoint: focalPoint);
+    _applyZoomImmediate(targetScale, focalPoint: focalPoint);
   }
 
-  void _startZoomAnimation(double targetScale, {Offset? focalPoint}) {
+  void _applyZoomImmediate(double targetScale, {Offset? focalPoint}) {
     targetScale = _clampScale(targetScale);
     if ((targetScale - _currentScale).abs() < 0.0001) {
-      return;
-    }
-    _pendingZoomFocalPoint = focalPoint;
-    _zoomController.stop();
-    _zoomAnimation = Tween<double>(
-      begin: _currentScale,
-      end: targetScale,
-    ).animate(
-      CurvedAnimation(parent: _zoomController, curve: Curves.easeOutCubic),
-    );
-    debugPrint(
-      '[ImageCard] zoom start id=${widget.item.id} current=${_currentScale.toStringAsFixed(3)} target=${targetScale.toStringAsFixed(3)} focal=$focalPoint',
-    );
-    _zoomController.forward(from: 0);
-  }
-
-  void _applyZoomInternal(double newScale, {Offset? focalPoint}) {
-    final oldScale = _currentScale;
-    if ((newScale - oldScale).abs() < 0.0001) {
       return;
     }
     final size = widget.sizeNotifier.value;
     final center = Offset(size.width / 2, size.height / 2);
     Offset newOffset;
     if (focalPoint != null) {
-      final ratio = newScale / oldScale;
       final focalVector = focalPoint - center;
-      newOffset = focalVector * (1 - ratio) + _imageOffset * ratio;
+      final scaleRatio = targetScale / _currentScale;
+      newOffset = _imageOffset + (focalVector - _imageOffset) * (1 - scaleRatio);
     } else {
       newOffset = _imageOffset;
     }
     newOffset = clampPanOffset(
       offset: newOffset,
       size: size,
-      scale: newScale,
-    );
-    debugPrint(
-      '[ImageCard] zoom frame id=${widget.item.id} old=${oldScale.toStringAsFixed(3)} new=${newScale.toStringAsFixed(3)} offset=$newOffset focal=$focalPoint',
+      scale: targetScale,
     );
     setState(() {
       _imageOffset = newOffset;
     });
-    _currentScale = newScale;
+    _currentScale = targetScale;
     _suppressScaleListener = true;
-    widget.scaleNotifier.value = newScale;
+    widget.scaleNotifier.value = targetScale;
     _suppressScaleListener = false;
-    widget.onZoom(widget.item.id, newScale);
+    widget.onZoom(widget.item.id, targetScale);
   }
 
   Size _clampSize(Size size) {
