@@ -648,7 +648,7 @@ class _GridViewModuleState extends State<GridViewModule> {
       case GridBackgroundTone.white:
         return Colors.white;
       case GridBackgroundTone.lightGray:
-        return const Color(0xFFF0F0F0);
+        return const Color(0xFFC0C0C0);
       case GridBackgroundTone.darkGray:
         return const Color(0xFF2E2E2E);
       case GridBackgroundTone.black:
