@@ -379,7 +379,7 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
   @override
   double childMainAxisPosition(RenderBox child) {
     final parentData = child.parentData! as PinterestGridParentData;
-    return parentData.layoutOffset ?? 0;
+    return (parentData.layoutOffset ?? 0) - constraints.scrollOffset;
   }
 
   String _describeChildren() {
