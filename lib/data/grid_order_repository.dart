@@ -12,10 +12,10 @@ class GridOrderRepository extends ChangeNotifier {
     final stored = _box.get(path);
     if (stored is List) {
       // Log retrieval for debugging order persistence.
-      debugPrint('[GridOrderRepository] getOrder path=$path order=$stored');
+      // debugPrint('[GridOrderRepository] getOrder path=$path order=$stored');
       return List<String>.from(stored);
     }
-    debugPrint('[GridOrderRepository] getOrder path=$path order=[] (not found)');
+    // debugPrint('[GridOrderRepository] getOrder path=$path order=[] (not found)');
     return const <String>[];
   }
 

@@ -278,9 +278,9 @@ class _GridViewModuleState extends State<GridViewModule> {
     final item = entry.item;
     final animatedKey = ObjectKey(entry);
     final entryHash = identityHashCode(entry);
-    debugPrint(
-      '[GridViewModule] build_child key=$animatedKey entryHash=$entryHash removing=${entry.isRemoving} dragging=${entry.isDragging} opacity=${entry.opacity.toStringAsFixed(2)}',
-    );
+    // debugPrint(
+    //   '[GridViewModule] build_child key=$animatedKey entryHash=$entryHash removing=${entry.isRemoving} dragging=${entry.isDragging} opacity=${entry.opacity.toStringAsFixed(2)}',
+    // );
     if (!_currentBuildKeys.add(animatedKey)) {
       debugPrint(
         '[GridViewModule] duplicate_detected key=$animatedKey entryHash=$entryHash',
@@ -830,8 +830,8 @@ class _GridViewModuleState extends State<GridViewModule> {
       return items;
     }
     final stored = repo.getOrder(path);
-    debugPrint(
-        '[GridViewModule] apply order path=$path stored=$stored incoming=${items.map((e) => e.id).toList()}');
+    // debugPrint(
+    //   '[GridViewModule] apply order path=$path stored=$stored incoming=${items.map((e) => e.id).toList()}');
     if (items.isEmpty) {
       debugPrint('[GridViewModule] incoming empty; skip reorder');
       return items;

@@ -120,6 +120,11 @@ class _MainScreenState extends State<MainScreen> {
           child: NotificationListener<ScrollNotification>(
             onNotification: (notification) {
               if (_isRestoringRootScroll) {
+                debugPrint(
+                  '[ScrollDebug] notification ignored while restoring: '
+                  'type=${notification.runtimeType} '
+                  'pixels=${notification.metrics.pixels.toStringAsFixed(1)}',
+                );
                 return false;
               }
               if (notification.metrics.axis == Axis.vertical &&
@@ -128,6 +133,13 @@ class _MainScreenState extends State<MainScreen> {
                 if (rootPath != null) {
                   _cancelPendingRootRestore(rootPath);
                 }
+                debugPrint(
+                  '[ScrollDebug] notification received: '
+                  'type=${notification.runtimeType} '
+                  'pixels=${notification.metrics.pixels.toStringAsFixed(1)} '
+                  'max=${notification.metrics.maxScrollExtent.toStringAsFixed(1)} '
+                  'min=${notification.metrics.minScrollExtent.toStringAsFixed(1)}',
+                );
                 context
                     .read<SelectedFolderNotifier>()
                     .updateRootScroll(notification.metrics.pixels);
@@ -201,33 +213,50 @@ class _MainScreenState extends State<MainScreen> {
     if (!mounted || state.viewMode != FolderViewMode.root) {
       _pendingRootScrollOffset = null;
       _needsRootScrollRestore = false;
+      debugPrint(
+        '[ScrollDebug] prepare skipped: mounted=$mounted '
+        'viewMode=${state.viewMode} needs=$_needsRootScrollRestore',
+      );
       return;
     }
 
     final path = state.current?.path;
     if (path == null) {
+      debugPrint('[ScrollDebug] prepare aborted: current path is null');
       return;
     }
 
     if (_restoredRootScrollPaths.contains(path) &&
         _pendingRootScrollOffset == null) {
+      debugPrint('[ScrollDebug] prepare skipped: already restored for $path');
       return;
     }
 
     _pendingRootScrollOffset ??= state.rootScrollOffset;
     _restoringForPath ??= path;
     _needsRootScrollRestore = true;
+    debugPrint(
+      '[ScrollDebug] prepare pending restore: path=$path '
+      'target=${_pendingRootScrollOffset?.toStringAsFixed(1)}',
+    );
   }
 
   void _maybeRestoreRootScroll(SelectedFolderState state) {
     if (!mounted || !_needsRootScrollRestore) {
+      if (!mounted) {
+        debugPrint('[ScrollDebug] restore skipped: widget not mounted');
+      }
       return;
     }
     if (state.viewMode != FolderViewMode.root) {
+      debugPrint(
+        '[ScrollDebug] restore waiting: viewMode=${state.viewMode}',
+      );
       return;
     }
 
     if (!_rootScrollController.hasClients) {
+      debugPrint('[ScrollDebug] restore waiting: controller has no clients');
       _scheduleRootScrollCheck();
       return;
     }
@@ -236,11 +265,13 @@ class _MainScreenState extends State<MainScreen> {
     final targetPath = _restoringForPath ?? state.current?.path;
     if (pending == null || targetPath == null) {
       _needsRootScrollRestore = false;
+      debugPrint('[ScrollDebug] restore cancelled: pending/target missing');
       return;
     }
 
     final position = _rootScrollController.position;
     if (!position.hasContentDimensions) {
+      debugPrint('[ScrollDebug] restore waiting: dimensions unavailable yet');
       _scheduleRootScrollCheck();
       return;
     }
@@ -248,11 +279,19 @@ class _MainScreenState extends State<MainScreen> {
     final clamped =
         pending.clamp(position.minScrollExtent, position.maxScrollExtent);
     if ((position.pixels - clamped).abs() < 0.5) {
+      debugPrint(
+        '[ScrollDebug] restore not needed: already near '
+        '${clamped.toStringAsFixed(1)} for $targetPath',
+      );
       _completeRootRestore(targetPath);
       return;
     }
 
     _isRestoringRootScroll = true;
+    debugPrint(
+      '[ScrollDebug] restore jumpTo: target=${clamped.toStringAsFixed(1)} '
+      'current=${position.pixels.toStringAsFixed(1)} path=$targetPath',
+    );
     _rootScrollController.jumpTo(clamped);
     _isRestoringRootScroll = false;
     _completeRootRestore(targetPath);
@@ -263,6 +302,7 @@ class _MainScreenState extends State<MainScreen> {
       return;
     }
     _restoreScheduled = true;
+    debugPrint('[ScrollDebug] schedule restore check');
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _restoreScheduled = false;
       if (!mounted) {
@@ -277,6 +317,7 @@ class _MainScreenState extends State<MainScreen> {
     if (!_needsRootScrollRestore) {
       return;
     }
+    debugPrint('[ScrollDebug] cancel pending restore due to user scroll');
     _completeRootRestore(path);
   }
 
@@ -285,6 +326,7 @@ class _MainScreenState extends State<MainScreen> {
     _pendingRootScrollOffset = null;
     _restoringForPath = null;
     _restoredRootScrollPaths.add(path);
+    debugPrint('[ScrollDebug] restore completed for $path');
   }
 
   Future<void> _requestFolderSelection(BuildContext context) async {
