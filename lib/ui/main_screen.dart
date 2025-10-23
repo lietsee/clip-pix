@@ -336,6 +336,7 @@ class _MainScreenState extends State<MainScreen> {
         'pixels=${position.pixels.toStringAsFixed(1)} '
         'min=${position.minScrollExtent.toStringAsFixed(1)} '
         'max=${position.maxScrollExtent.toStringAsFixed(1)} '
+        'viewport=${position.viewportDimension.toStringAsFixed(1)} '
         'outOfRange=${position.outOfRange}',
       );
     });
