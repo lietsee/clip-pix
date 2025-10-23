@@ -150,9 +150,21 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
     final double columnWidth =
         columnCount == 0 ? 0 : (crossAxisExtent - totalGaps) / columnCount;
 
+    debugPrint(
+      '[ScrollDebug] sliver layout start: '
+      'scrollOffset=${constraints.scrollOffset.toStringAsFixed(1)} '
+      'cacheOrigin=${constraints.cacheOrigin.toStringAsFixed(1)} '
+      'remainingExtent=${constraints.remainingPaintExtent.toStringAsFixed(1)} '
+      'crossAxisExtent=${crossAxisExtent.toStringAsFixed(1)} '
+      'columnWidth=${columnWidth.toStringAsFixed(1)} '
+      'columns=$columnCount',
+    );
+
     if (columnWidth <= 0 || columnCount <= 0) {
       geometry = SliverGeometry.zero;
       childManager.didFinishLayout();
+      debugPrint(
+          '[ScrollDebug] sliver layout abort: columnWidth<=0 or columnCount<=0');
       return;
     }
 
@@ -277,6 +289,8 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
     double maxPaintedExtent = 0;
     double maxScrollExtent = 0;
     RenderBox? paintChild = firstChild;
+    RenderBox? leadingTrackedChild;
+    RenderBox? trailingTrackedChild;
     while (paintChild != null) {
       final parentData = paintChild.parentData! as PinterestGridParentData;
       final double end = parentData.layoutOffset! + parentData.paintExtent;
@@ -286,10 +300,12 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
       if (end > maxScrollExtent) {
         maxScrollExtent = end;
       }
+      trailingTrackedChild = paintChild;
+      leadingTrackedChild ??= paintChild;
       paintChild = childAfter(paintChild);
     }
 
-    geometry = SliverGeometry(
+    final computedGeometry = SliverGeometry(
       scrollExtent: maxScrollExtent,
       paintExtent: calculatePaintOffset(
         constraints,
@@ -299,6 +315,29 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
       maxPaintExtent: maxScrollExtent,
       hasVisualOverflow: maxPaintedExtent > constraints.remainingPaintExtent,
     );
+    geometry = computedGeometry;
+
+    if (leadingTrackedChild != null && trailingTrackedChild != null) {
+      final leadingData =
+          leadingTrackedChild.parentData! as PinterestGridParentData;
+      final trailingData =
+          trailingTrackedChild.parentData! as PinterestGridParentData;
+      debugPrint(
+        '[ScrollDebug] sliver layout done: '
+        'geometry.scrollExtent=${computedGeometry.scrollExtent.toStringAsFixed(1)} '
+        'geometry.paintExtent=${computedGeometry.paintExtent.toStringAsFixed(1)} '
+        'leadingOffset=${leadingData.layoutOffset?.toStringAsFixed(1)} '
+        'trailingOffset=${trailingData.layoutOffset?.toStringAsFixed(1)} '
+        'lastPaintExtent=${trailingData.paintExtent.toStringAsFixed(1)} '
+        'underflow=${computedGeometry.scrollExtent <= constraints.scrollOffset}',
+      );
+    } else {
+      debugPrint(
+        '[ScrollDebug] sliver layout done: no children '
+        'geometry.scrollExtent=${computedGeometry.scrollExtent.toStringAsFixed(1)} '
+        'geometry.paintExtent=${computedGeometry.paintExtent.toStringAsFixed(1)}',
+      );
+    }
 
     childManager.didFinishLayout();
   }

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 
 import '../data/models/image_entry.dart';
@@ -36,6 +37,7 @@ class _MainScreenState extends State<MainScreen> {
   double? _pendingRootScrollOffset;
   String? _restoringForPath;
   final Set<String> _restoredRootScrollPaths = <String>{};
+  bool _controllerLogScheduled = false;
 
   @override
   void initState() {
@@ -140,6 +142,7 @@ class _MainScreenState extends State<MainScreen> {
                   'max=${notification.metrics.maxScrollExtent.toStringAsFixed(1)} '
                   'min=${notification.metrics.minScrollExtent.toStringAsFixed(1)}',
                 );
+                _scheduleControllerSnapshot();
                 context
                     .read<SelectedFolderNotifier>()
                     .updateRootScroll(notification.metrics.pixels);
@@ -310,6 +313,31 @@ class _MainScreenState extends State<MainScreen> {
       }
       final state = context.read<SelectedFolderState>();
       _maybeRestoreRootScroll(state);
+    });
+  }
+
+  void _scheduleControllerSnapshot() {
+    if (_controllerLogScheduled || !mounted) {
+      return;
+    }
+    _controllerLogScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _controllerLogScheduled = false;
+      if (!mounted) {
+        return;
+      }
+      if (!_rootScrollController.hasClients) {
+        debugPrint('[ScrollDebug] controller snapshot skipped: no clients');
+        return;
+      }
+      final position = _rootScrollController.position;
+      debugPrint(
+        '[ScrollDebug] controller snapshot: '
+        'pixels=${position.pixels.toStringAsFixed(1)} '
+        'min=${position.minScrollExtent.toStringAsFixed(1)} '
+        'max=${position.maxScrollExtent.toStringAsFixed(1)} '
+        'outOfRange=${position.outOfRange}',
+      );
     });
   }
 
