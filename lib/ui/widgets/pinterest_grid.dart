@@ -226,6 +226,15 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
       }
 
       parentData.paintExtent = paintedChildSize;
+
+      debugPrint(
+        '[ScrollDebug] child placed: '
+        'span=$span start=$bestStart '
+        'layoutOffset=${parentData.layoutOffset?.toStringAsFixed(1)} '
+        'paintExtent=${paintedChildSize.toStringAsFixed(1)} '
+        'scrollOffset=${constraints.scrollOffset.toStringAsFixed(1)} '
+        'columnHeights=${columnHeights.map((h) => h.toStringAsFixed(1)).join('/')}',
+      );
     }
 
     // Layout visible children.
@@ -271,6 +280,12 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
                 paintExtentOf(leadingChildWithLayout) <
             scrollOffset) {
       leadingGarbage++;
+      debugPrint(
+        '[ScrollDebug] collect leading: '
+        'childOffset=${childScrollOffset(leadingChildWithLayout)!.toStringAsFixed(1)} '
+        'paintExtent=${paintExtentOf(leadingChildWithLayout).toStringAsFixed(1)} '
+        'scrollOffset=${scrollOffset.toStringAsFixed(1)}',
+      );
       leadingChildWithLayout = childAfter(leadingChildWithLayout);
     }
 
@@ -279,6 +294,11 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
         childScrollOffset(trailingChildWithLayout) != null &&
         childScrollOffset(trailingChildWithLayout)! > targetEndScrollOffset) {
       trailingGarbage++;
+      debugPrint(
+        '[ScrollDebug] collect trailing: '
+        'childOffset=${childScrollOffset(trailingChildWithLayout)!.toStringAsFixed(1)} '
+        'targetEnd=${targetEndScrollOffset.toStringAsFixed(1)}',
+      );
       trailingChildWithLayout = childBefore(trailingChildWithLayout);
     }
 
