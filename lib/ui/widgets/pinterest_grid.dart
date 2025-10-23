@@ -336,7 +336,8 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
           trailingTrackedChild.parentData! as PinterestGridParentData;
       bottomChildPaintExtent = trailingData.paintExtent;
     }
-    final double extraExtent = math.max(0, viewportExtent - bottomChildPaintExtent);
+    final double extraExtent =
+        math.max(0, viewportExtent - (bottomChildPaintExtent * 2));
     final double extendedScrollExtent = maxScrollExtent + extraExtent;
     final double extendedPaintExtentUpperBound =
         maxPaintedExtent + extraExtent;
