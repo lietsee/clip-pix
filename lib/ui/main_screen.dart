@@ -32,7 +32,10 @@ class _MainScreenState extends State<MainScreen> {
   String? _lastLoadedPath;
   bool _isRestoringRootScroll = false;
   bool _restoreScheduled = false;
+  bool _needsRootScrollRestore = false;
   double? _pendingRootScrollOffset;
+  String? _restoringForPath;
+  final Set<String> _restoredRootScrollPaths = <String>{};
 
   @override
   void initState() {
@@ -105,6 +108,7 @@ class _MainScreenState extends State<MainScreen> {
     }
 
     final tabs = _buildTabs(context, folderState);
+    _prepareRootScrollRestoreIfNeeded(folderState);
     _maybeRestoreRootScroll(folderState);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -120,6 +124,10 @@ class _MainScreenState extends State<MainScreen> {
               }
               if (notification.metrics.axis == Axis.vertical &&
                   folderState.viewMode == FolderViewMode.root) {
+                final rootPath = folderState.current?.path;
+                if (rootPath != null) {
+                  _cancelPendingRootRestore(rootPath);
+                }
                 context
                     .read<SelectedFolderNotifier>()
                     .updateRootScroll(notification.metrics.pixels);
@@ -189,26 +197,68 @@ class _MainScreenState extends State<MainScreen> {
     return tabs;
   }
 
-  void _maybeRestoreRootScroll(SelectedFolderState state) {
+  void _prepareRootScrollRestoreIfNeeded(SelectedFolderState state) {
     if (!mounted || state.viewMode != FolderViewMode.root) {
       _pendingRootScrollOffset = null;
+      _needsRootScrollRestore = false;
       return;
     }
 
-    final target = state.rootScrollOffset;
-    if (_rootScrollController.hasClients) {
-      final position = _rootScrollController.position;
-      final clamped =
-          target.clamp(position.minScrollExtent, position.maxScrollExtent);
-      if ((position.pixels - clamped).abs() < 0.5) {
-        return;
-      }
+    final path = state.current?.path;
+    if (path == null) {
+      return;
     }
-    _scheduleRootScrollRestore(target);
+
+    if (_restoredRootScrollPaths.contains(path) &&
+        _pendingRootScrollOffset == null) {
+      return;
+    }
+
+    _pendingRootScrollOffset ??= state.rootScrollOffset;
+    _restoringForPath ??= path;
+    _needsRootScrollRestore = true;
   }
 
-  void _scheduleRootScrollRestore(double target) {
-    _pendingRootScrollOffset = target;
+  void _maybeRestoreRootScroll(SelectedFolderState state) {
+    if (!mounted || !_needsRootScrollRestore) {
+      return;
+    }
+    if (state.viewMode != FolderViewMode.root) {
+      return;
+    }
+
+    if (!_rootScrollController.hasClients) {
+      _scheduleRootScrollCheck();
+      return;
+    }
+
+    final pending = _pendingRootScrollOffset;
+    final targetPath = _restoringForPath ?? state.current?.path;
+    if (pending == null || targetPath == null) {
+      _needsRootScrollRestore = false;
+      return;
+    }
+
+    final position = _rootScrollController.position;
+    if (!position.hasContentDimensions) {
+      _scheduleRootScrollCheck();
+      return;
+    }
+
+    final clamped =
+        pending.clamp(position.minScrollExtent, position.maxScrollExtent);
+    if ((position.pixels - clamped).abs() < 0.5) {
+      _completeRootRestore(targetPath);
+      return;
+    }
+
+    _isRestoringRootScroll = true;
+    _rootScrollController.jumpTo(clamped);
+    _isRestoringRootScroll = false;
+    _completeRootRestore(targetPath);
+  }
+
+  void _scheduleRootScrollCheck() {
     if (_restoreScheduled || !mounted) {
       return;
     }
@@ -218,24 +268,23 @@ class _MainScreenState extends State<MainScreen> {
       if (!mounted) {
         return;
       }
-      final pending = _pendingRootScrollOffset;
-      if (pending == null) {
-        return;
-      }
-      if (!_rootScrollController.hasClients) {
-        _scheduleRootScrollRestore(pending);
-        return;
-      }
-      final position = _rootScrollController.position;
-      final clamped =
-          pending.clamp(position.minScrollExtent, position.maxScrollExtent);
-      if ((position.pixels - clamped).abs() < 0.5) {
-        return;
-      }
-      _isRestoringRootScroll = true;
-      _rootScrollController.jumpTo(clamped);
-      _isRestoringRootScroll = false;
+      final state = context.read<SelectedFolderState>();
+      _maybeRestoreRootScroll(state);
     });
+  }
+
+  void _cancelPendingRootRestore(String path) {
+    if (!_needsRootScrollRestore) {
+      return;
+    }
+    _completeRootRestore(path);
+  }
+
+  void _completeRootRestore(String path) {
+    _needsRootScrollRestore = false;
+    _pendingRootScrollOffset = null;
+    _restoringForPath = null;
+    _restoredRootScrollPaths.add(path);
   }
 
   Future<void> _requestFolderSelection(BuildContext context) async {
