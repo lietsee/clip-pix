@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 
 import '../data/models/image_entry.dart';
@@ -31,6 +30,9 @@ class _MainScreenState extends State<MainScreen> {
   late final ScrollController _rootScrollController;
   late final ScrollController _subfolderScrollController;
   String? _lastLoadedPath;
+  bool _isRestoringRootScroll = false;
+  bool _restoreScheduled = false;
+  double? _pendingRootScrollOffset;
 
   @override
   void initState() {
@@ -103,6 +105,7 @@ class _MainScreenState extends State<MainScreen> {
     }
 
     final tabs = _buildTabs(context, folderState);
+    _maybeRestoreRootScroll(folderState);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -112,6 +115,9 @@ class _MainScreenState extends State<MainScreen> {
         Expanded(
           child: NotificationListener<ScrollNotification>(
             onNotification: (notification) {
+              if (_isRestoringRootScroll) {
+                return false;
+              }
               if (notification.metrics.axis == Axis.vertical &&
                   folderState.viewMode == FolderViewMode.root) {
                 context
@@ -180,16 +186,56 @@ class _MainScreenState extends State<MainScreen> {
       );
     }
 
-    SchedulerBinding.instance.addPostFrameCallback((_) {
-      if (state.viewMode == FolderViewMode.root) {
-        final offset = state.rootScrollOffset;
-        if (_rootScrollController.hasClients) {
-          _rootScrollController.jumpTo(offset);
-        }
-      }
-    });
-
     return tabs;
+  }
+
+  void _maybeRestoreRootScroll(SelectedFolderState state) {
+    if (!mounted || state.viewMode != FolderViewMode.root) {
+      _pendingRootScrollOffset = null;
+      return;
+    }
+
+    final target = state.rootScrollOffset;
+    if (_rootScrollController.hasClients) {
+      final position = _rootScrollController.position;
+      final clamped =
+          target.clamp(position.minScrollExtent, position.maxScrollExtent);
+      if ((position.pixels - clamped).abs() < 0.5) {
+        return;
+      }
+    }
+    _scheduleRootScrollRestore(target);
+  }
+
+  void _scheduleRootScrollRestore(double target) {
+    _pendingRootScrollOffset = target;
+    if (_restoreScheduled || !mounted) {
+      return;
+    }
+    _restoreScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _restoreScheduled = false;
+      if (!mounted) {
+        return;
+      }
+      final pending = _pendingRootScrollOffset;
+      if (pending == null) {
+        return;
+      }
+      if (!_rootScrollController.hasClients) {
+        _scheduleRootScrollRestore(pending);
+        return;
+      }
+      final position = _rootScrollController.position;
+      final clamped =
+          pending.clamp(position.minScrollExtent, position.maxScrollExtent);
+      if ((position.pixels - clamped).abs() < 0.5) {
+        return;
+      }
+      _isRestoringRootScroll = true;
+      _rootScrollController.jumpTo(clamped);
+      _isRestoringRootScroll = false;
+    });
   }
 
   Future<void> _requestFolderSelection(BuildContext context) async {
