@@ -304,6 +304,10 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
 
     if (leadingGarbage > 0 || trailingGarbage > 0) {
       collectGarbage(leadingGarbage, trailingGarbage);
+      debugPrint(
+        '[ScrollDebug] collect summary: leading=$leadingGarbage trailing=$trailingGarbage '
+        'children=${_describeChildren()}',
+      );
     }
 
     double maxPaintedExtent = 0;
@@ -337,6 +341,9 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
     );
     geometry = computedGeometry;
 
+    final viewportStart = constraints.scrollOffset;
+    final viewportEnd = viewportStart + constraints.remainingPaintExtent;
+
     if (leadingTrackedChild != null && trailingTrackedChild != null) {
       final leadingData =
           leadingTrackedChild.parentData! as PinterestGridParentData;
@@ -349,7 +356,8 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
         'leadingOffset=${leadingData.layoutOffset?.toStringAsFixed(1)} '
         'trailingOffset=${trailingData.layoutOffset?.toStringAsFixed(1)} '
         'lastPaintExtent=${trailingData.paintExtent.toStringAsFixed(1)} '
-        'underflow=${computedGeometry.scrollExtent <= constraints.scrollOffset}',
+        'underflow=${computedGeometry.scrollExtent <= constraints.scrollOffset}\n'
+        'visibleChildren=${_describeChildrenInViewport(viewportStart, viewportEnd)}',
       );
     } else {
       debugPrint(
@@ -372,5 +380,43 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
   double childMainAxisPosition(RenderBox child) {
     final parentData = child.parentData! as PinterestGridParentData;
     return parentData.layoutOffset ?? 0;
+  }
+
+  String _describeChildren() {
+    final buffer = StringBuffer();
+    RenderBox? child = firstChild;
+    while (child != null) {
+      final data = child.parentData! as PinterestGridParentData;
+      buffer.write(
+        '[offset=${data.layoutOffset?.toStringAsFixed(1)}, '
+        'span=${data.columnSpan}, paint=${data.paintExtent.toStringAsFixed(1)}]',
+      );
+      child = childAfter(child);
+      if (child != null) {
+        buffer.write(', ');
+      }
+    }
+    return buffer.isEmpty ? 'none' : buffer.toString();
+  }
+
+  String _describeChildrenInViewport(double viewportStart, double viewportEnd) {
+    final buffer = StringBuffer();
+    RenderBox? child = firstChild;
+    while (child != null) {
+      final data = child.parentData! as PinterestGridParentData;
+      final double start = data.layoutOffset ?? 0;
+      final double end = start + (data.paintExtent ?? 0);
+      final bool overlaps = end > viewportStart && start < viewportEnd;
+      buffer.write(
+        '[offset=${start.toStringAsFixed(1)}, '
+        'end=${end.toStringAsFixed(1)}, '
+        'visible=$overlaps]',
+      );
+      child = childAfter(child);
+      if (child != null) {
+        buffer.write(', ');
+      }
+    }
+    return buffer.isEmpty ? 'none' : buffer.toString();
   }
 }
