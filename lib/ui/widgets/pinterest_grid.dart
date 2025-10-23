@@ -150,21 +150,21 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
     final double columnWidth =
         columnCount == 0 ? 0 : (crossAxisExtent - totalGaps) / columnCount;
 
-    debugPrint(
-      '[ScrollDebug] sliver layout start: '
-      'scrollOffset=${constraints.scrollOffset.toStringAsFixed(1)} '
-      'cacheOrigin=${constraints.cacheOrigin.toStringAsFixed(1)} '
-      'remainingExtent=${constraints.remainingPaintExtent.toStringAsFixed(1)} '
-      'crossAxisExtent=${crossAxisExtent.toStringAsFixed(1)} '
-      'columnWidth=${columnWidth.toStringAsFixed(1)} '
-      'columns=$columnCount',
-    );
+    // debugPrint(
+    //   '[ScrollDebug] sliver layout start: '
+    //   'scrollOffset=${constraints.scrollOffset.toStringAsFixed(1)} '
+    //   'cacheOrigin=${constraints.cacheOrigin.toStringAsFixed(1)} '
+    //   'remainingExtent=${constraints.remainingPaintExtent.toStringAsFixed(1)} '
+    //   'crossAxisExtent=${crossAxisExtent.toStringAsFixed(1)} '
+    //   'columnWidth=${columnWidth.toStringAsFixed(1)} '
+    //   'columns=$columnCount',
+    // );
 
     if (columnWidth <= 0 || columnCount <= 0) {
       geometry = SliverGeometry.zero;
       childManager.didFinishLayout();
-      debugPrint(
-          '[ScrollDebug] sliver layout abort: columnWidth<=0 or columnCount<=0');
+      // debugPrint(
+      //     '[ScrollDebug] sliver layout abort: columnWidth<=0 or columnCount<=0');
       return;
     }
 
@@ -227,14 +227,14 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
 
       parentData.paintExtent = paintedChildSize;
 
-      debugPrint(
-        '[ScrollDebug] child placed: '
-        'span=$span start=$bestStart '
-        'layoutOffset=${parentData.layoutOffset?.toStringAsFixed(1)} '
-        'paintExtent=${paintedChildSize.toStringAsFixed(1)} '
-        'scrollOffset=${constraints.scrollOffset.toStringAsFixed(1)} '
-        'columnHeights=${columnHeights.map((h) => h.toStringAsFixed(1)).join('/')}',
-      );
+      // debugPrint(
+      //   '[ScrollDebug] child placed: '
+      //   'span=$span start=$bestStart '
+      //   'layoutOffset=${parentData.layoutOffset?.toStringAsFixed(1)} '
+      //   'paintExtent=${paintedChildSize.toStringAsFixed(1)} '
+      //   'scrollOffset=${constraints.scrollOffset.toStringAsFixed(1)} '
+      //   'columnHeights=${columnHeights.map((h) => h.toStringAsFixed(1)).join('/')}',
+      // );
     }
 
     // Layout visible children.
@@ -280,12 +280,12 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
                 paintExtentOf(leadingChildWithLayout) <
             scrollOffset) {
       leadingGarbage++;
-      debugPrint(
-        '[ScrollDebug] collect leading: '
-        'childOffset=${childScrollOffset(leadingChildWithLayout)!.toStringAsFixed(1)} '
-        'paintExtent=${paintExtentOf(leadingChildWithLayout).toStringAsFixed(1)} '
-        'scrollOffset=${scrollOffset.toStringAsFixed(1)}',
-      );
+      // debugPrint(
+      //   '[ScrollDebug] collect leading: '
+      //   'childOffset=${childScrollOffset(leadingChildWithLayout)!.toStringAsFixed(1)} '
+      //   'paintExtent=${paintExtentOf(leadingChildWithLayout).toStringAsFixed(1)} '
+      //   'scrollOffset=${scrollOffset.toStringAsFixed(1)}',
+      // );
       leadingChildWithLayout = childAfter(leadingChildWithLayout);
     }
 
@@ -294,20 +294,20 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
         childScrollOffset(trailingChildWithLayout) != null &&
         childScrollOffset(trailingChildWithLayout)! > targetEndScrollOffset) {
       trailingGarbage++;
-      debugPrint(
-        '[ScrollDebug] collect trailing: '
-        'childOffset=${childScrollOffset(trailingChildWithLayout)!.toStringAsFixed(1)} '
-        'targetEnd=${targetEndScrollOffset.toStringAsFixed(1)}',
-      );
+      // debugPrint(
+      //   '[ScrollDebug] collect trailing: '
+      //   'childOffset=${childScrollOffset(trailingChildWithLayout)!.toStringAsFixed(1)} '
+      //   'targetEnd=${targetEndScrollOffset.toStringAsFixed(1)}',
+      // );
       trailingChildWithLayout = childBefore(trailingChildWithLayout);
     }
 
     if (leadingGarbage > 0 || trailingGarbage > 0) {
       collectGarbage(leadingGarbage, trailingGarbage);
-      debugPrint(
-        '[ScrollDebug] collect summary: leading=$leadingGarbage trailing=$trailingGarbage '
-        'children=${_describeChildren()}',
-      );
+      // debugPrint(
+      //   '[ScrollDebug] collect summary: leading=$leadingGarbage trailing=$trailingGarbage '
+      //   'children=${_describeChildren()}',
+      // );
     }
 
     double maxPaintedExtent = 0;
@@ -362,22 +362,22 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
           leadingTrackedChild.parentData! as PinterestGridParentData;
       final trailingData =
           trailingTrackedChild.parentData! as PinterestGridParentData;
-      debugPrint(
-        '[ScrollDebug] sliver layout done: '
-        'geometry.scrollExtent=${computedGeometry.scrollExtent.toStringAsFixed(1)} '
-        'geometry.paintExtent=${computedGeometry.paintExtent.toStringAsFixed(1)} '
-        'leadingOffset=${leadingData.layoutOffset?.toStringAsFixed(1)} '
-        'trailingOffset=${trailingData.layoutOffset?.toStringAsFixed(1)} '
-        'lastPaintExtent=${trailingData.paintExtent.toStringAsFixed(1)} '
-        'underflow=${computedGeometry.scrollExtent <= constraints.scrollOffset}\n'
-        'visibleChildren=${_describeChildrenInViewport(viewportStart, viewportEnd)}',
-      );
+      // debugPrint(
+      //   '[ScrollDebug] sliver layout done: '
+      //   'geometry.scrollExtent=${computedGeometry.scrollExtent.toStringAsFixed(1)} '
+      //   'geometry.paintExtent=${computedGeometry.paintExtent.toStringAsFixed(1)} '
+      //   'leadingOffset=${leadingData.layoutOffset?.toStringAsFixed(1)} '
+      //   'trailingOffset=${trailingData.layoutOffset?.toStringAsFixed(1)} '
+      //   'lastPaintExtent=${trailingData.paintExtent.toStringAsFixed(1)} '
+      //   'underflow=${computedGeometry.scrollExtent <= constraints.scrollOffset}\n'
+      //   'visibleChildren=${_describeChildrenInViewport(viewportStart, viewportEnd)}',
+      // );
     } else {
-      debugPrint(
-        '[ScrollDebug] sliver layout done: no children '
-        'geometry.scrollExtent=${computedGeometry.scrollExtent.toStringAsFixed(1)} '
-        'geometry.paintExtent=${computedGeometry.paintExtent.toStringAsFixed(1)}',
-      );
+      // debugPrint(
+      //   '[ScrollDebug] sliver layout done: no children '
+      //   'geometry.scrollExtent=${computedGeometry.scrollExtent.toStringAsFixed(1)} '
+      //   'geometry.paintExtent=${computedGeometry.paintExtent.toStringAsFixed(1)}',
+      // );
     }
 
     childManager.didFinishLayout();
