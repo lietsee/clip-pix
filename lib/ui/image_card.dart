@@ -25,6 +25,7 @@ class ImageCard extends StatefulWidget {
     required this.columnWidth,
     required this.columnCount,
     required this.columnGap,
+    required this.backgroundColor,
     this.onReorderPointerDown,
     this.onStartReorder,
     this.onReorderUpdate,
@@ -44,6 +45,7 @@ class ImageCard extends StatefulWidget {
   final double columnWidth;
   final int columnCount;
   final double columnGap;
+  final Color backgroundColor;
   final void Function(String id, int pointer)? onReorderPointerDown;
   final void Function(String id, Offset globalPosition)? onStartReorder;
   final void Function(String id, Offset globalPosition)? onReorderUpdate;
@@ -239,6 +241,8 @@ class _ImageCardState extends State<ImageCard> {
                   child: Card(
                     clipBehavior: Clip.antiAlias,
                     elevation: 2,
+                    color: widget.backgroundColor,
+                    surfaceTintColor: Colors.transparent,
                     child: Stack(
                       fit: StackFit.expand,
                       children: [

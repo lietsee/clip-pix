@@ -190,6 +190,8 @@ class _GridViewModuleState extends State<GridViewModule> {
           );
           final columnWidth = _calculateColumnWidth(effectiveColumns);
           final backgroundColor = _backgroundForTone(settings.background);
+          final cardBackgroundColor =
+              _cardBackgroundForTone(settings.background);
           _currentBuildKeys.clear();
 
           return Container(
@@ -246,6 +248,7 @@ class _GridViewModuleState extends State<GridViewModule> {
                           columnWidth: columnWidth,
                           columnCount: gridDelegate.columnCount,
                           span: span,
+                          backgroundColor: cardBackgroundColor,
                         );
                         return PinterestGridTile(
                           span: span,
@@ -274,6 +277,7 @@ class _GridViewModuleState extends State<GridViewModule> {
     required double columnWidth,
     required int columnCount,
     required int span,
+    required Color backgroundColor,
   }) {
     final item = entry.item;
     final animatedKey = ObjectKey(entry);
@@ -311,6 +315,7 @@ class _GridViewModuleState extends State<GridViewModule> {
           onReorderUpdate: _updateReorder,
           onReorderEnd: _endReorder,
           onReorderCancel: _handleReorderCancel,
+          backgroundColor: backgroundColor,
         ),
       ),
     );
@@ -654,6 +659,13 @@ class _GridViewModuleState extends State<GridViewModule> {
       case GridBackgroundTone.black:
         return Colors.black;
     }
+  }
+
+  Color _cardBackgroundForTone(GridBackgroundTone tone) {
+    final base = _backgroundForTone(tone);
+    final hsl = HSLColor.fromColor(base);
+    final darkerLightness = (hsl.lightness - 0.08).clamp(0.0, 1.0);
+    return hsl.withLightness(darkerLightness).toColor();
   }
 
   void _attachResizeController() {
