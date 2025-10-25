@@ -18,6 +18,7 @@ void main() {
                 store: store,
                 columnGap: 3,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
+                resolveColumnCount: (_) => 2,
                 childBuilder: (context, geometry, states) {
                   return Text('items=${states.length}');
                 },
@@ -46,6 +47,7 @@ void main() {
               store: store,
               columnGap: 4,
               padding: EdgeInsets.zero,
+              resolveColumnCount: (_) => 1,
               childBuilder: (context, geometry, states) {
                 buildCount += 1;
                 return Text('build=$buildCount');

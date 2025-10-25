@@ -154,6 +154,8 @@ class _GridViewModuleState extends State<GridViewModule> {
         store: layoutStore,
         columnGap: _gridGap,
         padding: EdgeInsets.zero,
+        resolveColumnCount: (availableWidth) =>
+            _resolveColumnCount(availableWidth, settings),
         childBuilder: (context, geometry, states) {
           _orderRepository = context.watch<GridOrderRepository>();
           final controller = _resolveController(selectedState);
@@ -413,6 +415,25 @@ class _GridViewModuleState extends State<GridViewModule> {
     final id = entry.item.id;
     _scaleDebounceTimers.remove(id)?.cancel();
     _cardKeys.remove(id);
+  }
+
+  int _resolveColumnCount(
+    double availableWidth,
+    GridLayoutSettings settings,
+  ) {
+    if (availableWidth <= 0) {
+      return 1;
+    }
+    final preferred = settings.preferredColumns.clamp(1, settings.maxColumns);
+    final target = math.max(1, preferred);
+    final maxByWidth = math.max(
+      1,
+      (availableWidth /
+              (GridLayoutPreferenceRecord.defaultWidth + _gridGap))
+          .floor(),
+    );
+    final capped = math.min(settings.maxColumns, maxByWidth);
+    return math.max(1, math.min(target, capped));
   }
 
   void _showPreviewDialog(ImageItem item) {

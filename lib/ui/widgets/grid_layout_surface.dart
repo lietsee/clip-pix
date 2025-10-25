@@ -10,6 +10,8 @@ typedef GridLayoutChildBuilder = Widget Function(
   List<GridCardViewState> states,
 );
 
+typedef GridColumnCountResolver = int Function(double availableWidth);
+
 class GridLayoutSurface extends StatefulWidget {
   const GridLayoutSurface({
     super.key,
@@ -17,12 +19,14 @@ class GridLayoutSurface extends StatefulWidget {
     required this.childBuilder,
     required this.columnGap,
     required this.padding,
+    required this.resolveColumnCount,
   });
 
   final GridLayoutSurfaceStore store;
   final GridLayoutChildBuilder childBuilder;
   final double columnGap;
   final EdgeInsets padding;
+  final GridColumnCountResolver resolveColumnCount;
 
   @override
   State<GridLayoutSurface> createState() => _GridLayoutSurfaceState();
@@ -66,15 +70,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
           0,
           maxWidth - widget.padding.horizontal,
         );
-        int columnCount = availableWidth <= 0
-            ? 1
-            : math.max(
-                1,
-                (availableWidth /
-                        (GridLayoutPreferenceRecord.defaultWidth +
-                            widget.columnGap))
-                    .floor(),
-              );
+        int columnCount = widget.resolveColumnCount(availableWidth);
         double columnWidth;
         if (columnCount <= 0) {
           columnCount = 1;
