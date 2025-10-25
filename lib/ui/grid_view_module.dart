@@ -503,9 +503,6 @@ class _GridViewModuleState extends State<GridViewModule> {
       notifier.removeListener(existing);
     }
     void listener() {
-      if (mounted) {
-        setState(() {});
-      }
     }
 
     notifier.addListener(listener);
