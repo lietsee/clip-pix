@@ -7,7 +7,6 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 
 import '../data/grid_card_preferences_repository.dart';
@@ -526,31 +525,21 @@ class _GridViewModuleState extends State<GridViewModule> {
     if (existing != null) {
       notifier.removeListener(existing);
     }
-    void listener() {
-      if (mounted) {
-        setState(() {});
-      }
-    }
+    void listener() {}
 
     notifier.addListener(listener);
     _sizeListeners[id] = listener;
   }
 
-  void _replaceSizeNotifier(String id, Size size) {
-    final existing = _sizeNotifiers.remove(id);
-    final listener = _sizeListeners.remove(id);
-    if (existing != null && listener != null) {
-      existing.removeListener(listener);
+  void _disposeNotifiers(String id) {
+    final sizeNotifier = _sizeNotifiers.remove(id);
+    final sizeListener = _sizeListeners.remove(id);
+    if (sizeNotifier != null && sizeListener != null) {
+      sizeNotifier.removeListener(sizeListener);
     }
-    existing?.dispose();
-    final notifier = ValueNotifier<Size>(size);
-    _sizeNotifiers[id] = notifier;
-    _attachSizeListener(id, notifier);
-  }
+    sizeNotifier?.dispose();
 
-  void _replaceScaleNotifier(String id, double scale) {
     _scaleNotifiers.remove(id)?.dispose();
-    _scaleNotifiers[id] = ValueNotifier<double>(scale);
   }
 
   void _showPreviewDialog(ImageItem item) {
@@ -869,17 +858,8 @@ class _GridViewModuleState extends State<GridViewModule> {
     final newScales = <String, double>{};
 
     try {
-      final schedule = SchedulerBinding.instance;
-      await schedule.endOfFrame;
-
-      const batchSize = 8;
-      var processed = 0;
-
       for (final mutation in mutations) {
-        if (!mounted) {
-          return;
-        }
-
+        _disposeNotifiers(mutation.id);
         newSizes[mutation.id] = mutation.size;
         if (mutation.scale != null) {
           newScales[mutation.id] = mutation.scale!;
@@ -904,20 +884,22 @@ class _GridViewModuleState extends State<GridViewModule> {
           await _preferences.saveScale(mutation.id, mutation.scale!);
         }
 
-        processed += 1;
-        if (processed % batchSize == 0) {
-          await schedule.endOfFrame;
-        } else {
-          await Future<void>.delayed(Duration.zero);
-        }
+        await Future<void>.delayed(Duration.zero);
       }
 
       if (mounted) {
         setState(() {
-          newSizes.forEach(_replaceSizeNotifier);
-          newScales.forEach(_replaceScaleNotifier);
-          _isApplyingResizeMutations = false;
+          newSizes.forEach((id, size) {
+            final notifier = ValueNotifier<Size>(size);
+            _sizeNotifiers[id] = notifier;
+            _attachSizeListener(id, notifier);
+          });
+          newScales.forEach((id, scale) {
+            _scaleNotifiers[id] = ValueNotifier<double>(scale);
+          });
         });
+
+        await context.read<ImageLibraryNotifier>().refresh();
       }
     } finally {
       if (mounted && _isApplyingResizeMutations) {
