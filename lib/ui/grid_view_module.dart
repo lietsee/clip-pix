@@ -8,7 +8,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter/semantics.dart';
 import 'package:provider/provider.dart';
 
 import '../data/grid_card_preferences_repository.dart';
@@ -843,9 +842,6 @@ class _GridViewModuleState extends State<GridViewModule> {
       return;
     }
 
-    final semanticsBinding = SemanticsBinding.instance;
-    semanticsBinding.deferSemanticsUpdates();
-
     if (mounted) {
       setState(() {
         _isApplyingResizeMutations = true;
@@ -896,7 +892,6 @@ class _GridViewModuleState extends State<GridViewModule> {
         }
       }
     } finally {
-      semanticsBinding.undeferSemanticsUpdates();
       if (mounted) {
         setState(() {
           _isApplyingResizeMutations = false;
