@@ -536,6 +536,23 @@ class _GridViewModuleState extends State<GridViewModule> {
     _sizeListeners[id] = listener;
   }
 
+  void _replaceSizeNotifier(String id, Size size) {
+    final existing = _sizeNotifiers.remove(id);
+    final listener = _sizeListeners.remove(id);
+    if (existing != null && listener != null) {
+      existing.removeListener(listener);
+    }
+    existing?.dispose();
+    final notifier = ValueNotifier<Size>(size);
+    _sizeNotifiers[id] = notifier;
+    _attachSizeListener(id, notifier);
+  }
+
+  void _replaceScaleNotifier(String id, double scale) {
+    _scaleNotifiers.remove(id)?.dispose();
+    _scaleNotifiers[id] = ValueNotifier<double>(scale);
+  }
+
   void _showPreviewDialog(ImageItem item) {
     if (Platform.isWindows) {
       final launched = _launchPreviewWindowProcess(item);
@@ -848,6 +865,9 @@ class _GridViewModuleState extends State<GridViewModule> {
       });
     }
 
+    final newSizes = <String, Size>{};
+    final newScales = <String, double>{};
+
     try {
       final schedule = SchedulerBinding.instance;
       await schedule.endOfFrame;
@@ -860,9 +880,9 @@ class _GridViewModuleState extends State<GridViewModule> {
           return;
         }
 
-        mutation.notifier.value = mutation.size;
-        if (mutation.scaleNotifier != null && mutation.scale != null) {
-          mutation.scaleNotifier!.value = mutation.scale!;
+        newSizes[mutation.id] = mutation.size;
+        if (mutation.scale != null) {
+          newScales[mutation.id] = mutation.scale!;
         }
 
         if (mutation.persistSize) {
@@ -891,8 +911,16 @@ class _GridViewModuleState extends State<GridViewModule> {
           await Future<void>.delayed(Duration.zero);
         }
       }
-    } finally {
+
       if (mounted) {
+        setState(() {
+          newSizes.forEach(_replaceSizeNotifier);
+          newScales.forEach(_replaceScaleNotifier);
+          _isApplyingResizeMutations = false;
+        });
+      }
+    } finally {
+      if (mounted && _isApplyingResizeMutations) {
         setState(() {
           _isApplyingResizeMutations = false;
         });
