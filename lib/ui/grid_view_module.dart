@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/semantics.dart';
 import 'package:provider/provider.dart';
 
 import '../data/grid_card_preferences_repository.dart';
@@ -76,6 +77,7 @@ class _GridViewModuleState extends State<GridViewModule> {
   List<_GridEntry> _entries = <_GridEntry>[];
   bool _loggedInitialBuild = false;
   final Set<Object> _currentBuildKeys = <Object>{};
+  bool _isApplyingResizeMutations = false;
 
   @override
   void didChangeDependencies() {
@@ -166,7 +168,7 @@ class _GridViewModuleState extends State<GridViewModule> {
       _logEntries('build_init', _entries);
     }
 
-    return RefreshIndicator(
+    final content = RefreshIndicator(
       onRefresh: () => libraryNotifier.refresh(),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -270,6 +272,28 @@ class _GridViewModuleState extends State<GridViewModule> {
           );
         },
       ),
+    );
+
+    return Stack(
+      children: [
+        IgnorePointer(
+          ignoring: _isApplyingResizeMutations,
+          child: content,
+        ),
+        if (_isApplyingResizeMutations)
+          Positioned.fill(
+            child: Container(
+              color: Colors.black.withOpacity(0.08),
+              child: const Center(
+                child: SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: CircularProgressIndicator(strokeWidth: 3),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -504,6 +528,9 @@ class _GridViewModuleState extends State<GridViewModule> {
       notifier.removeListener(existing);
     }
     void listener() {
+      if (mounted) {
+        setState(() {});
+      }
     }
 
     notifier.addListener(listener);
@@ -816,11 +843,16 @@ class _GridViewModuleState extends State<GridViewModule> {
       return;
     }
 
-    Future<void> run() async {
-      if (!mounted) {
-        return;
-      }
+    final semanticsBinding = SemanticsBinding.instance;
+    semanticsBinding.deferSemanticsUpdates();
 
+    if (mounted) {
+      setState(() {
+        _isApplyingResizeMutations = true;
+      });
+    }
+
+    try {
       final schedule = SchedulerBinding.instance;
       await schedule.endOfFrame;
 
@@ -863,22 +895,14 @@ class _GridViewModuleState extends State<GridViewModule> {
           await Future<void>.delayed(Duration.zero);
         }
       }
-
+    } finally {
+      semanticsBinding.undeferSemanticsUpdates();
       if (mounted) {
-        setState(() {});
+        setState(() {
+          _isApplyingResizeMutations = false;
+        });
       }
     }
-
-    final completer = Completer<void>();
-    WidgetsBinding.instance.ensureVisualUpdate();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      run().whenComplete(() {
-        if (!completer.isCompleted) {
-          completer.complete();
-        }
-      });
-    });
-    await completer.future;
   }
 
   double _calculateColumnWidth(int columnCount) {
