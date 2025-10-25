@@ -669,14 +669,26 @@ class _ImageCardState extends State<ImageCard> {
 
   void _handleRetry() {
     setState(() {
-      _visualState = _CardVisualState.loading;
       _retryCount += 1;
-      _imageKey = UniqueKey();
-      _resolvedSignature = null;
     });
-    _detachImageStream();
-    _scheduleLoadingTimeout();
+    _retryStreamLocally();
     widget.onRetry(widget.item.id);
+  }
+
+  void _handleTimeoutRetry() {
+    _retryStreamLocally();
+  }
+
+  void _retryStreamLocally() {
+    final size = widget.sizeNotifier.value;
+    final scale = _currentScale;
+    _reloadImage();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _attachImageStream(size, scale);
+    });
   }
 
   void _updateVisualState(_CardVisualState state, {ImageChunkEvent? chunk}) {
@@ -792,7 +804,7 @@ class _ImageCardState extends State<ImageCard> {
         debugPrint(
           '[ImageCard] loading_timeout id=${widget.item.id} size=${widget.sizeNotifier.value} scale=$_currentScale retry=$_retryCount',
         );
-        _handleRetry();
+        _handleTimeoutRetry();
       }
     });
   }
