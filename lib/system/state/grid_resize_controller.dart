@@ -38,12 +38,14 @@ class GridCardSizeSnapshot {
     required this.height,
     required this.columnSpan,
     required this.customHeight,
+    required this.scale,
   });
 
   final double width;
   final double height;
   final int columnSpan;
   final double? customHeight;
+  final double scale;
 }
 
 typedef GridResizeListener = Future<GridResizeSnapshot?> Function(

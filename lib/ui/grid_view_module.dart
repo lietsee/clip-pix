@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -49,6 +50,7 @@ class _GridViewModuleState extends State<GridViewModule> {
   final Map<String, ScrollController> _directoryControllers = {};
   final Map<String, VoidCallback> _sizeListeners = {};
   final Map<String, GlobalKey> _cardKeys = {};
+  final Map<String, Size> _intrinsicSizeCache = {};
   GridLayoutSettingsRepository? _layoutSettingsRepository;
   GridOrderRepository? _orderRepository;
   GridResizeController? _resizeController;
@@ -492,6 +494,7 @@ class _GridViewModuleState extends State<GridViewModule> {
     }
     sizeNotifier?.dispose();
     _scaleNotifiers.remove(id)?.dispose();
+    _intrinsicSizeCache.remove(id);
   }
 
   void _attachSizeListener(String id, ValueNotifier<Size> notifier) {
@@ -735,6 +738,7 @@ class _GridViewModuleState extends State<GridViewModule> {
         height: size.height,
         columnSpan: pref.columnSpan,
         customHeight: pref.customHeight,
+        scale: pref.scale,
       );
     }
     return GridResizeSnapshot(
@@ -757,10 +761,10 @@ class _GridViewModuleState extends State<GridViewModule> {
       if (sizeNotifier == null) {
         continue;
       }
-      final currentSize = sizeNotifier.value;
-      final ratio = currentSize.width > 0
-          ? (currentSize.height / currentSize.width)
-          : 1.0;
+      final intrinsicSize = await _resolveIntrinsicSize(item);
+      final ratio = intrinsicSize != null && intrinsicSize.width > 0
+          ? intrinsicSize.height / intrinsicSize.width
+          : _effectiveAspectRatio(item.id, sizeNotifier.value);
       final width = columnWidth * clampedSpan +
           _gridGap * math.max(0.0, (clampedSpan - 1).toDouble());
       final height = ratio.isFinite && ratio > 0 ? width * ratio : width;
@@ -770,6 +774,9 @@ class _GridViewModuleState extends State<GridViewModule> {
           notifier: sizeNotifier,
           size: Size(width, height),
           columnSpan: clampedSpan,
+          scaleNotifier: _scaleNotifiers[item.id],
+          scale: 1.0,
+          persistScale: true,
         ),
       );
     }
@@ -785,6 +792,7 @@ class _GridViewModuleState extends State<GridViewModule> {
         continue;
       }
       final sizeNotifier = _sizeNotifiers[item.id];
+      final scaleNotifier = _scaleNotifiers[item.id];
       if (sizeNotifier == null) {
         continue;
       }
@@ -796,6 +804,9 @@ class _GridViewModuleState extends State<GridViewModule> {
           columnSpan: saved.columnSpan,
           persistCustomHeight: true,
           customHeight: saved.customHeight,
+          scaleNotifier: scaleNotifier,
+          scale: saved.scale,
+          persistScale: true,
         ),
       );
     }
@@ -814,6 +825,9 @@ class _GridViewModuleState extends State<GridViewModule> {
       final persistenceTasks = <Future<void>>[];
       for (final mutation in mutations) {
         mutation.notifier.value = mutation.size;
+        if (mutation.scaleNotifier != null && mutation.scale != null) {
+          mutation.scaleNotifier!.value = mutation.scale!;
+        }
         persistenceTasks.add(() async {
           if (mutation.persistSize) {
             await _preferences.saveSize(mutation.id, mutation.size);
@@ -826,6 +840,9 @@ class _GridViewModuleState extends State<GridViewModule> {
               mutation.id,
               mutation.customHeight,
             );
+          }
+          if (mutation.persistScale && mutation.scale != null) {
+            await _preferences.saveScale(mutation.id, mutation.scale!);
           }
         }());
       }
@@ -1296,6 +1313,51 @@ class _GridViewModuleState extends State<GridViewModule> {
         (a.width - b.width).abs() <= tolerance &&
         (a.height - b.height).abs() <= tolerance;
   }
+
+  double _effectiveAspectRatio(String id, Size size) {
+    if (size.width <= 0) {
+      return 1.0;
+    }
+    final preference = _preferences.get(id);
+    final referenceHeight = preference?.height ?? size.height;
+    if (referenceHeight <= 0) {
+      return 1.0;
+    }
+    return referenceHeight / size.width;
+  }
+
+  Future<Size?> _resolveIntrinsicSize(ImageItem item) async {
+    final cached = _intrinsicSizeCache[item.id];
+    if (cached != null) {
+      return cached;
+    }
+    final file = File(item.filePath);
+    if (!await file.exists()) {
+      return null;
+    }
+    ui.Codec? codec;
+    try {
+      final bytes = await file.readAsBytes();
+      codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+      final size = Size(
+        image.width.toDouble(),
+        image.height.toDouble(),
+      );
+      image.dispose();
+      _intrinsicSizeCache[item.id] = size;
+      return size;
+    } catch (error) {
+      debugPrint(
+        '[GridViewModule] failed to decode intrinsic size '
+        'id=${item.id} path=${item.filePath} error=$error',
+      );
+      return null;
+    } finally {
+      codec?.dispose();
+    }
+  }
 }
 
 class _GridEntry {
@@ -1323,8 +1385,11 @@ class _CardSizeMutation {
     required this.size,
     this.columnSpan,
     this.customHeight,
+    this.scaleNotifier,
+    this.scale,
     this.persistSize = true,
     this.persistCustomHeight = false,
+    this.persistScale = false,
   });
 
   final String id;
@@ -1332,6 +1397,9 @@ class _CardSizeMutation {
   final Size size;
   final int? columnSpan;
   final double? customHeight;
+  final ValueNotifier<double>? scaleNotifier;
+  final double? scale;
   final bool persistSize;
   final bool persistCustomHeight;
+  final bool persistScale;
 }
