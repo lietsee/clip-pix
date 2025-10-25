@@ -823,43 +823,45 @@ class _GridViewModuleState extends State<GridViewModule> {
       final persistenceTasks = <Future<void>>[];
       final schedule = SchedulerBinding.instance;
       schedule.addPostFrameCallback((_) {
-        if (!mounted) {
-          return;
-        }
-        for (final mutation in mutations) {
-          mutation.notifier.value = mutation.size;
-          if (mutation.scaleNotifier != null && mutation.scale != null) {
-            mutation.scaleNotifier!.value = mutation.scale!;
+        schedule.addPostFrameCallback((__) {
+          if (!mounted) {
+            return;
           }
-          persistenceTasks.add(() async {
-            if (mutation.persistSize) {
-              await _preferences.saveSize(mutation.id, mutation.size);
+          for (final mutation in mutations) {
+            mutation.notifier.value = mutation.size;
+            if (mutation.scaleNotifier != null && mutation.scale != null) {
+              mutation.scaleNotifier!.value = mutation.scale!;
             }
-            if (mutation.columnSpan != null) {
-              await _preferences.saveColumnSpan(
-                mutation.id,
-                mutation.columnSpan!,
-              );
-            }
-            if (mutation.persistCustomHeight) {
-              await _preferences.saveCustomHeight(
-                mutation.id,
-                mutation.customHeight,
-              );
-            }
-            if (mutation.persistScale && mutation.scale != null) {
-              await _preferences.saveScale(mutation.id, mutation.scale!);
-            }
-          }());
-        }
-        if (persistenceTasks.isNotEmpty) {
-          schedule.scheduleTask(
-            () async {
-              await Future.wait(persistenceTasks);
-            },
-            Priority.animation,
-          );
-        }
+            persistenceTasks.add(() async {
+              if (mutation.persistSize) {
+                await _preferences.saveSize(mutation.id, mutation.size);
+              }
+              if (mutation.columnSpan != null) {
+                await _preferences.saveColumnSpan(
+                  mutation.id,
+                  mutation.columnSpan!,
+                );
+              }
+              if (mutation.persistCustomHeight) {
+                await _preferences.saveCustomHeight(
+                  mutation.id,
+                  mutation.customHeight,
+                );
+              }
+              if (mutation.persistScale && mutation.scale != null) {
+                await _preferences.saveScale(mutation.id, mutation.scale!);
+              }
+            }());
+          }
+          if (persistenceTasks.isNotEmpty) {
+            schedule.scheduleTask(
+              () async {
+                await Future.wait(persistenceTasks);
+              },
+              Priority.animation,
+            );
+          }
+        });
       });
     }
 
