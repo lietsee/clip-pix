@@ -1,4 +1,5 @@
 import 'dart:collection';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
@@ -185,6 +186,7 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
   @override
   void updateGeometry(GridLayoutGeometry geometry) {
     _geometry = geometry;
+    _applyGeometryAdjustments();
   }
 
   @override
@@ -410,5 +412,48 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
       return current.height / current.width;
     }
     return 1.0;
+  }
+
+  void _applyGeometryAdjustments() {
+    final geometry = _geometry;
+    if (geometry == null || _viewStates.isEmpty) {
+      return;
+    }
+    bool changed = false;
+    for (final id in _orderedIds) {
+      final current = _viewStates[id];
+      if (current == null) {
+        continue;
+      }
+      var span = current.columnSpan.clamp(1, geometry.columnCount);
+      if (span <= 0) {
+        span = 1;
+      }
+      final width =
+          geometry.columnWidth * span + geometry.gap * math.max(0, span - 1);
+      if (width <= 0) {
+        continue;
+      }
+      final ratio = current.width > 0 && current.height > 0
+          ? current.height / current.width
+          : 1.0;
+      final height = ratio.isFinite && ratio > 0 ? width * ratio : width;
+      if ((width - current.width).abs() > _epsilon ||
+          (height - current.height).abs() > _epsilon ||
+          span != current.columnSpan) {
+        _viewStates[id] = GridCardViewState(
+          id: current.id,
+          width: width,
+          height: height,
+          scale: current.scale,
+          columnSpan: span,
+          customHeight: height,
+        );
+        changed = true;
+      }
+    }
+    if (changed) {
+      notifyListeners();
+    }
   }
 }

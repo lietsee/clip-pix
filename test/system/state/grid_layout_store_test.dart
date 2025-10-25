@@ -79,13 +79,6 @@ void main() {
         ImageItem(id: 'c', filePath: 'c.png'),
       ];
       store.syncLibrary(library, directoryPath: '/pictures');
-      store.updateGeometry(
-        const GridLayoutGeometry(
-          columnCount: 6,
-          columnWidth: 180,
-          gap: 3,
-        ),
-      );
     });
 
     test('初期同期で preferences をもとにビュー状態を生成する', () {
@@ -103,6 +96,13 @@ void main() {
     });
 
     test('applyBulkSpan は単一通知で完了し、永続化バッチも 1 回で済む', () async {
+      store.updateGeometry(
+        const GridLayoutGeometry(
+          columnCount: 6,
+          columnWidth: 180,
+          gap: 3,
+        ),
+      );
       var notifications = 0;
       store.addListener(() {
         notifications += 1;
@@ -122,6 +122,13 @@ void main() {
     test('スナップショットを round trip で適用できる', () async {
       final snapshot = store.captureSnapshot();
 
+      store.updateGeometry(
+        const GridLayoutGeometry(
+          columnCount: 6,
+          columnWidth: 180,
+          gap: 3,
+        ),
+      );
       await store.applyBulkSpan(span: 4);
       expect(store.viewStateFor('a').columnSpan, 4);
 
@@ -150,6 +157,20 @@ void main() {
       expect(store.viewStateFor('b').scale, 0.9);
       expect(persistence.recordedBatches, hasLength(1));
       expect(persistence.recordedBatches.single.single.id, 'b');
+    });
+
+    test('updateGeometry で列数変化に追従する', () async {
+      store.updateGeometry(
+        const GridLayoutGeometry(columnCount: 3, columnWidth: 120, gap: 3),
+      );
+      store.updateGeometry(
+        const GridLayoutGeometry(columnCount: 1, columnWidth: 90, gap: 3),
+      );
+
+      final updated = store.viewStateFor('a');
+      expect(updated.columnSpan, 1);
+      expect(updated.width, closeTo(90, 0.0001));
+      expect(updated.height, closeTo(90 * (320 / 220), 0.5));
     });
   });
 }
