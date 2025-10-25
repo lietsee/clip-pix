@@ -839,50 +839,55 @@ class _GridViewModuleState extends State<GridViewModule> {
       }
       final persistenceTasks = <Future<void>>[];
       final schedule = SchedulerBinding.instance;
-      schedule.addPostFrameCallback((_) {
-        schedule.addPostFrameCallback((__) {
-          if (!mounted) {
-            return;
-          }
-          for (final mutation in mutations) {
-            _replaceSizeNotifier(mutation.id, mutation.size);
-            if (mutation.scale != null) {
-              _replaceScaleNotifier(mutation.id, mutation.scale!);
-            }
-            persistenceTasks.add(() async {
-              if (mutation.persistSize) {
-                await _preferences.saveSize(mutation.id, mutation.size);
+      schedule.scheduleTask(
+        () {
+          schedule.addPostFrameCallback((_) {
+            schedule.addPostFrameCallback((__) {
+              if (!mounted) {
+                return;
               }
-              if (mutation.columnSpan != null) {
-                await _preferences.saveColumnSpan(
-                  mutation.id,
-                  mutation.columnSpan!,
+              for (final mutation in mutations) {
+                _replaceSizeNotifier(mutation.id, mutation.size);
+                if (mutation.scale != null) {
+                  _replaceScaleNotifier(mutation.id, mutation.scale!);
+                }
+                persistenceTasks.add(() async {
+                  if (mutation.persistSize) {
+                    await _preferences.saveSize(mutation.id, mutation.size);
+                  }
+                  if (mutation.columnSpan != null) {
+                    await _preferences.saveColumnSpan(
+                      mutation.id,
+                      mutation.columnSpan!,
+                    );
+                  }
+                  if (mutation.persistCustomHeight) {
+                    await _preferences.saveCustomHeight(
+                      mutation.id,
+                      mutation.customHeight,
+                    );
+                  }
+                  if (mutation.persistScale && mutation.scale != null) {
+                    await _preferences.saveScale(mutation.id, mutation.scale!);
+                  }
+                }());
+              }
+              if (mounted) {
+                setState(() {});
+              }
+              if (persistenceTasks.isNotEmpty) {
+                schedule.scheduleTask(
+                  () async {
+                    await Future.wait(persistenceTasks);
+                  },
+                  Priority.idle,
                 );
               }
-              if (mutation.persistCustomHeight) {
-                await _preferences.saveCustomHeight(
-                  mutation.id,
-                  mutation.customHeight,
-                );
-              }
-              if (mutation.persistScale && mutation.scale != null) {
-                await _preferences.saveScale(mutation.id, mutation.scale!);
-              }
-            }());
-          }
-          if (mounted) {
-            setState(() {});
-          }
-          if (persistenceTasks.isNotEmpty) {
-            schedule.scheduleTask(
-              () async {
-                await Future.wait(persistenceTasks);
-              },
-              Priority.animation,
-            );
-          }
-        });
-      });
+            });
+          });
+        },
+        Priority.idle,
+      );
     }
 
     final completer = Completer<void>();
