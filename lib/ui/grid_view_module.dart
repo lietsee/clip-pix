@@ -510,23 +510,6 @@ class _GridViewModuleState extends State<GridViewModule> {
     _sizeListeners[id] = listener;
   }
 
-  void _replaceSizeNotifier(String id, Size size) {
-    final oldNotifier = _sizeNotifiers[id];
-    final listener = _sizeListeners[id];
-    if (oldNotifier != null && listener != null) {
-      oldNotifier.removeListener(listener);
-    }
-    oldNotifier?.dispose();
-    final notifier = ValueNotifier<Size>(size);
-    _sizeNotifiers[id] = notifier;
-    _attachSizeListener(id, notifier);
-  }
-
-  void _replaceScaleNotifier(String id, double scale) {
-    _scaleNotifiers[id]?.dispose();
-    _scaleNotifiers[id] = ValueNotifier<double>(scale);
-  }
-
   void _showPreviewDialog(ImageItem item) {
     if (Platform.isWindows) {
       final launched = _launchPreviewWindowProcess(item);
@@ -837,57 +820,53 @@ class _GridViewModuleState extends State<GridViewModule> {
       if (!mounted) {
         return;
       }
-      final persistenceTasks = <Future<void>>[];
+
       final schedule = SchedulerBinding.instance;
-      schedule.scheduleTask(
-        () {
-          schedule.addPostFrameCallback((_) {
-            schedule.addPostFrameCallback((__) {
-              if (!mounted) {
-                return;
-              }
-              for (final mutation in mutations) {
-                _replaceSizeNotifier(mutation.id, mutation.size);
-                if (mutation.scale != null) {
-                  _replaceScaleNotifier(mutation.id, mutation.scale!);
-                }
-                persistenceTasks.add(() async {
-                  if (mutation.persistSize) {
-                    await _preferences.saveSize(mutation.id, mutation.size);
-                  }
-                  if (mutation.columnSpan != null) {
-                    await _preferences.saveColumnSpan(
-                      mutation.id,
-                      mutation.columnSpan!,
-                    );
-                  }
-                  if (mutation.persistCustomHeight) {
-                    await _preferences.saveCustomHeight(
-                      mutation.id,
-                      mutation.customHeight,
-                    );
-                  }
-                  if (mutation.persistScale && mutation.scale != null) {
-                    await _preferences.saveScale(mutation.id, mutation.scale!);
-                  }
-                }());
-              }
-              if (mounted) {
-                setState(() {});
-              }
-              if (persistenceTasks.isNotEmpty) {
-                schedule.scheduleTask(
-                  () async {
-                    await Future.wait(persistenceTasks);
-                  },
-                  Priority.idle,
-                );
-              }
-            });
-          });
-        },
-        Priority.idle,
-      );
+      await schedule.endOfFrame;
+
+      const batchSize = 8;
+      var processed = 0;
+
+      for (final mutation in mutations) {
+        if (!mounted) {
+          return;
+        }
+
+        mutation.notifier.value = mutation.size;
+        if (mutation.scaleNotifier != null && mutation.scale != null) {
+          mutation.scaleNotifier!.value = mutation.scale!;
+        }
+
+        if (mutation.persistSize) {
+          await _preferences.saveSize(mutation.id, mutation.size);
+        }
+        if (mutation.columnSpan != null) {
+          await _preferences.saveColumnSpan(
+            mutation.id,
+            mutation.columnSpan!,
+          );
+        }
+        if (mutation.persistCustomHeight) {
+          await _preferences.saveCustomHeight(
+            mutation.id,
+            mutation.customHeight,
+          );
+        }
+        if (mutation.persistScale && mutation.scale != null) {
+          await _preferences.saveScale(mutation.id, mutation.scale!);
+        }
+
+        processed += 1;
+        if (processed % batchSize == 0) {
+          await schedule.endOfFrame;
+        } else {
+          await Future<void>.delayed(Duration.zero);
+        }
+      }
+
+      if (mounted) {
+        setState(() {});
+      }
     }
 
     final completer = Completer<void>();
