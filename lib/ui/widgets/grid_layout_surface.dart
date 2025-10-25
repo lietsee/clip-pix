@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
@@ -35,6 +36,9 @@ class GridLayoutSurface extends StatefulWidget {
 class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
   GridLayoutGeometry? _lastReportedGeometry;
   GridLayoutGeometry? _pendingGeometry;
+  bool _pendingNotify = false;
+  Timer? _geometryDebounceTimer;
+  static const _throttleDuration = Duration(milliseconds: 40);
 
   GridLayoutSurfaceStore get _store => widget.store;
 
@@ -57,6 +61,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
   @override
   void dispose() {
     _store.removeListener(_handleStoreChanged);
+    _geometryDebounceTimer?.cancel();
     super.dispose();
   }
 
@@ -124,19 +129,19 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     final shouldNotify =
         previous == null || previous.columnCount != geometry.columnCount;
     _pendingGeometry = geometry;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      final pending = _pendingGeometry;
-      if (pending == null) {
-        return;
-      }
-      _pendingGeometry = null;
-      _store.updateGeometry(
-        pending,
-        notify: shouldNotify,
-      );
+    _pendingNotify = _pendingNotify || shouldNotify;
+    if (shouldNotify) {
+      _geometryDebounceTimer?.cancel();
+      _geometryDebounceTimer = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _commitPending());
+      return;
+    }
+    if (_geometryDebounceTimer != null) {
+      return;
+    }
+    _geometryDebounceTimer = Timer(_throttleDuration, () {
+      _geometryDebounceTimer = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _commitPending());
     });
   }
 
@@ -144,5 +149,20 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     return a.columnCount == b.columnCount &&
         (a.columnWidth - b.columnWidth).abs() < 0.1 &&
         (a.gap - b.gap).abs() < 0.1;
+  }
+
+  void _commitPending() {
+    if (!mounted) {
+      return;
+    }
+    final pending = _pendingGeometry;
+    if (pending == null) {
+      _pendingNotify = false;
+      return;
+    }
+    _pendingGeometry = null;
+    final notify = _pendingNotify;
+    _pendingNotify = false;
+    _store.updateGeometry(pending, notify: notify);
   }
 }
