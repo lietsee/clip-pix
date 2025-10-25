@@ -34,6 +34,7 @@ class GridLayoutSurface extends StatefulWidget {
 
 class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
   GridLayoutGeometry? _lastReportedGeometry;
+  GridLayoutGeometry? _pendingGeometry;
 
   GridLayoutSurfaceStore get _store => widget.store;
 
@@ -120,11 +121,22 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
       return;
     }
     _lastReportedGeometry = geometry;
+    final shouldNotify =
+        previous == null || previous.columnCount != geometry.columnCount;
+    _pendingGeometry = geometry;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
-      _store.updateGeometry(geometry);
+      final pending = _pendingGeometry;
+      if (pending == null) {
+        return;
+      }
+      _pendingGeometry = null;
+      _store.updateGeometry(
+        pending,
+        notify: shouldNotify,
+      );
     });
   }
 

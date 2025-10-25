@@ -49,7 +49,7 @@ abstract class GridLayoutCommandTarget {
 abstract class GridLayoutSurfaceStore extends Listenable
     implements GridLayoutCommandTarget {
   List<GridCardViewState> get viewStates;
-  void updateGeometry(GridLayoutGeometry geometry);
+  void updateGeometry(GridLayoutGeometry geometry, {bool notify = true});
 }
 
 class GridLayoutGeometry {
@@ -184,9 +184,12 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
   }
 
   @override
-  void updateGeometry(GridLayoutGeometry geometry) {
+  void updateGeometry(
+    GridLayoutGeometry geometry, {
+    bool notify = true,
+  }) {
     _geometry = geometry;
-    _applyGeometryAdjustments();
+    _applyGeometryAdjustments(notify: notify);
   }
 
   @override
@@ -414,7 +417,7 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     return 1.0;
   }
 
-  void _applyGeometryAdjustments() {
+  void _applyGeometryAdjustments({required bool notify}) {
     final geometry = _geometry;
     if (geometry == null || _viewStates.isEmpty) {
       return;
@@ -452,7 +455,7 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
         changed = true;
       }
     }
-    if (changed) {
+    if (changed && notify) {
       notifyListeners();
     }
   }

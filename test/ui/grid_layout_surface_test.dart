@@ -92,7 +92,7 @@ class _WidgetFakeGridLayoutStore extends ChangeNotifier
       List<GridCardViewState>.unmodifiable(_states);
 
   @override
-  void updateGeometry(GridLayoutGeometry geometry) {
+  void updateGeometry(GridLayoutGeometry geometry, {bool notify = true}) {
     updateGeometryCalls += 1;
     lastGeometry = geometry;
   }

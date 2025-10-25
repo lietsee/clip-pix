@@ -102,6 +102,7 @@ void main() {
           columnWidth: 180,
           gap: 3,
         ),
+        notify: false,
       );
       var notifications = 0;
       store.addListener(() {
@@ -128,6 +129,7 @@ void main() {
           columnWidth: 180,
           gap: 3,
         ),
+        notify: false,
       );
       await store.applyBulkSpan(span: 4);
       expect(store.viewStateFor('a').columnSpan, 4);
@@ -162,9 +164,11 @@ void main() {
     test('updateGeometry で列数変化に追従する', () async {
       store.updateGeometry(
         const GridLayoutGeometry(columnCount: 3, columnWidth: 120, gap: 3),
+        notify: false,
       );
       store.updateGeometry(
         const GridLayoutGeometry(columnCount: 1, columnWidth: 90, gap: 3),
+        notify: true,
       );
 
       final updated = store.viewStateFor('a');
