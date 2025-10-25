@@ -510,6 +510,23 @@ class _GridViewModuleState extends State<GridViewModule> {
     _sizeListeners[id] = listener;
   }
 
+  void _replaceSizeNotifier(String id, Size size) {
+    final oldNotifier = _sizeNotifiers[id];
+    final listener = _sizeListeners[id];
+    if (oldNotifier != null && listener != null) {
+      oldNotifier.removeListener(listener);
+    }
+    oldNotifier?.dispose();
+    final notifier = ValueNotifier<Size>(size);
+    _sizeNotifiers[id] = notifier;
+    _attachSizeListener(id, notifier);
+  }
+
+  void _replaceScaleNotifier(String id, double scale) {
+    _scaleNotifiers[id]?.dispose();
+    _scaleNotifiers[id] = ValueNotifier<double>(scale);
+  }
+
   void _showPreviewDialog(ImageItem item) {
     if (Platform.isWindows) {
       final launched = _launchPreviewWindowProcess(item);
@@ -828,9 +845,9 @@ class _GridViewModuleState extends State<GridViewModule> {
             return;
           }
           for (final mutation in mutations) {
-            mutation.notifier.value = mutation.size;
-            if (mutation.scaleNotifier != null && mutation.scale != null) {
-              mutation.scaleNotifier!.value = mutation.scale!;
+            _replaceSizeNotifier(mutation.id, mutation.size);
+            if (mutation.scale != null) {
+              _replaceScaleNotifier(mutation.id, mutation.scale!);
             }
             persistenceTasks.add(() async {
               if (mutation.persistSize) {
@@ -852,6 +869,9 @@ class _GridViewModuleState extends State<GridViewModule> {
                 await _preferences.saveScale(mutation.id, mutation.scale!);
               }
             }());
+          }
+          if (mounted) {
+            setState(() {});
           }
           if (persistenceTasks.isNotEmpty) {
             schedule.scheduleTask(
