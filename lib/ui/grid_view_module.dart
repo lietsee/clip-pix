@@ -4,8 +4,8 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../data/grid_card_preferences_repository.dart';
@@ -750,7 +750,7 @@ class _GridViewModuleState extends State<GridViewModule> {
     if (columnWidth <= 0) {
       return;
     }
-    final futures = <Future<void>>[];
+    final mutations = <_CardSizeMutation>[];
     for (final entry in _entries) {
       final item = entry.item;
       final sizeNotifier = _sizeNotifiers[item.id];
@@ -764,20 +764,20 @@ class _GridViewModuleState extends State<GridViewModule> {
       final width = columnWidth * clampedSpan +
           _gridGap * math.max(0.0, (clampedSpan - 1).toDouble());
       final height = ratio.isFinite && ratio > 0 ? width * ratio : width;
-      sizeNotifier.value = Size(width, height);
-      futures.add(_preferences.saveSize(item.id, Size(width, height)));
-      futures.add(_preferences.saveColumnSpan(item.id, clampedSpan));
+      mutations.add(
+        _CardSizeMutation(
+          id: item.id,
+          notifier: sizeNotifier,
+          size: Size(width, height),
+          columnSpan: clampedSpan,
+        ),
+      );
     }
-    if (futures.isNotEmpty) {
-      await Future.wait(futures);
-    }
-    if (mounted) {
-      setState(() {});
-    }
+    await _applyCardMutations(mutations);
   }
 
   Future<void> _restoreSnapshot(GridResizeSnapshot snapshot) async {
-    final futures = <Future<void>>[];
+    final mutations = <_CardSizeMutation>[];
     for (final entry in _entries) {
       final item = entry.item;
       final saved = snapshot.values[item.id];
@@ -785,18 +785,68 @@ class _GridViewModuleState extends State<GridViewModule> {
         continue;
       }
       final sizeNotifier = _sizeNotifiers[item.id];
-      sizeNotifier?.value = Size(saved.width, saved.height);
-      futures
-          .add(_preferences.saveSize(item.id, Size(saved.width, saved.height)));
-      futures.add(_preferences.saveColumnSpan(item.id, saved.columnSpan));
-      futures.add(_preferences.saveCustomHeight(item.id, saved.customHeight));
+      if (sizeNotifier == null) {
+        continue;
+      }
+      mutations.add(
+        _CardSizeMutation(
+          id: item.id,
+          notifier: sizeNotifier,
+          size: Size(saved.width, saved.height),
+          columnSpan: saved.columnSpan,
+          persistCustomHeight: true,
+          customHeight: saved.customHeight,
+        ),
+      );
     }
-    if (futures.isNotEmpty) {
-      await Future.wait(futures);
+    await _applyCardMutations(mutations);
+  }
+
+  Future<void> _applyCardMutations(List<_CardSizeMutation> mutations) async {
+    if (mutations.isEmpty) {
+      return;
     }
-    if (mounted) {
-      setState(() {});
+
+    Future<void> run() async {
+      if (!mounted) {
+        return;
+      }
+      final persistenceTasks = <Future<void>>[];
+      for (final mutation in mutations) {
+        mutation.notifier.value = mutation.size;
+        persistenceTasks.add(() async {
+          if (mutation.persistSize) {
+            await _preferences.saveSize(mutation.id, mutation.size);
+          }
+          if (mutation.columnSpan != null) {
+            await _preferences.saveColumnSpan(mutation.id, mutation.columnSpan!);
+          }
+          if (mutation.persistCustomHeight) {
+            await _preferences.saveCustomHeight(
+              mutation.id,
+              mutation.customHeight,
+            );
+          }
+        }());
+      }
+      if (persistenceTasks.isNotEmpty) {
+        await Future.wait(persistenceTasks);
+      }
+      if (mounted) {
+        setState(() {});
+      }
     }
+
+    final completer = Completer<void>();
+    WidgetsBinding.instance.ensureVisualUpdate();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      run().whenComplete(() {
+        if (!completer.isCompleted) {
+          completer.complete();
+        }
+      });
+    });
+    await completer.future;
   }
 
   double _calculateColumnWidth(int columnCount) {
@@ -1264,4 +1314,24 @@ class _DropTarget {
 
   final Rect rect;
   final int insertIndex;
+}
+
+class _CardSizeMutation {
+  _CardSizeMutation({
+    required this.id,
+    required this.notifier,
+    required this.size,
+    this.columnSpan,
+    this.customHeight,
+    this.persistSize = true,
+    this.persistCustomHeight = false,
+  });
+
+  final String id;
+  final ValueNotifier<Size> notifier;
+  final Size size;
+  final int? columnSpan;
+  final double? customHeight;
+  final bool persistSize;
+  final bool persistCustomHeight;
 }
