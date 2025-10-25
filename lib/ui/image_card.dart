@@ -680,14 +680,11 @@ class _ImageCardState extends State<ImageCard> {
   }
 
   void _retryStreamLocally() {
-    final size = widget.sizeNotifier.value;
-    final scale = _currentScale;
-    _reloadImage();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
-      _attachImageStream(size, scale);
+      _reloadImage();
     });
   }
 
