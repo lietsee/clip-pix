@@ -109,6 +109,7 @@ class _ImageCardState extends State<ImageCard> {
   double _currentScale = 1.0;
   bool _suppressScaleListener = false;
   Timer? _loadingTimeout;
+  int _loadingStateVersion = 0;
 
   @override
   void initState() {
@@ -708,6 +709,7 @@ class _ImageCardState extends State<ImageCard> {
         _latestChunk = chunk;
       });
       if (state == _CardVisualState.ready || state == _CardVisualState.error) {
+        _loadingStateVersion += 1;
         _cancelLoadingTimeout();
       } else if (state == _CardVisualState.loading) {
         _scheduleLoadingTimeout();
@@ -774,11 +776,17 @@ class _ImageCardState extends State<ImageCard> {
   }
 
   void _setLoadingDeferred() {
+    _loadingStateVersion += 1;
+    final version = _loadingStateVersion;
     if (_visualState == _CardVisualState.loading) {
+      _scheduleLoadingTimeout();
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
+      if (!mounted || version != _loadingStateVersion) {
+        return;
+      }
+      if (_visualState == _CardVisualState.ready) {
         return;
       }
       if (_visualState != _CardVisualState.loading) {
