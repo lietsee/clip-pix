@@ -71,4 +71,18 @@ class GridCardPreferencesRepository {
   Future<void> clear() async {
     await _box.clear();
   }
+
+  Future<void> savePreference(GridCardPreference preference) async {
+    await _box.put(preference.id, preference);
+  }
+
+  Future<void> saveAll(Iterable<GridCardPreference> preferences) async {
+    final Map<String, GridCardPreference> entries = {
+      for (final preference in preferences) preference.id: preference,
+    };
+    if (entries.isEmpty) {
+      return;
+    }
+    await _box.putAll(entries);
+  }
 }

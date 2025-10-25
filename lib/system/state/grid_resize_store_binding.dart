@@ -9,11 +9,13 @@ class GridResizeStoreBinding {
     required GridLayoutCommandTarget store,
   })  : _controller = controller,
         _store = store {
-    _controller.attach(_handleCommand);
+    _listener = _handleCommand;
+    _controller.attach(_listener);
   }
 
   final GridResizeController _controller;
   final GridLayoutCommandTarget _store;
+  late final GridResizeListener _listener;
 
   Future<GridResizeSnapshot?> _handleCommand(
     GridResizeCommand command,
@@ -42,6 +44,10 @@ class GridResizeStoreBinding {
         await _store.restoreSnapshot(_convertToLayout(redoSnapshot));
         return _convertSnapshot(undoBase);
     }
+  }
+
+  void dispose() {
+    _controller.detach(_listener);
   }
 
   GridResizeSnapshot _convertSnapshot(GridLayoutSnapshot snapshot) {

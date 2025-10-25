@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:clip_pix/data/models/image_item.dart';
+import 'package:clip_pix/system/state/grid_layout_store.dart';
 import 'package:clip_pix/ui/image_card.dart';
 
 double _spanWidth(int span, double columnWidth, double gap) =>
@@ -37,40 +38,44 @@ void main() {
     const columnGap = 3.0;
     const columnCount = 4;
 
-    final sizeNotifier = ValueNotifier(
-      Size(_spanWidth(2, columnWidth, columnGap), 220),
-    );
-    final scaleNotifier = ValueNotifier(1.0);
     final recordedSpans = <int>[];
-
-    addTearDown(() {
-      sizeNotifier.dispose();
-      scaleNotifier.dispose();
-    });
+    var viewState = GridCardViewState(
+      id: '1',
+      width: _spanWidth(2, columnWidth, columnGap),
+      height: 220,
+      scale: 1.0,
+      columnSpan: 2,
+      customHeight: 220,
+    );
+    late StateSetter setState;
 
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: Align(
-            alignment: Alignment.topLeft,
-            child: SizedBox(
-              width: 600,
-              child: ImageCard(
-                item: ImageItem(id: '1', filePath: imageFile.path),
-                sizeNotifier: sizeNotifier,
-                scaleNotifier: scaleNotifier,
-                onResize: (_, __) {},
-                onSpanChange: (_, span) => recordedSpans.add(span),
-                onZoom: (_, __) {},
-                onRetry: (_) {},
-                onOpenPreview: (_) {},
-                onCopyImage: (_) {},
-                columnWidth: columnWidth,
-                columnCount: columnCount,
-                columnGap: columnGap,
-                backgroundColor: const Color(0xFFB0B0B0),
-              ),
-            ),
+          body: StatefulBuilder(
+            builder: (context, innerSetState) {
+              setState = innerSetState;
+              return Align(
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  width: 600,
+                  child: ImageCard(
+                    item: ImageItem(id: '1', filePath: imageFile.path),
+                    viewState: viewState,
+                    onResize: (_, __) {},
+                    onSpanChange: (_, span) => recordedSpans.add(span),
+                    onZoom: (_, __) {},
+                    onRetry: (_) {},
+                    onOpenPreview: (_) {},
+                    onCopyImage: (_) {},
+                    columnWidth: columnWidth,
+                    columnCount: columnCount,
+                    columnGap: columnGap,
+                    backgroundColor: const Color(0xFFB0B0B0),
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -78,35 +83,29 @@ void main() {
 
     await tester.pump();
 
-    expect(
-      sizeNotifier.value.width,
-      closeTo(_spanWidth(2, columnWidth, columnGap), 0.5),
-    );
+    setState(() {
+      viewState = GridCardViewState(
+        id: '1',
+        width: _spanWidth(3, columnWidth, columnGap),
+        height: 260,
+        scale: 1.0,
+        columnSpan: 3,
+        customHeight: 260,
+      );
+    });
 
-    sizeNotifier.value = Size(
-      _spanWidth(3, columnWidth, columnGap),
-      260,
-    );
     await tester.pump();
 
-    expect(
-      sizeNotifier.value.width,
-      closeTo(_spanWidth(3, columnWidth, columnGap), 0.5),
-    );
-    expect(recordedSpans.contains(3), isFalse);
+    expect(recordedSpans, isEmpty);
   });
 
   testWidgets('ImageCard suppresses scroll while zooming', (tester) async {
-    final sizeNotifier = ValueNotifier(const Size(200, 220));
-    final scaleNotifier = ValueNotifier(1.0);
     final scrollController = ScrollController();
     const columnWidth = 150.0;
     const columnGap = 3.0;
     const columnCount = 4;
 
     addTearDown(() {
-      sizeNotifier.dispose();
-      scaleNotifier.dispose();
       scrollController.dispose();
     });
 
@@ -119,8 +118,14 @@ void main() {
               padding: const EdgeInsets.symmetric(vertical: 400),
               child: ImageCard(
                 item: ImageItem(id: '1', filePath: imageFile.path),
-                sizeNotifier: sizeNotifier,
-                scaleNotifier: scaleNotifier,
+                viewState: GridCardViewState(
+                  id: '1',
+                  width: 200,
+                  height: 220,
+                  scale: 1.0,
+                  columnSpan: 1,
+                  customHeight: 220,
+                ),
                 onResize: (_, __) {},
                 onSpanChange: (_, __) {},
                 onZoom: (_, __) {},

@@ -9,13 +9,13 @@ import 'package:flutter/services.dart';
 import 'package:meta/meta.dart';
 
 import '../data/models/image_item.dart';
+import '../system/state/grid_layout_store.dart';
 
 class ImageCard extends StatefulWidget {
   const ImageCard({
     super.key,
     required this.item,
-    required this.sizeNotifier,
-    required this.scaleNotifier,
+    required this.viewState,
     required this.onResize,
     required this.onSpanChange,
     required this.onZoom,
@@ -34,8 +34,7 @@ class ImageCard extends StatefulWidget {
   });
 
   final ImageItem item;
-  final ValueNotifier<Size> sizeNotifier;
-  final ValueNotifier<double> scaleNotifier;
+  final GridCardViewState viewState;
   final void Function(String id, Size newSize) onResize;
   final void Function(String id, int span) onSpanChange;
   final void Function(String id, double scale) onZoom;
@@ -110,27 +109,32 @@ class _ImageCardState extends State<ImageCard> {
   bool _suppressScaleListener = false;
   Timer? _loadingTimeout;
   int _loadingStateVersion = 0;
+  late ValueNotifier<Size> _sizeNotifier;
+  late ValueNotifier<double> _scaleNotifier;
 
   @override
   void initState() {
     super.initState();
-    widget.sizeNotifier.addListener(_handleSizeExternalChange);
-    widget.scaleNotifier.addListener(_handleScaleExternalChange);
-    _currentSpan = _computeSpan(widget.sizeNotifier.value.width);
-    _currentScale = widget.scaleNotifier.value;
+    _sizeNotifier = ValueNotifier<Size>(
+      Size(widget.viewState.width, widget.viewState.height),
+    );
+    _scaleNotifier = ValueNotifier<double>(widget.viewState.scale);
+    _sizeNotifier.addListener(_handleSizeExternalChange);
+    _scaleNotifier.addListener(_handleScaleExternalChange);
+    _currentSpan = widget.viewState.columnSpan;
+    _currentScale = widget.viewState.scale;
   }
 
   @override
   void didUpdateWidget(covariant ImageCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.sizeNotifier != widget.sizeNotifier) {
-      oldWidget.sizeNotifier.removeListener(_handleSizeExternalChange);
-      widget.sizeNotifier.addListener(_handleSizeExternalChange);
+    final newSize = Size(widget.viewState.width, widget.viewState.height);
+    if (_sizeNotifier.value != newSize) {
+      _sizeNotifier.value = newSize;
     }
-    if (oldWidget.scaleNotifier != widget.scaleNotifier) {
-      oldWidget.scaleNotifier.removeListener(_handleScaleExternalChange);
-      widget.scaleNotifier.addListener(_handleScaleExternalChange);
-      _currentScale = widget.scaleNotifier.value;
+    if (_scaleNotifier.value != widget.viewState.scale) {
+      _scaleNotifier.value = widget.viewState.scale;
+      _currentScale = widget.viewState.scale;
     }
     if (oldWidget.item.filePath != widget.item.filePath) {
       _reloadImage();
@@ -138,24 +142,29 @@ class _ImageCardState extends State<ImageCard> {
     if (oldWidget.columnWidth != widget.columnWidth ||
         oldWidget.columnGap != widget.columnGap ||
         oldWidget.columnCount != widget.columnCount) {
-      _currentSpan = _computeSpan(widget.sizeNotifier.value.width);
+      _currentSpan = widget.viewState.columnSpan;
+    }
+    if (oldWidget.viewState.columnSpan != widget.viewState.columnSpan) {
+      _currentSpan = widget.viewState.columnSpan;
     }
   }
 
   @override
   void dispose() {
     _focusNode.dispose();
-    widget.sizeNotifier.removeListener(_handleSizeExternalChange);
-    widget.scaleNotifier.removeListener(_handleScaleExternalChange);
+    _sizeNotifier.removeListener(_handleSizeExternalChange);
+    _scaleNotifier.removeListener(_handleScaleExternalChange);
+    _sizeNotifier.dispose();
+    _scaleNotifier.dispose();
     _detachImageStream();
     _cancelLoadingTimeout();
     super.dispose();
   }
 
   void _handleSizeExternalChange() {
-    final size = _clampSize(widget.sizeNotifier.value);
-    if (size != widget.sizeNotifier.value) {
-      widget.sizeNotifier.value = size;
+    final size = _clampSize(_sizeNotifier.value);
+    if (size != _sizeNotifier.value) {
+      _sizeNotifier.value = size;
     }
     _currentSpan = _computeSpan(size.width);
     final constrained = clampPanOffset(
@@ -171,9 +180,9 @@ class _ImageCardState extends State<ImageCard> {
   }
 
   void _handleScaleExternalChange() {
-    final scale = _clampScale(widget.scaleNotifier.value);
-    if (scale != widget.scaleNotifier.value) {
-      widget.scaleNotifier.value = scale;
+    final scale = _clampScale(_scaleNotifier.value);
+    if (scale != _scaleNotifier.value) {
+      _scaleNotifier.value = scale;
     }
     if (_suppressScaleListener) {
       return;
@@ -181,7 +190,7 @@ class _ImageCardState extends State<ImageCard> {
     _currentScale = scale;
     final constrained = clampPanOffset(
       offset: _imageOffset,
-      size: widget.sizeNotifier.value,
+      size: _sizeNotifier.value,
       scale: scale,
     );
     if (constrained != _imageOffset) {
@@ -228,12 +237,12 @@ class _ImageCardState extends State<ImageCard> {
                     ? SystemMouseCursors.grabbing
                     : SystemMouseCursors.basic,
             child: ValueListenableBuilder<Size>(
-              valueListenable: widget.sizeNotifier,
+              valueListenable: _sizeNotifier,
               builder: (context, size, _) {
                 final clampedSize = _clampSize(size);
                 if (clampedSize != size) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
-                    widget.sizeNotifier.value = clampedSize;
+                    _sizeNotifier.value = clampedSize;
                   });
                 }
                 return SizedBox(
@@ -266,12 +275,12 @@ class _ImageCardState extends State<ImageCard> {
 
   Widget _buildImageContent(BuildContext context, Size size) {
     return ValueListenableBuilder<double>(
-      valueListenable: widget.scaleNotifier,
+      valueListenable: _scaleNotifier,
       builder: (context, scale, _) {
         final clampedScale = _clampScale(scale);
         if (clampedScale != scale) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            widget.scaleNotifier.value = clampedScale;
+            _scaleNotifier.value = clampedScale;
           });
         }
         return Stack(
@@ -466,7 +475,7 @@ class _ImageCardState extends State<ImageCard> {
   void _onResizeStart(DragStartDetails details) {
     setState(() {
       _isResizing = true;
-      _resizeStartSize = widget.sizeNotifier.value;
+      _resizeStartSize = _sizeNotifier.value;
       _resizeStartGlobalPosition = details.globalPosition;
       _resizeStartSpan = _currentSpan;
     });
@@ -484,8 +493,8 @@ class _ImageCardState extends State<ImageCard> {
     final newHeight =
         (_resizeStartSize!.height + delta.dy).clamp(_minHeight, _maxHeight);
     final newSize = Size(snappedWidth, newHeight);
-    if (widget.sizeNotifier.value != newSize) {
-      widget.sizeNotifier.value = newSize;
+    if (_sizeNotifier.value != newSize) {
+      _sizeNotifier.value = newSize;
     }
     if (snappedSpan != _currentSpan) {
       setState(() {
@@ -500,8 +509,8 @@ class _ImageCardState extends State<ImageCard> {
       _resizeStartSize = null;
       _resizeStartGlobalPosition = null;
     });
-    _attachImageStream(widget.sizeNotifier.value, _currentScale);
-    widget.onResize(widget.item.id, widget.sizeNotifier.value);
+    _attachImageStream(_sizeNotifier.value, _currentScale);
+    widget.onResize(widget.item.id, _sizeNotifier.value);
     if (_currentSpan != _resizeStartSpan) {
       widget.onSpanChange(widget.item.id, _currentSpan);
     }
@@ -553,7 +562,7 @@ class _ImageCardState extends State<ImageCard> {
     setState(() {
       _imageOffset = clampPanOffset(
         offset: _panStartOffset! + delta,
-        size: widget.sizeNotifier.value,
+        size: _sizeNotifier.value,
         scale: _currentScale,
       );
     });
@@ -602,8 +611,8 @@ class _ImageCardState extends State<ImageCard> {
     }
     if (event.logicalKey == LogicalKeyboardKey.enter) {
       if (shiftPressed) {
-        widget.sizeNotifier.value = const Size(200, 200);
-        widget.onResize(widget.item.id, widget.sizeNotifier.value);
+        _sizeNotifier.value = const Size(200, 200);
+        widget.onResize(widget.item.id, _sizeNotifier.value);
       } else {
         widget.onOpenPreview(widget.item);
       }
@@ -632,7 +641,7 @@ class _ImageCardState extends State<ImageCard> {
   }
 
   void _applyZoomWithMatrices(double targetScale, {Offset? focalPoint}) {
-    final size = widget.sizeNotifier.value;
+    final size = _sizeNotifier.value;
     final center = Offset(size.width / 2, size.height / 2);
     Offset newOffset;
     final scaleRatio = targetScale / (_currentScale == 0 ? 1 : _currentScale);
@@ -652,7 +661,7 @@ class _ImageCardState extends State<ImageCard> {
     });
     _currentScale = targetScale;
     _suppressScaleListener = true;
-    widget.scaleNotifier.value = targetScale;
+    _scaleNotifier.value = targetScale;
     _suppressScaleListener = false;
     widget.onZoom(widget.item.id, targetScale);
   }
@@ -807,7 +816,7 @@ class _ImageCardState extends State<ImageCard> {
       }
       if (_visualState == _CardVisualState.loading) {
         debugPrint(
-          '[ImageCard] loading_timeout id=${widget.item.id} size=${widget.sizeNotifier.value} scale=$_currentScale retry=$_retryCount',
+          '[ImageCard] loading_timeout id=${widget.item.id} size=${_sizeNotifier.value} scale=$_currentScale retry=$_retryCount',
         );
         _handleTimeoutRetry();
       }

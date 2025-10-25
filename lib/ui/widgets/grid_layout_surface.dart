@@ -6,6 +6,7 @@ import '../../system/state/grid_layout_store.dart';
 
 typedef GridLayoutChildBuilder = Widget Function(
   BuildContext context,
+  GridLayoutGeometry geometry,
   List<GridCardViewState> states,
 );
 
@@ -95,6 +96,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
 
         final child = widget.childBuilder(
           context,
+          geometry,
           _store.viewStates,
         );
 

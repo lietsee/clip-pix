@@ -24,7 +24,10 @@ import 'system/folder_picker_service.dart';
 import 'system/file_watcher.dart';
 import 'system/image_saver.dart';
 import 'system/state/app_state_provider.dart';
+import 'system/state/grid_layout_store.dart';
+import 'system/state/grid_layout_store_adapters.dart';
 import 'system/state/grid_resize_controller.dart';
+import 'system/state/grid_resize_store_binding.dart';
 import 'system/state/image_library_notifier.dart';
 import 'system/state/image_library_state.dart';
 import 'system/state/image_history_notifier.dart';
@@ -241,6 +244,27 @@ class ClipPixApp extends StatelessWidget {
       ),
       ChangeNotifierProvider<GridResizeController>(
         create: (_) => GridResizeController(),
+      ),
+      ChangeNotifierProxyProvider<GridCardPreferencesRepository,
+          GridLayoutStore>(
+        create: (context) => GridLayoutStore(
+          persistence: GridLayoutHivePersistence(
+            context.read<GridCardPreferencesRepository>(),
+          ),
+          ratioResolver: FileImageRatioResolver(),
+        ),
+        update: (_, __, store) {
+          assert(store != null, 'GridLayoutStore must be created');
+          return store!;
+        },
+      ),
+      Provider<GridResizeStoreBinding>(
+        lazy: false,
+        create: (context) => GridResizeStoreBinding(
+          controller: context.read<GridResizeController>(),
+          store: context.read<GridLayoutStore>(),
+        ),
+        dispose: (_, binding) => binding.dispose(),
       ),
       Provider<ImageRepository>(create: (_) => ImageRepository()),
       StateNotifierProvider<ImageLibraryNotifier, ImageLibraryState>(

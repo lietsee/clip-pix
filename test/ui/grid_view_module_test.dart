@@ -7,6 +7,8 @@ import 'package:clip_pix/data/models/image_item.dart';
 import 'package:clip_pix/system/clipboard_monitor.dart';
 import 'package:clip_pix/system/clipboard_copy_service.dart';
 import 'package:clip_pix/system/state/grid_resize_controller.dart';
+import 'package:clip_pix/system/state/grid_layout_store.dart';
+import 'package:clip_pix/system/state/grid_resize_store_binding.dart';
 import 'package:clip_pix/system/state/image_library_notifier.dart';
 import 'package:clip_pix/system/state/image_library_state.dart';
 import 'package:clip_pix/system/state/selected_folder_state.dart';
@@ -25,7 +27,8 @@ import 'package:clip_pix/system/state/folder_view_mode.dart';
 
 class InMemoryGridCardPreferencesRepository
     implements GridCardPreferencesRepository {
-  final Map<String, GridCardPreference> _storage = <String, GridCardPreference>{};
+  final Map<String, GridCardPreference> _storage =
+      <String, GridCardPreference>{};
 
   @override
   GridCardPreference? get(String id) => _storage[id];
@@ -78,6 +81,18 @@ class InMemoryGridCardPreferencesRepository
   }
 
   @override
+  Future<void> savePreference(GridCardPreference preference) async {
+    _storage[preference.id] = preference;
+  }
+
+  @override
+  Future<void> saveAll(Iterable<GridCardPreference> preferences) async {
+    for (final preference in preferences) {
+      _storage[preference.id] = preference;
+    }
+  }
+
+  @override
   Future<void> clear() async {
     _storage.clear();
   }
@@ -86,6 +101,46 @@ class InMemoryGridCardPreferencesRepository
   Future<void> remove(String id) async {
     _storage.remove(id);
   }
+}
+
+class _TestGridLayoutPersistence implements GridLayoutPersistence {
+  _TestGridLayoutPersistence(this._repository);
+
+  final GridCardPreferencesRepository _repository;
+
+  @override
+  GridLayoutPreferenceRecord read(String id) {
+    final pref = _repository.getOrCreate(id);
+    return GridLayoutPreferenceRecord(
+      id: pref.id,
+      width: pref.width,
+      height: pref.height,
+      scale: pref.scale,
+      columnSpan: pref.columnSpan,
+      customHeight: pref.customHeight,
+    );
+  }
+
+  @override
+  Future<void> saveBatch(List<GridLayoutPreferenceRecord> mutations) async {
+    for (final mutation in mutations) {
+      await _repository.savePreference(
+        GridCardPreference(
+          id: mutation.id,
+          width: mutation.width,
+          height: mutation.height,
+          scale: mutation.scale,
+          columnSpan: mutation.columnSpan,
+          customHeight: mutation.customHeight,
+        ),
+      );
+    }
+  }
+}
+
+class _TestRatioResolver implements GridIntrinsicRatioResolver {
+  @override
+  Future<double?> resolve(String id, ImageItem? item) async => 1.0;
 }
 
 class TestGridLayoutSettingsRepository extends ChangeNotifier
@@ -190,6 +245,16 @@ void main() {
     final orderRepo = TestGridOrderRepository();
     final clipboardService = TestClipboardCopyService();
     final resizeController = GridResizeController();
+    final layoutStore = GridLayoutStore(
+      persistence: _TestGridLayoutPersistence(preferences),
+      ratioResolver: _TestRatioResolver(),
+    );
+    addTearDown(layoutStore.dispose);
+    final storeBinding = GridResizeStoreBinding(
+      controller: resizeController,
+      store: layoutStore,
+    );
+    addTearDown(storeBinding.dispose);
     final imageNotifier = TestImageLibraryNotifier();
     imageNotifier.seed(
       ImageLibraryState(
@@ -223,10 +288,14 @@ void main() {
             ChangeNotifierProvider<GridOrderRepository>.value(
               value: orderRepo,
             ),
+            ChangeNotifierProvider<GridLayoutStore>.value(
+              value: layoutStore,
+            ),
             Provider<ClipboardCopyService>.value(value: clipboardService),
             ChangeNotifierProvider<GridResizeController>.value(
               value: resizeController,
             ),
+            Provider<GridResizeStoreBinding>.value(value: storeBinding),
             Provider<ImageLibraryNotifier>.value(value: imageNotifier),
             Provider<SelectedFolderState>.value(value: selectedState),
           ],

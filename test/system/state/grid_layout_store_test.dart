@@ -45,7 +45,7 @@ class _FakeAspectRatioResolver implements GridIntrinsicRatioResolver {
   final Map<String, double> ratios;
 
   @override
-  Future<double?> resolve(String id) async => ratios[id];
+  Future<double?> resolve(String id, ImageItem? item) async => ratios[id];
 }
 
 void main() {

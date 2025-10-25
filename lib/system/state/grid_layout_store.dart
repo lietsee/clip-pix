@@ -36,7 +36,7 @@ class GridLayoutPreferenceRecord {
 }
 
 abstract class GridIntrinsicRatioResolver {
-  Future<double?> resolve(String id);
+  Future<double?> resolve(String id, ImageItem? item);
 }
 
 abstract class GridLayoutCommandTarget {
@@ -107,8 +107,7 @@ class GridCardSnapshot {
   final double? customHeight;
 }
 
-class GridLayoutStore extends ChangeNotifier
-    implements GridLayoutSurfaceStore {
+class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
   GridLayoutStore({
     required GridLayoutPersistence persistence,
     required GridIntrinsicRatioResolver ratioResolver,
@@ -124,6 +123,7 @@ class GridLayoutStore extends ChangeNotifier
   final List<String> _orderedIds = [];
   String? _directoryPath;
   GridLayoutGeometry? _geometry;
+  final Map<String, ImageItem> _items = {};
 
   @override
   List<GridCardViewState> get viewStates => UnmodifiableListView(
@@ -133,8 +133,15 @@ class GridLayoutStore extends ChangeNotifier
             .toList(growable: false),
       );
 
-  void syncLibrary(List<ImageItem> items, {String? directoryPath}) {
+  void syncLibrary(
+    List<ImageItem> items, {
+    String? directoryPath,
+    bool notify = true,
+  }) {
     _directoryPath = directoryPath;
+    _items
+      ..clear()
+      ..addEntries(items.map((item) => MapEntry(item.id, item)));
     final Map<String, GridCardViewState> nextStates = {};
     final List<String> nextOrder = [];
 
@@ -162,7 +169,7 @@ class GridLayoutStore extends ChangeNotifier
       ..clear()
       ..addAll(nextOrder);
 
-    if (orderChanged || contentChanged) {
+    if (notify && (orderChanged || contentChanged)) {
       notifyListeners();
     }
   }
@@ -194,8 +201,7 @@ class GridLayoutStore extends ChangeNotifier
     }
     final int clampedSpan = span.clamp(1, geometry.columnCount);
     final double gapTotal = geometry.gap * (clampedSpan - 1);
-    final double targetWidth =
-        geometry.columnWidth * clampedSpan + gapTotal;
+    final double targetWidth = geometry.columnWidth * clampedSpan + gapTotal;
 
     bool changed = false;
     final List<GridLayoutPreferenceRecord> batch = [];
@@ -294,6 +300,7 @@ class GridLayoutStore extends ChangeNotifier
     required String id,
     Size? customSize,
     double? scale,
+    int? columnSpan,
   }) async {
     final current = _viewStates[id];
     if (current == null) {
@@ -303,6 +310,7 @@ class GridLayoutStore extends ChangeNotifier
     double nextHeight = current.height;
     double? nextCustomHeight = current.customHeight;
     double nextScale = current.scale;
+    int nextSpan = current.columnSpan;
 
     if (customSize != null) {
       nextWidth = customSize.width;
@@ -312,13 +320,30 @@ class GridLayoutStore extends ChangeNotifier
     if (scale != null) {
       nextScale = scale;
     }
+    if (columnSpan != null) {
+      final geometry = _geometry;
+      if (geometry != null && geometry.columnCount > 0) {
+        nextSpan = columnSpan.clamp(1, geometry.columnCount);
+        if (customSize == null) {
+          final double gapTotal = geometry.gap * (nextSpan - 1);
+          nextWidth = geometry.columnWidth * nextSpan + gapTotal;
+          final ratio = await _resolveAspectRatio(id, current);
+          final computedHeight =
+              ratio.isFinite && ratio > 0 ? nextWidth * ratio : nextWidth;
+          nextHeight = computedHeight;
+          nextCustomHeight = computedHeight;
+        }
+      } else {
+        nextSpan = columnSpan;
+      }
+    }
 
     final nextState = GridCardViewState(
       id: id,
       width: nextWidth,
       height: nextHeight,
       scale: nextScale,
-      columnSpan: current.columnSpan,
+      columnSpan: nextSpan,
       customHeight: nextCustomHeight,
     );
 
@@ -377,7 +402,7 @@ class GridLayoutStore extends ChangeNotifier
     String id,
     GridCardViewState current,
   ) async {
-    final resolved = await _ratioResolver.resolve(id);
+    final resolved = await _ratioResolver.resolve(id, _items[id]);
     if (resolved != null && resolved.isFinite && resolved > 0) {
       return resolved;
     }

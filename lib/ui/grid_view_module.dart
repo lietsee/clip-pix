@@ -2,14 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../data/grid_card_preferences_repository.dart';
 import '../data/grid_layout_settings_repository.dart';
 import '../data/grid_order_repository.dart';
 import '../data/models/grid_layout_settings.dart';
@@ -17,12 +15,13 @@ import '../data/models/image_item.dart';
 import '../system/clipboard_copy_service.dart';
 import 'package:logging/logging.dart';
 import '../system/state/folder_view_mode.dart';
-import '../system/state/grid_resize_controller.dart';
+import '../system/state/grid_layout_store.dart';
 import '../system/state/image_library_notifier.dart';
 import '../system/state/image_library_state.dart';
 import '../system/state/selected_folder_state.dart';
 import 'image_card.dart';
 import 'image_preview_window.dart';
+import 'widgets/grid_layout_surface.dart';
 import 'widgets/pinterest_grid.dart';
 import 'package:path/path.dart' as p;
 
@@ -41,23 +40,14 @@ class _GridViewModuleState extends State<GridViewModule> {
   static const double _outerPadding = 12;
   static const double _gridGap = 3;
 
-  late GridCardPreferencesRepository _preferences;
   bool _isInitialized = false;
 
-  final Map<String, ValueNotifier<Size>> _sizeNotifiers = {};
-  final Map<String, ValueNotifier<double>> _scaleNotifiers = {};
   final Map<String, Timer> _scaleDebounceTimers = {};
   final Map<String, ScrollController> _directoryControllers = {};
-  final Map<String, VoidCallback> _sizeListeners = {};
   final Map<String, GlobalKey> _cardKeys = {};
-  final Map<String, Size> _intrinsicSizeCache = {};
   GridLayoutSettingsRepository? _layoutSettingsRepository;
   GridOrderRepository? _orderRepository;
-  GridResizeController? _resizeController;
-  GridResizeListener? _resizeListener;
-  double _lastViewportWidth = 0;
-  double _lastAvailableWidth = 0;
-  int _lastColumnCount = 1;
+  late GridLayoutStore _layoutStore;
   OverlayEntry? _dragOverlay;
   String? _draggingId;
   Offset _dragOverlayOffset = Offset.zero;
@@ -75,20 +65,21 @@ class _GridViewModuleState extends State<GridViewModule> {
   List<_GridEntry> _entries = <_GridEntry>[];
   bool _loggedInitialBuild = false;
   final Set<Object> _currentBuildKeys = <Object>{};
-  bool _isApplyingResizeMutations = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_isInitialized) {
-      _preferences = context.read<GridCardPreferencesRepository>();
+      _layoutStore = context.read<GridLayoutStore>();
       _layoutSettingsRepository = context.read<GridLayoutSettingsRepository>();
       _orderRepository = context.read<GridOrderRepository>();
       final orderedImages = _applyDirectoryOrder(widget.state.images);
       _entries = orderedImages.map(_createEntry).toList(growable: true);
-      for (final item in orderedImages) {
-        _ensureNotifiers(item);
-      }
+      _layoutStore.syncLibrary(
+        orderedImages,
+        directoryPath: widget.state.activeDirectory?.path,
+        notify: false,
+      );
       setState(() {
         _isInitialized = true;
       });
@@ -97,8 +88,9 @@ class _GridViewModuleState extends State<GridViewModule> {
           _animateEntryVisible(entry);
         }
       });
+    } else {
+      _layoutStore = context.read<GridLayoutStore>();
     }
-    _attachResizeController();
   }
 
   @override
@@ -107,14 +99,14 @@ class _GridViewModuleState extends State<GridViewModule> {
     if (!_isInitialized) {
       return;
     }
+    final orderedImages = _applyDirectoryOrder(widget.state.images);
     if (!listEquals(oldWidget.state.images, widget.state.images)) {
       _reconcileEntries(widget.state.images);
-    } else {
-      final orderedImages = _applyDirectoryOrder(widget.state.images);
-      for (final item in orderedImages) {
-        _ensureNotifiers(item);
-      }
     }
+    _layoutStore.syncLibrary(
+      orderedImages,
+      directoryPath: widget.state.activeDirectory?.path,
+    );
   }
 
   @override
@@ -128,19 +120,6 @@ class _GridViewModuleState extends State<GridViewModule> {
     for (final timer in _scaleDebounceTimers.values) {
       timer.cancel();
     }
-    _sizeNotifiers.forEach((key, notifier) {
-      final listener = _sizeListeners[key];
-      if (listener != null) {
-        notifier.removeListener(listener);
-      }
-      notifier.dispose();
-    });
-    _sizeListeners.clear();
-    for (final notifier in _scaleNotifiers.values) {
-      notifier.dispose();
-    }
-    _detachResizeController();
-    _detachResizeController();
     super.dispose();
   }
 
@@ -160,6 +139,9 @@ class _GridViewModuleState extends State<GridViewModule> {
 
     final libraryNotifier = context.read<ImageLibraryNotifier>();
     final selectedState = context.watch<SelectedFolderState>();
+    final layoutStore = context.watch<GridLayoutStore>();
+    final settingsRepo = context.watch<GridLayoutSettingsRepository>();
+    final settings = settingsRepo.value;
 
     if (!_loggedInitialBuild) {
       _loggedInitialBuild = true;
@@ -168,33 +150,21 @@ class _GridViewModuleState extends State<GridViewModule> {
 
     final content = RefreshIndicator(
       onRefresh: () => libraryNotifier.refresh(),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
+      child: GridLayoutSurface(
+        store: layoutStore,
+        columnGap: _gridGap,
+        padding: EdgeInsets.zero,
+        childBuilder: (context, geometry, states) {
           _orderRepository = context.watch<GridOrderRepository>();
-          final settingsRepo = context.watch<GridLayoutSettingsRepository>();
-          final settings = settingsRepo.value;
           final controller = _resolveController(selectedState);
-
-          final viewportWidth = constraints.maxWidth.isFinite
-              ? constraints.maxWidth
-              : MediaQuery.of(context).size.width;
-          final availableWidth =
-              math.max(0.0, viewportWidth - (_outerPadding * 2));
-          _lastViewportWidth = viewportWidth;
-          _lastAvailableWidth = availableWidth;
-          final effectiveColumns = _resolveColumnCount(
-            availableWidth,
-            settings,
-          );
-          _lastColumnCount = effectiveColumns;
-          final gridDelegate = PinterestGridDelegate(
-            columnCount: effectiveColumns,
-            gap: _gridGap,
-          );
-          final columnWidth = _calculateColumnWidth(effectiveColumns);
           final backgroundColor = _backgroundForTone(settings.background);
           final cardBackgroundColor =
               _cardBackgroundForTone(settings.background);
+          final columnCount = math.max(1, geometry.columnCount).toInt();
+          final gridDelegate = PinterestGridDelegate(
+            columnCount: columnCount,
+            gap: _gridGap,
+          );
           _currentBuildKeys.clear();
 
           return Container(
@@ -216,40 +186,16 @@ class _GridViewModuleState extends State<GridViewModule> {
                           return null;
                         }
                         final entry = _entries[index];
-                        final item = entry.item;
-                        final sizeNotifier = _sizeNotifiers[item.id]!;
-                        final scaleNotifier = _scaleNotifiers[item.id]!;
-                        final pref = _preferences.getOrCreate(item.id);
-                        final currentSize = sizeNotifier.value;
-                        final inferredSpan = _spanFromWidth(
-                          currentSize.width,
-                          columnWidth,
-                          gridDelegate.columnCount,
+                        final viewState = layoutStore.viewStateFor(
+                          entry.item.id,
                         );
-                        final storedSpan =
-                            pref.columnSpan.clamp(1, gridDelegate.columnCount);
-                        final span = currentSize.width > 0
-                            ? inferredSpan.clamp(
-                                1,
-                                gridDelegate.columnCount,
-                              )
-                            : storedSpan;
-                        final desiredWidth = _spanWidth(span, columnWidth);
-
-                        if ((currentSize.width - desiredWidth).abs() > 0.5) {
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (!mounted) return;
-                            sizeNotifier.value =
-                                Size(desiredWidth, currentSize.height);
-                          });
-                        }
-
+                        final span =
+                            viewState.columnSpan.clamp(1, columnCount).toInt();
                         final cardWidget = _buildCard(
                           entry: entry,
-                          sizeNotifier: sizeNotifier,
-                          scaleNotifier: scaleNotifier,
-                          columnWidth: columnWidth,
-                          columnCount: gridDelegate.columnCount,
+                          viewState: viewState,
+                          columnWidth: geometry.columnWidth,
+                          columnCount: columnCount,
                           span: span,
                           backgroundColor: cardBackgroundColor,
                         );
@@ -272,33 +218,12 @@ class _GridViewModuleState extends State<GridViewModule> {
       ),
     );
 
-    return Stack(
-      children: [
-        IgnorePointer(
-          ignoring: _isApplyingResizeMutations,
-          child: content,
-        ),
-        if (_isApplyingResizeMutations)
-          Positioned.fill(
-            child: Container(
-              color: Colors.black.withOpacity(0.08),
-              child: const Center(
-                child: SizedBox(
-                  width: 32,
-                  height: 32,
-                  child: CircularProgressIndicator(strokeWidth: 3),
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
+    return content;
   }
 
   Widget _buildCard({
     required _GridEntry entry,
-    required ValueNotifier<Size> sizeNotifier,
-    required ValueNotifier<double> scaleNotifier,
+    required GridCardViewState viewState,
     required double columnWidth,
     required int columnCount,
     required int span,
@@ -324,8 +249,7 @@ class _GridViewModuleState extends State<GridViewModule> {
         opacity: entry.opacity,
         child: ImageCard(
           item: item,
-          sizeNotifier: sizeNotifier,
-          scaleNotifier: scaleNotifier,
+          viewState: viewState,
           onResize: _handleResize,
           onSpanChange: _handleSpanChange,
           onZoom: _handleZoom,
@@ -372,21 +296,18 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   void _handleResize(String id, Size newSize) {
-    unawaited(_preferences.saveSize(id, newSize));
+    unawaited(_layoutStore.updateCard(id: id, customSize: newSize));
   }
 
   void _handleZoom(String id, double scale) {
     _scaleDebounceTimers[id]?.cancel();
     _scaleDebounceTimers[id] = Timer(const Duration(milliseconds: 150), () {
-      unawaited(_preferences.saveScale(id, scale));
+      unawaited(_layoutStore.updateCard(id: id, scale: scale));
     });
   }
 
   void _handleSpanChange(String id, int span) {
-    unawaited(_preferences.saveColumnSpan(id, span));
-    if (mounted) {
-      setState(() {});
-    }
+    unawaited(_layoutStore.updateCard(id: id, columnSpan: span));
   }
 
   ScrollController _resolveController(SelectedFolderState selectedState) {
@@ -400,26 +321,7 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   _GridEntry _createEntry(ImageItem item) {
-    _ensureNotifiers(item);
     return _GridEntry(item: item, opacity: 0);
-  }
-
-  void _ensureNotifiers(ImageItem item) {
-    _sizeNotifiers.putIfAbsent(item.id, () {
-      final pref =
-          _preferences.get(item.id) ?? _preferences.getOrCreate(item.id);
-      final notifier = ValueNotifier<Size>(pref.size);
-      _attachSizeListener(item.id, notifier);
-      return notifier;
-    });
-    if (!_sizeListeners.containsKey(item.id)) {
-      _attachSizeListener(item.id, _sizeNotifiers[item.id]!);
-    }
-    _scaleNotifiers.putIfAbsent(item.id, () {
-      final pref =
-          _preferences.get(item.id) ?? _preferences.getOrCreate(item.id);
-      return ValueNotifier<double>(pref.scale);
-    });
   }
 
   void _reconcileEntries(List<ImageItem> newItems) {
@@ -510,36 +412,7 @@ class _GridViewModuleState extends State<GridViewModule> {
     entry.removalTimer = null;
     final id = entry.item.id;
     _scaleDebounceTimers.remove(id)?.cancel();
-    final sizeNotifier = _sizeNotifiers.remove(id);
-    final sizeListener = _sizeListeners.remove(id);
-    if (sizeNotifier != null && sizeListener != null) {
-      sizeNotifier.removeListener(sizeListener);
-    }
-    sizeNotifier?.dispose();
-    _scaleNotifiers.remove(id)?.dispose();
-    _intrinsicSizeCache.remove(id);
-  }
-
-  void _attachSizeListener(String id, ValueNotifier<Size> notifier) {
-    final existing = _sizeListeners[id];
-    if (existing != null) {
-      notifier.removeListener(existing);
-    }
-    void listener() {}
-
-    notifier.addListener(listener);
-    _sizeListeners[id] = listener;
-  }
-
-  void _disposeNotifiers(String id) {
-    final sizeNotifier = _sizeNotifiers.remove(id);
-    final sizeListener = _sizeListeners.remove(id);
-    if (sizeNotifier != null && sizeListener != null) {
-      sizeNotifier.removeListener(sizeListener);
-    }
-    sizeNotifier?.dispose();
-
-    _scaleNotifiers.remove(id)?.dispose();
+    _cardKeys.remove(id);
   }
 
   void _showPreviewDialog(ImageItem item) {
@@ -656,31 +529,6 @@ class _GridViewModuleState extends State<GridViewModule> {
     return duplicates;
   }
 
-  int _resolveColumnCount(double availableWidth, GridLayoutSettings settings) {
-    if (availableWidth <= 0) {
-      return 1;
-    }
-    final maxColumns = settings.maxColumns;
-    final preferred = settings.preferredColumns;
-    final target = preferred.clamp(1, maxColumns);
-    final minColumnWidth = 150.0;
-    final maxPossible = math.max(1, (availableWidth / minColumnWidth).floor());
-    return math.max(1, math.min(target, maxPossible));
-  }
-
-  int _resolveSpan(double storedWidth, double availableWidth, int columnCount) {
-    if (columnCount <= 0) {
-      return 1;
-    }
-    final gapTotal = _gridGap * (columnCount - 1);
-    final columnWidth = (availableWidth - gapTotal) / columnCount;
-    if (columnWidth <= 0) {
-      return 1;
-    }
-    final rawSpan = (storedWidth / columnWidth).round();
-    return rawSpan.clamp(1, columnCount);
-  }
-
   Color _backgroundForTone(GridBackgroundTone tone) {
     switch (tone) {
       case GridBackgroundTone.white:
@@ -699,251 +547,6 @@ class _GridViewModuleState extends State<GridViewModule> {
     final hsl = HSLColor.fromColor(base);
     final darkerLightness = (hsl.lightness - 0.08).clamp(0.0, 1.0);
     return hsl.withLightness(darkerLightness).toColor();
-  }
-
-  void _attachResizeController() {
-    final controller = context.read<GridResizeController>();
-    if (_resizeController == controller) {
-      return;
-    }
-    _detachResizeController();
-    _resizeController = controller;
-    _resizeListener = _handleResizeCommand;
-    controller.attach(_resizeListener!);
-  }
-
-  void _detachResizeController() {
-    final controller = _resizeController;
-    final listener = _resizeListener;
-    if (controller != null && listener != null) {
-      controller.detach(listener);
-    }
-    _resizeController = null;
-    _resizeListener = null;
-  }
-
-  Future<GridResizeSnapshot?> _handleResizeCommand(
-    GridResizeCommand command,
-  ) async {
-    switch (command.type) {
-      case GridResizeCommandType.apply:
-        final span = command.span;
-        if (span == null || _entries.isEmpty) {
-          return null;
-        }
-        final snapshot = _captureSnapshot();
-        await _applyBulkSpan(span);
-        return snapshot;
-      case GridResizeCommandType.undo:
-        final snapshot = command.snapshot;
-        if (snapshot == null) {
-          return null;
-        }
-        final redoSnapshot = _captureSnapshot();
-        await _restoreSnapshot(snapshot);
-        return redoSnapshot;
-      case GridResizeCommandType.redo:
-        final snapshot = command.snapshot;
-        if (snapshot == null) {
-          return null;
-        }
-        final undoSnapshot = _captureSnapshot();
-        await _restoreSnapshot(snapshot);
-        return undoSnapshot;
-    }
-  }
-
-  GridResizeSnapshot _captureSnapshot() {
-    final values = <String, GridCardSizeSnapshot>{};
-    for (final entry in _entries) {
-      final item = entry.item;
-      final sizeNotifier = _sizeNotifiers[item.id];
-      if (sizeNotifier == null) {
-        continue;
-      }
-      final size = sizeNotifier.value;
-      final pref = _preferences.getOrCreate(item.id);
-      values[item.id] = GridCardSizeSnapshot(
-        width: size.width,
-        height: size.height,
-        columnSpan: pref.columnSpan,
-        customHeight: pref.customHeight,
-        scale: pref.scale,
-      );
-    }
-    return GridResizeSnapshot(
-      directoryPath: widget.state.activeDirectory?.path,
-      values: values,
-    );
-  }
-
-  Future<void> _applyBulkSpan(int span) async {
-    final columnCount = math.max(1, _lastColumnCount);
-    final clampedSpan = span.clamp(1, columnCount);
-    final columnWidth = _calculateColumnWidth(columnCount);
-    if (columnWidth <= 0) {
-      return;
-    }
-    final mutations = <_CardSizeMutation>[];
-    for (final entry in _entries) {
-      final item = entry.item;
-      final sizeNotifier = _sizeNotifiers[item.id];
-      if (sizeNotifier == null) {
-        continue;
-      }
-      final intrinsicSize = await _resolveIntrinsicSize(item);
-      final ratio = intrinsicSize != null && intrinsicSize.width > 0
-          ? intrinsicSize.height / intrinsicSize.width
-          : _effectiveAspectRatio(item.id, sizeNotifier.value);
-      final width = columnWidth * clampedSpan +
-          _gridGap * math.max(0.0, (clampedSpan - 1).toDouble());
-      final height = ratio.isFinite && ratio > 0 ? width * ratio : width;
-      mutations.add(
-        _CardSizeMutation(
-          id: item.id,
-          notifier: sizeNotifier,
-          size: Size(width, height),
-          columnSpan: clampedSpan,
-          scaleNotifier: _scaleNotifiers[item.id],
-          scale: 1.0,
-          persistScale: true,
-        ),
-      );
-    }
-    await _applyCardMutations(mutations);
-  }
-
-  Future<void> _restoreSnapshot(GridResizeSnapshot snapshot) async {
-    final mutations = <_CardSizeMutation>[];
-    for (final entry in _entries) {
-      final item = entry.item;
-      final saved = snapshot.values[item.id];
-      if (saved == null) {
-        continue;
-      }
-      final sizeNotifier = _sizeNotifiers[item.id];
-      final scaleNotifier = _scaleNotifiers[item.id];
-      if (sizeNotifier == null) {
-        continue;
-      }
-      mutations.add(
-        _CardSizeMutation(
-          id: item.id,
-          notifier: sizeNotifier,
-          size: Size(saved.width, saved.height),
-          columnSpan: saved.columnSpan,
-          persistCustomHeight: true,
-          customHeight: saved.customHeight,
-          scaleNotifier: scaleNotifier,
-          scale: saved.scale,
-          persistScale: true,
-        ),
-      );
-    }
-    await _applyCardMutations(mutations);
-  }
-
-  Future<void> _applyCardMutations(List<_CardSizeMutation> mutations) async {
-    if (mutations.isEmpty) {
-      return;
-    }
-
-    if (mounted) {
-      setState(() {
-        _isApplyingResizeMutations = true;
-      });
-    }
-
-    final newSizes = <String, Size>{};
-    final newScales = <String, double>{};
-
-    try {
-      for (final mutation in mutations) {
-        _disposeNotifiers(mutation.id);
-        newSizes[mutation.id] = mutation.size;
-        if (mutation.scale != null) {
-          newScales[mutation.id] = mutation.scale!;
-        }
-
-        if (mutation.persistSize) {
-          await _preferences.saveSize(mutation.id, mutation.size);
-        }
-        if (mutation.columnSpan != null) {
-          await _preferences.saveColumnSpan(
-            mutation.id,
-            mutation.columnSpan!,
-          );
-        }
-        if (mutation.persistCustomHeight) {
-          await _preferences.saveCustomHeight(
-            mutation.id,
-            mutation.customHeight,
-          );
-        }
-        if (mutation.persistScale && mutation.scale != null) {
-          await _preferences.saveScale(mutation.id, mutation.scale!);
-        }
-
-        await Future<void>.delayed(Duration.zero);
-      }
-
-      if (mounted) {
-        setState(() {
-          newSizes.forEach((id, size) {
-            final notifier = ValueNotifier<Size>(size);
-            _sizeNotifiers[id] = notifier;
-            _attachSizeListener(id, notifier);
-          });
-          newScales.forEach((id, scale) {
-            _scaleNotifiers[id] = ValueNotifier<double>(scale);
-          });
-        });
-
-        await context.read<ImageLibraryNotifier>().refresh();
-      }
-    } finally {
-      if (mounted && _isApplyingResizeMutations) {
-        setState(() {
-          _isApplyingResizeMutations = false;
-        });
-      }
-    }
-  }
-
-  double _calculateColumnWidth(int columnCount) {
-    if (columnCount <= 0) {
-      return 0;
-    }
-    final totalGap = _gridGap * (columnCount - 1);
-    final width = _lastAvailableWidth - totalGap;
-    if (width <= 0) {
-      return 0;
-    }
-    return width / columnCount;
-  }
-
-  double _spanWidth(int span, double columnWidth) {
-    return columnWidth * span + _gridGap * math.max(0.0, (span - 1).toDouble());
-  }
-
-  int _spanFromWidth(
-    double width,
-    double columnWidth,
-    int columnCount,
-  ) {
-    if (columnWidth <= 0 || columnCount <= 0 || width <= 0) {
-      return 1;
-    }
-    final unit = columnWidth + _gridGap;
-    if (unit <= 0) {
-      return 1;
-    }
-    final normalized = (width + _gridGap) / unit;
-    if (!normalized.isFinite) {
-      return 1;
-    }
-    final rounded = normalized.round();
-    return rounded.clamp(1, columnCount);
   }
 
   List<ImageItem> _applyDirectoryOrder(List<ImageItem> items) {
@@ -1216,6 +819,14 @@ class _GridViewModuleState extends State<GridViewModule> {
           ..isDragging = false;
       });
     }
+    final orderedItems = _entries
+        .where((entry) => !entry.isRemoving)
+        .map((entry) => entry.item)
+        .toList(growable: false);
+    _layoutStore.syncLibrary(
+      orderedItems,
+      directoryPath: widget.state.activeDirectory?.path,
+    );
     if (!canceled) {
       unawaited(_persistOrder());
     }
@@ -1357,51 +968,6 @@ class _GridViewModuleState extends State<GridViewModule> {
         (a.width - b.width).abs() <= tolerance &&
         (a.height - b.height).abs() <= tolerance;
   }
-
-  double _effectiveAspectRatio(String id, Size size) {
-    if (size.width <= 0) {
-      return 1.0;
-    }
-    final preference = _preferences.get(id);
-    final referenceHeight = preference?.height ?? size.height;
-    if (referenceHeight <= 0) {
-      return 1.0;
-    }
-    return referenceHeight / size.width;
-  }
-
-  Future<Size?> _resolveIntrinsicSize(ImageItem item) async {
-    final cached = _intrinsicSizeCache[item.id];
-    if (cached != null) {
-      return cached;
-    }
-    final file = File(item.filePath);
-    if (!await file.exists()) {
-      return null;
-    }
-    ui.Codec? codec;
-    try {
-      final bytes = await file.readAsBytes();
-      codec = await ui.instantiateImageCodec(bytes);
-      final frame = await codec.getNextFrame();
-      final image = frame.image;
-      final size = Size(
-        image.width.toDouble(),
-        image.height.toDouble(),
-      );
-      image.dispose();
-      _intrinsicSizeCache[item.id] = size;
-      return size;
-    } catch (error) {
-      debugPrint(
-        '[GridViewModule] failed to decode intrinsic size '
-        'id=${item.id} path=${item.filePath} error=$error',
-      );
-      return null;
-    } finally {
-      codec?.dispose();
-    }
-  }
 }
 
 class _GridEntry {
@@ -1420,30 +986,4 @@ class _DropTarget {
 
   final Rect rect;
   final int insertIndex;
-}
-
-class _CardSizeMutation {
-  _CardSizeMutation({
-    required this.id,
-    required this.notifier,
-    required this.size,
-    this.columnSpan,
-    this.customHeight,
-    this.scaleNotifier,
-    this.scale,
-    this.persistSize = true,
-    this.persistCustomHeight = false,
-    this.persistScale = false,
-  });
-
-  final String id;
-  final ValueNotifier<Size> notifier;
-  final Size size;
-  final int? columnSpan;
-  final double? customHeight;
-  final ValueNotifier<double>? scaleNotifier;
-  final double? scale;
-  final bool persistSize;
-  final bool persistCustomHeight;
-  final bool persistScale;
 }
