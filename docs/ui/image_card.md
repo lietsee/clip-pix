@@ -1,93 +1,127 @@
-# ImageCard 詳細設計
+# ImageCard 実装仕様（2025-10-26 時点）
 
-## 1. 概要
-PinterestGrid (カスタム Sliver) 上に表示する単一画像カード。列幅単位のリサイズやズーム/パン、並べ替え操作を提供し、参考資料画像をシンプルにプレビューする。
+最終更新: 2025-10-26  
+対象コミット: `c44a51f`（fix: throttle grid geometry updates）
 
-## 2. 責務
-- 画像サムネイルをプレビュー表示し、ロード中プレースホルダに切り替える。
-- 右下リサイズハンドルの描画とドラッグ操作の検知（列幅単位で幅をスナップ）。
-- 右クリック＋ホイールによるズーム操作を捕捉し、`onZoom` を発火。
-- Shift+ドラッグによるパン操作（ズーム時）。
-- エラー時のリトライ操作提供。
-- 左ダブルクリック (または Enter キー) でプレビューウィンドウを起動。
+本書は `lib/ui/image_card.dart` に実装されているカードコンポーネントの仕様・挙動・描画フローを整理したものです。GridViewModule/ClipPix のリファクタ作業で参照できるよう、ユーザー操作とコールバックの関係、描画制御、既知の制約を詳細にまとめます。
 
-## 3. 入出力
-| 種別 | 名称 | 型 | 説明 |
-|------|------|----|------|
-| 入力 | item | `ImageItem` | 画像のパス/メタ情報を含むモデル |
-| 入力 | sizeNotifier | `ValueNotifier<Size>` | 現在のカードサイズ |
-| 入力 | scaleNotifier | `ValueNotifier<double>` | 現在のズーム倍率 |
-| 入力 | columnWidth | `double` | 1 列分の幅 |
-| 入力 | columnCount | `int` | カードが配置可能な列数 |
-| 入力 | columnGap | `double` | 列間ギャップ |
-| 出力 | onResize | `Function(String id, Size newSize)` | 新サイズのコールバック |
-| 出力 | onSpanChange | `Function(String id, int span)` | 列スパン更新の通知 |
-| 出力 | onZoom | `Function(String id, double scale)` | ズーム倍率のコールバック |
-| 出力 | onRetry | `Function(String id)` | 読み込み失敗時のリトライ要求 |
-| 出力 | onOpenPreview | `Function(ImageItem item)` | プレビューウィンドウ起動要求 |
-| 出力 | onCopyImage | `Function(ImageItem item)` | 画像をクリップボードにコピーする要求 |
-| 出力 | onStartReorder | `Function(String id, Offset globalPosition)` | 並べ替え開始通知 |
-| 出力 | onReorderUpdate | `Function(String id, Offset globalPosition)` | 並べ替え中位置更新通知 |
-| 出力 | onReorderEnd | `Function(String id)` | 並べ替え終了通知 |
+## 1. 依存データと責務
 
-## 4. 依存関係
-- `ValueListenableBuilder`
-- `GestureDetector` / `Listener`
-- `Overlay`
-- `Image.file`
+| フィールド | 役割 |
+|------------|------|
+| `ImageItem item` | Hive 由来の画像メタデータ（`id`、`filePath` 等）。画像ロードキーとして利用。 |
+| `GridCardViewState viewState` | `GridLayoutStore` から渡されるビュー状態。幅・高さ・スケール・列スパン・任意高さを保持。初期レイアウトを決定。 |
+| `columnWidth / columnCount / columnGap` | 現在のグリッド列の寸法。リサイズスナップ計算に使用。 |
+| `backgroundColor` | カード本体（Material Card）の塗色。グリッド背景とのコントラストを調整。 |
+| `onResize / onSpanChange / onZoom` | ユーザー操作から `GridLayoutStore` へサイズ・列スパン・ズームを伝えるためのコールバック。 |
+| `onRetry / onOpenPreview / onCopyImage` | 画像読み込みエラー、プレビュー表示、コピー操作のために呼び出される外部ハンドラ。 |
+| `onReorder*` 系 | ドラッグ & ドロップでカード順序を変更する際のイベントフック。 |
 
-## 5. UI レイアウト
+ImageCard の責務は「単一画像の表示とインタラクション制御」。永続化やレイアウト再計算は親側（GridViewModule / GridLayoutStore）が担当する。
+
+## 2. レイアウト構造
+
 ```
-┌─────────────────────────────┐
-│ [プレビュー画像 (Transform + ClipRect)] │
-│                     ┌─────┐ │ ←コピー/ズームボタンはホバーでフェードイン
-│                     │ copy│ │
-│                     └─────┘ │
-│                             │
-│              ┌───────┐      │ ←フッター中央にドラッグハンドル
-│              │↕︎ drag│      │
-│              └───────┘      │
-│                             ◢ │ ←右下リサイズハンドル
-└─────────────────────────────┘
+Focus
+ └─ NotificationListener<ScrollNotification>
+     └─ Listener (pointer events)
+         └─ MouseRegion (カーソル切替)
+             └─ ValueListenableBuilder<Size>  // _sizeNotifier
+                 └─ SizedBox(width,height)
+                     └─ Card (clip=antiAlias, elevation=2)
+                         └─ Stack
+                              ├─ _buildImageContent()  // Image＋オーバーレイ
+                              └─ _buildHoverControls() // コピー・リサイズ・リオーダーハンドル
 ```
-- リサイズハンドルは 24×24px の半透明ボタン。
-- コピー・ドラッグハンドル・リサイズハンドルはカーソルホバー時に 150ms でフェードイン。
-- エラー時は中央にアイコン＋「再読み込み」ボタンを表示。
 
-## 6. リサイズ仕様
-- 幅は列スパン単位で変更。ドラッグ距離から最も近いスパンにスナップし、`onSpanChange` を通知。
-- 高さは自由に変更可能（ドラッグ量に応じて `customHeight` として保存）。
-- ドラッグ開始時に現在サイズとスパンを保存し、ドラッグ中は `sizeNotifier.value` を更新。ハンドル離脱で `onResize` / `onSpanChange` を発火。
-- サイズの上下限: 最小 100×100 px、最大 1920×1080 px。
-- グリッド列幅を超える要求は最も近いスパンに自動調整し、結果サイズを `sizeNotifier` に反映。
-- リリース時に Hive へ永続化。
+### 主要要素
+- **フォーカス管理**: `FocusNode` でキーボードショートカット（Ctrl+±/Ctrl+C/Enter 等）を処理。
+- **サイズ・スケール Notifier**: `ValueNotifier<Size>` と `ValueNotifier<double>` を内部に持ち、外部 `viewState` の変化を反映しつつユーザー操作による変更を即時反映。
+- **Card コンテナ**: `backgroundColor` 指定の Material カード。描画領域は `Stack` で構 成。
+- **Image レイヤ**: `Image.file` を `Transform` と `ClipRect` でラップ。ズーム・パンの行列を適用。
+- **AnimatedSwitcher**: ローディング・エラー時のプレースホルダを切り替え（200ms）。
+- **InkWell オーバーレイ**: タップ・ダブルタップでプレビューを開く。
+- **Hover コントロール**: マウスホバーでコピーアイコン、右下リサイズハンドル、底部リオーダーハンドルを `AnimatedOpacity` でフェードイン。
 
-## 7. ズーム仕様
-- 右クリック押下中にホイールが回転した場合のみ `onZoom` を発火。
-- ズーム量: `scale += deltaY / 400`、範囲は 0.5〜3.0。
-- ズーム結果は `scaleNotifier` に反映し、`Transform` + カスタムオフセットで描画。
-- ズーム中はスクロールイベントを吸収し、ホイール位置を基準に画像を拡大（カーソル中心ズーム）。
-- `Shift` キーを押しながら左ドラッグでパン。パン操作はズーム時にのみ有効。
+## 3. ビジュアル状態 (`_CardVisualState`)
 
-## 8. 状態遷移
-| 状態 | 表示内容 |
-|------|----------|
-| `loading` | プレースホルダ（シャマー）と進捗インジケータ |
-| `ready` | 画像＋ホバー UI (コピー/ドラッグ/リサイズ) |
-| `error` | エラーアイコン + `再読み込み` ボタン + ログ記録 |
+| 状態 | トリガ | 表示 |
+|------|--------|------|
+| `loading` | 初回ロード、再ロード、画像ストリーム chunk 受信時 | `_LoadingPlaceholder`（プログレスインジケータ） |
+| `ready` | 画像デコード成功 | プレースホルダ非表示。`_loadingTimeout` を解除。 |
+| `error` | ファイル不可／デコード失敗／タイムアウト | `_ErrorPlaceholder` を表示、リトライボタン（最大3回） |
 
-## 9. キーボード・アクセシビリティ
-- カードフォーカス時に `Ctrl++` / `Ctrl+-` でズーム調整。
-- `Enter` キーでプレビューウィンドウを開き、`Shift+Enter` でデフォルトサイズ (200×200) にリセット。
-- `Ctrl+C` で `onCopyImage` を呼び出し、画像をクリップボードへ格納（ClipboardMonitor には通知しない）。
-- ハンドルには `Semantics` ラベル「サイズ変更ハンドル」を付与。
+`FileImage` の `ImageStream` を監視し、chunk 受信時に `loading` 継続、完了時に `ready` へ移行。一定時間進捗が無い場合 `_handleTimeoutRetry` でローカル再試行＋外部 `onRetry` を発火。
 
-## 10. エラーハンドリング
-- 読み込み失敗時は `error` 状態に遷移し、`onRetry` で再読み込み要求。
-- `onRetry` 実行後も失敗が続く場合は 3 回までリトライし、以降はログのみ。
+## 4. ユーザーインタラクション詳細
 
-## 11. テスト方針
-- `WidgetTest` で `sizeNotifier` / `scaleNotifier` を更新し、列幅スナップとズーム・パンが反映されることを確認。
-- `GestureDetector` のドラッグ／ホイール操作をモックし、`onResize` / `onSpanChange` / `onZoom` の呼び出しを検証。
-- 並べ替えハンドルのドラッグ開始とオーバーレイ表示をユニットテストで確認。
-- Golden テストで `loading` / `ready` / `error` 状態を撮影。
+### 4.1 リサイズ（右下ハンドル）
+- `GestureDetector` の `onPan*` で処理。
+- つまみ更新中は `_isResizing = true`、リアルタイムで `_sizeNotifier` を更新。
+- 横幅は列幅にスナップ:
+  ```
+  snappedSpan = round((width + gap) / (columnWidth + gap))
+  snappedWidth = columnWidth * span + gap * (span - 1)
+  ```
+- 高さは 100〜1080、幅は 100〜1920 に clamp。
+- 操作終了 (`onPanEnd`) 後に `onResize`, `onSpanChange` コールバックを呼ぶ。
+
+### 4.2 ズーム & パン
+- **マウス**: 右クリック押下中にホイールスクロール→指数関数的ズーム（`exp(-Δy / 300)`）。
+- **キーボード**: `Ctrl` + `+`/`-`、`Ctrl` + `Shift` + `=` 等で ±0.1 ずつズーム。
+- **パン**: `Shift` + 左ドラッグで有効。画像中央を基準に `clampPanOffset` で画角外へ出ないよう制限。
+- ズーム時はフォーカス点（ホイール位置）を考慮してパン位置を補正。
+- スケールは 0.5〜15.0 に clamp、更新時に `onZoom` で prefs レイヤへ保存要求。
+
+### 4.3 コピー・プレビュー
+- コピーアイコン（右上のボタン）クリック or `Ctrl+C` で `onCopyImage`。
+- シングル／ダブルタップでプレビュー (`onOpenPreview`)。
+- `Enter`：プレビュー、`Shift+Enter`：サイズを 200×200 にリセットし `onResize`。
+
+### 4.4 リオーダー
+- 底部中央のドラッグハンドルで `onReorderPointerDown`／`onStartReorder`／`onReorderUpdate`／`onReorderEnd`。
+- `GridViewModule` 側で `_GridEntry` を並べ替える。ドラッグ中は `AnimatedOpacity` で半透明化。
+
+### 4.5 その他
+- 右クリック押下状態を追跡し、ホイールズームと通常スクロールを分離 (`_consumeScroll`)。
+- 画像ロード失敗時は `_handleRetry` が内部再ロード→外部 `onRetry`（Hive 更新／再走査）。
+
+## 5. 画像描画の実装ポイント
+
+1. **Transform**: `Matrix4` で平行移動→ズーム→逆移動。パン・ズーム位置は `_imageOffset` と `_currentScale` に依存。
+2. **Caching**: `cacheWidth = (width * scale * devicePixelRatio).clamp(64,4096)`。ウィンドウ縮小時に画質がぼやけるのは、`cacheWidth` が頻繁に変動しストリームが更新され続ける点が影響。
+3. **Gapless Playback**: `gaplessPlayback: true` によりズーム中の再描画でちらつきを抑制。ただしリサイズ連打時は古いフレームが残りやすい。
+4. **ロード遅延対策**: `_setLoadingDeferred()` でフレーム後に状態更新。`_loadingTimeout` (タイムアウト処理) で stuck ローディングを検知。
+
+## 6. コールバックとイベントフロー
+
+```
+ユーザー操作            内部状態                     外部通知
+------------------------------------------------------------------------------------
+右下ドラッグ            _sizeNotifier / _currentSpan -> onResize/onSpanChange
+Shift+ドラッグ          _imageOffset 更新             (通知なし)
+Ctrl+スクロール(右押下) _currentScale/_imageOffset -> onZoom
+コピーアイコン          （状態変化なし）              onCopyImage
+Retryボタン             _visualState=loading -> onRetry
+Enter / Shift+Enter     _sizeNotifier or onOpenPreview -> onResize / onOpenPreview
+底部ドラッグハンドル     _isDragging フラグ            onReorder*
+```
+
+## 7. 既知の制約・課題
+
+- **Semantics アサーション**: 連続リサイズ時に `!semantics.parentDataDirty` / `!childSemantics.renderObject._needsLayout` が発生。詳細は `docs/known_issue_grid_semantics.md` を参照。
+- **画像ぼやけ**: ウィンドウ幅の急激な縮小で `cacheWidth` の再計算が追いつかず、暫定的に低解像でレンダリングされる場合がある。
+- **プレビュー取り違え**: セマンティクス例外発生後に `_GridEntry` と `ImageCard` の対応が乱れるケースあり。現象は `GridViewModule` 側の再構築シーケンスと関連。
+
+## 8. テストカバレッジ
+
+- `test/ui/image_card_test.dart`
+  - 列スパンスナップの挙動
+  - ズーム時のスクロール抑制
+  - `clampPanOffset` の境界テスト
+- リオーダー・ズーム・リサイズに関わる統合テストは未整備。セマンティクス例外に直結する部分（AnimatedOpacity／Key の扱い）は今後のテスト追加が必要。
+
+---
+
+本ドキュメントはカード関連の仕様全体像を把握するためのベースライ ンとして運用します。動作が仕様と乖離する変更が入った際は、必ずここを更新し、関連テストも拡充してください。
+
