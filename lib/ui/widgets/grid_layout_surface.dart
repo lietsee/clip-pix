@@ -249,12 +249,10 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
       return;
     }
     _waitingForSemantics = true;
-    SchedulerBinding.instance.scheduleTask<void>(
-      () {
-        WidgetsBinding.instance.addPostFrameCallback((_) => finish());
-      },
-      Priority.idle,
-      debugLabel: 'GridLayoutSurface.waitSemantics',
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      WidgetsBinding.instance.addPostFrameCallback((__) {
+        finish();
+      });
+    });
   }
 }
