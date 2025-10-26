@@ -255,14 +255,23 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
       return;
     }
     _waitingForSemantics = true;
+    var retries = 0;
+    const maxRetries = 6;
+
     void scheduleNextWait() {
       SchedulerBinding.instance.endOfFrame.then((_) {
         Future.microtask(() {
           if (_shouldWaitSemanticsIdle()) {
+            retries += 1;
+            if (retries >= maxRetries) {
+              _debugLog(
+                  'semantics wait max retries reached; keeping grid hidden');
+              finish();
+              return;
+            }
             scheduleNextWait();
             return;
           }
-          RendererBinding.instance.pipelineOwner.flushSemantics();
           _logSemanticsStatus('schedule_end_hard');
           finish();
         });
