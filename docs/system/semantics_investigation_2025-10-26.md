@@ -92,3 +92,21 @@
 4. 画像取り違え再発防止を保証する自動テスト（リサイズ→プレビュー）を整備し、Semantics 例外が UX 上の不具合に直結していないか検証する。
 
 上記検証で原因を特定した後、列幅変更時にもグリッドを非表示にするなどの実装的対策を検討する。
+
+## 追加観測（2025-10-26T18:36 実機ログ）
+
+- `.tmp/app.log` の最新ビルド（コミット `fix: defer grid geometry reset until post frame` 適用後）でも、列数が変わらない連続リサイズで `notify=false` のまま `GridLayoutStore.updateGeometry` が呼ばれ、その直後から `!semantics.parentDataDirty` と `!childSemantics.renderObject._needsLayout` が再度バーストしている。
+- ミューテーションコントローラーは `hide=false` の軽量モードで begin/end を刻んでいるが、Semantics ツリーが dirty のまま復帰し、`GridLayoutSurface` が同じフレームで追加の geometry 更新を実行してしまっている。結果として parentData が安定せず RenderObject の再利用と衝突している。
+- 1 フレーム後段にディレイしただけでは Semantics の dirty 解消が間に合わず、列幅変更も列変更と同じレベルで競合を起こしていると判断できる。
+
+## 対応方針アップデート（2025-10-26 18:40）
+
+1. **描画とセマンティクスの完全分離（新方針）**  
+   - ミューテーション開始時に GridView 全体を `ExcludeSemantics`（もしくは `Semantics` の `container=false`）でラップし、列幅／列数問わず幾何更新が完了するまでセマンティクスツリーを切り離す。  
+   - 描画は継続して行うことで、列幅変更中のちらつきは従来通り抑制する。
+2. **復帰タイミングのエンド・オブ・フレーム保証**  
+   - ミューテーション終了時は `SchedulerBinding.instance.endOfFrame` を待ち、さらに `Priority.idle` のタスクで `RendererBinding.instance.pipelineOwner.semanticsOwnerNeedsUpdate`（もしくは `SemanticsBinding.instance.hasScheduledSemanticsUpdate` のポーリング）を監視し、dirty が残っている間は再接続しない。
+3. **マルチコミット抑制**  
+   - セマンティクス切り離し中は `_pendingGeometry` を蓄積してまとめて適用し、復帰直前に最新の 1 つだけをコミットする。これにより幅変更が短時間に複数回走っても、Semantics 復帰後に過去のジオメトリが再適用されるのを防ぐ。
+
+本方針をドキュメントに明記した上で、GridLayoutSurface / GridViewModule に実装を追加していく。

@@ -48,6 +48,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
   bool _semanticsTaskScheduled = false;
   bool _mutationInProgress = false;
   bool _waitingForSemantics = false;
+  bool _semanticsExcluded = false;
   bool _gridHiddenForReset = false;
   Key _gridResetKey = UniqueKey();
   static const _throttleDuration = Duration(milliseconds: 40);
@@ -125,6 +126,10 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
             child: child,
           );
         }
+        built = ExcludeSemantics(
+          excluding: _semanticsExcluded,
+          child: built,
+        );
         return KeyedSubtree(
           key: _gridResetKey,
           child: built,
@@ -219,6 +224,11 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
           setState(() {
             _gridHiddenForReset = true;
             _gridResetKey = UniqueKey();
+            _semanticsExcluded = true;
+          });
+        } else if (!_semanticsExcluded) {
+          setState(() {
+            _semanticsExcluded = true;
           });
         }
         final hideGrid = notify;
@@ -236,6 +246,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
             _scheduleMutationEnd(hideGrid);
           }
         }
+
         if (hideGrid) {
           WidgetsBinding.instance.addPostFrameCallback((_) => performUpdate());
         } else {
@@ -267,9 +278,16 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
       _mutationInProgress = false;
       _waitingForSemantics = false;
       _logSemanticsStatus('mutate_end hide=$hideGrid');
-      if (hideGrid && _gridHiddenForReset) {
+      final shouldRestoreGrid = hideGrid && _gridHiddenForReset;
+      final shouldRestoreSemantics = _semanticsExcluded;
+      if (shouldRestoreGrid || shouldRestoreSemantics) {
         setState(() {
-          _gridHiddenForReset = false;
+          if (shouldRestoreGrid) {
+            _gridHiddenForReset = false;
+          }
+          if (shouldRestoreSemantics) {
+            _semanticsExcluded = false;
+          }
         });
       }
       if (_pendingGeometry != null && !_semanticsTaskScheduled) {
@@ -278,9 +296,11 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
       }
     }
 
-    if (!hideGrid) {
+    final shouldWaitForSemantics = _semanticsExcluded;
+    if (!shouldWaitForSemantics) {
       WidgetsBinding.instance.addPostFrameCallback((_) => finish());
-      _logSemanticsStatus('schedule_end_soft');
+      _logSemanticsStatus(
+          hideGrid ? 'schedule_end_soft' : 'schedule_end_immediate');
       return;
     }
 
@@ -289,23 +309,26 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     }
     _waitingForSemantics = true;
     var retries = 0;
-    const maxRetries = 6;
+    const maxRetries = 8;
 
     void scheduleNextWait() {
       SchedulerBinding.instance.endOfFrame.then((_) {
         Future.microtask(() {
-          if (_shouldWaitSemanticsIdle()) {
+          if (_hasPendingSemanticsUpdates()) {
             retries += 1;
             if (retries >= maxRetries) {
               _debugLog(
-                  'semantics wait max retries reached; keeping grid hidden');
+                'semantics wait max retries reached; re-enabling semantics anyway',
+              );
               finish();
               return;
             }
             scheduleNextWait();
             return;
           }
-          _logSemanticsStatus('schedule_end_hard');
+          _logSemanticsStatus(
+            hideGrid ? 'schedule_end_hard' : 'schedule_end_semantics_only',
+          );
           finish();
         });
       });
@@ -341,19 +364,35 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     );
   }
 
-  bool _shouldWaitSemanticsIdle() {
-    final owner = RendererBinding.instance.pipelineOwner.semanticsOwner;
-    if (owner == null) {
+  bool _hasPendingSemanticsUpdates() {
+    final pipelineOwner = RendererBinding.instance.pipelineOwner;
+    try {
+      // ignore: avoid_dynamic_calls
+      final dynamic needsUpdate =
+          (pipelineOwner as dynamic).semanticsOwnerNeedsUpdate;
+      if (needsUpdate is bool && needsUpdate) {
+        return true;
+      }
+    } catch (_) {
+      // 無視: 古い Flutter バージョンではこのプロパティが存在しない
+    }
+    final semanticsOwner = pipelineOwner.semanticsOwner;
+    if (semanticsOwner == null || !semanticsOwner.hasListeners) {
       return false;
     }
-    if (!owner.hasListeners) {
-      return false;
+    final semanticsBinding = SemanticsBinding.instance;
+    if (semanticsBinding != null) {
+      try {
+        // ignore: avoid_dynamic_calls
+        final dynamic hasScheduled =
+            (semanticsBinding as dynamic).hasScheduledSemanticsUpdate;
+        if (hasScheduled is bool && hasScheduled) {
+          return true;
+        }
+      } catch (_) {
+        // 無視: プロパティが存在しない環境向け
+      }
     }
-    SchedulerBinding.instance.scheduleTask<void>(
-      () {},
-      Priority.idle,
-      debugLabel: 'GridLayoutSurface.waitSemanticsIdle',
-    );
-    return true;
+    return false;
   }
 }
