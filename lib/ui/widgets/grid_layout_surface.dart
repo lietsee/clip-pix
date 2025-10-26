@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter/rendering.dart';
 
 import '../../system/state/grid_layout_store.dart';
 
@@ -202,6 +204,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
         _debugLog(
           'geometry_commit geometry=$pending notify=$notify taskPhase=${SchedulerBinding.instance.schedulerPhase}',
         );
+        _logSemanticsStatus('commit_start notify=$notify');
         final hideGrid = notify;
         widget.onMutateStart?.call(hideGrid);
         _mutationInProgress = true;
@@ -217,6 +220,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     _debugLog(
       'geometry_schedule geometry=$_pendingGeometry notify=$_pendingNotify label=$debugLabel priority=$priority',
     );
+    _logSemanticsStatus('schedule_done notify=$_pendingNotify');
   }
 
   void _debugLog(String message) {
@@ -234,6 +238,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
       widget.onMutateEnd?.call(hideGrid);
       _mutationInProgress = false;
       _waitingForSemantics = false;
+      _logSemanticsStatus('mutate_end hide=$hideGrid');
       if (_pendingGeometry != null && !_semanticsTaskScheduled) {
         _debugLog('commit_pending resume after end');
         _commitPending();
@@ -242,6 +247,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
 
     if (!hideGrid) {
       WidgetsBinding.instance.addPostFrameCallback((_) => finish());
+      _logSemanticsStatus('schedule_end_soft');
       return;
     }
 
@@ -251,8 +257,20 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     _waitingForSemantics = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       WidgetsBinding.instance.addPostFrameCallback((__) {
+        _logSemanticsStatus('schedule_end_hard');
         finish();
       });
     });
+  }
+
+  void _logSemanticsStatus(String label) {
+    final binding = SemanticsBinding.instance;
+    final semanticsOwner =
+        RendererBinding.instance.pipelineOwner.semanticsOwner;
+    final hasOwner = semanticsOwner != null;
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    debugPrint(
+      '[GridLayoutSurface] semantics $label hasOwner=$hasOwner phase=$phase binding=$binding',
+    );
   }
 }

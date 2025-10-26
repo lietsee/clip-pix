@@ -78,4 +78,17 @@
 
 - `GridLayoutStore` と `GridLayoutSurface` のジオメトリ差分（`deltaWidth` / `deltaColumns`）をリリースでも出力するよう変更したため、実機ログで幅更新の頻度と変化量を直接追跡できるようになった。
 
+### 2025-10-26 実機検証（列変更復帰遅延後）
+
+- 列数変更時に `Priority.animation` でジオメトリコミットし、`onMutateEnd` を 2 フレーム遅延 → さらに `Priority.idle` 待機無しにダブル `addPostFrameCallback` で復帰させる構成に切り替えた。幅調整は `hide=false` でソフトミューテーションとし、表示を維持している。
+- 最新ログでも `deltaColumns=±1` の直後に `!semantics.parentDataDirty` が連続発生しており、改善は限定的。ソフトミューテーション区間（`hide=false`）では例外が増えていないため、列変更復帰フレームをさらに遅延／セマンティクス安定を監視する仕組みが必要。
+- Windows 実機で発生していた `Failed to post message to main thread` は二段階 `addPostFrameCallback` に切り替えることで消失した。
+
+### TODO（2025-10-26 時点）
+
+1. `GridLayoutSurface` で列変更が発生したフレームごとに `SemanticsBinding.hasScheduledSemanticsUpdate` と `endOfFrame` 到達をログする仕組みを追加し、Semantics がどのタイミングで落ち着くかを可視化する。
+2. 列変更時の `onMutateEnd` 呼び出しを `endOfFrame` 完了後に遅延させ、必要に応じて `scheduleTask(Priority.idle)` をループさせて Semantics 安定を待つ仕組みを試作・検証する。
+3. `_maybeUpdateGeometry` を拡張し、同一フレーム内で列数が往復するケース（4→3→4など）を間引いて最後の値のみ反映させることで、冗長な列変更イベントを削減する。
+4. 画像取り違え再発防止を保証する自動テスト（リサイズ→プレビュー）を整備し、Semantics 例外が UX 上の不具合に直結していないか検証する。
+
 上記検証で原因を特定した後、列幅変更時にもグリッドを非表示にするなどの実装的対策を検討する。
