@@ -48,7 +48,8 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
   bool _semanticsTaskScheduled = false;
   bool _mutationInProgress = false;
   bool _waitingForSemantics = false;
-  int _childGeneration = 0;
+  bool _gridHiddenForReset = false;
+  Key _gridResetKey = UniqueKey();
   static const _throttleDuration = Duration(milliseconds: 40);
 
   GridLayoutSurfaceStore get _store => widget.store;
@@ -113,6 +114,10 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
           _store.viewStates,
         );
 
+        if (_gridHiddenForReset) {
+          return const SizedBox.shrink();
+        }
+
         Widget built = child;
         if (widget.padding != EdgeInsets.zero) {
           built = Padding(
@@ -121,7 +126,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
           );
         }
         return KeyedSubtree(
-          key: ValueKey<int>(_childGeneration),
+          key: _gridResetKey,
           child: built,
         );
       },
@@ -212,16 +217,29 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
         _logSemanticsStatus('commit_start notify=$notify');
         if (notify) {
           setState(() {
-            _childGeneration += 1;
+            _gridHiddenForReset = true;
+            _gridResetKey = UniqueKey();
           });
         }
         final hideGrid = notify;
         widget.onMutateStart?.call(hideGrid);
         _mutationInProgress = true;
-        try {
-          _store.updateGeometry(pending, notify: notify);
-        } finally {
-          _scheduleMutationEnd(hideGrid);
+        void performUpdate() {
+          if (!mounted) {
+            _mutationInProgress = false;
+            _waitingForSemantics = false;
+            return;
+          }
+          try {
+            _store.updateGeometry(pending, notify: notify);
+          } finally {
+            _scheduleMutationEnd(hideGrid);
+          }
+        }
+        if (hideGrid) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => performUpdate());
+        } else {
+          performUpdate();
         }
       },
       priority,
@@ -249,6 +267,11 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
       _mutationInProgress = false;
       _waitingForSemantics = false;
       _logSemanticsStatus('mutate_end hide=$hideGrid');
+      if (hideGrid && _gridHiddenForReset) {
+        setState(() {
+          _gridHiddenForReset = false;
+        });
+      }
       if (_pendingGeometry != null && !_semanticsTaskScheduled) {
         _debugLog('commit_pending resume after end');
         _commitPending();
