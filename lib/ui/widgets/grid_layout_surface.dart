@@ -182,6 +182,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     }
     _semanticsTaskScheduled = true;
     final debugLabel = 'GridLayoutSurface.commitPending';
+    final priority = _pendingNotify ? Priority.animation : Priority.touch;
     SchedulerBinding.instance.scheduleTask<void>(
       () {
         _semanticsTaskScheduled = false;
@@ -206,24 +207,42 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
         try {
           _store.updateGeometry(pending, notify: notify);
         } finally {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) {
-              return;
-            }
-            widget.onMutateEnd?.call(hideGrid);
-            _mutationInProgress = false;
-            if (_pendingGeometry != null && !_semanticsTaskScheduled) {
-              _debugLog('commit_pending resume after end');
-              _commitPending();
-            }
-          });
+          if (hideGrid) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              WidgetsBinding.instance.addPostFrameCallback((__) {
+                if (!mounted) {
+                  _mutationInProgress = false;
+                  return;
+                }
+                widget.onMutateEnd?.call(hideGrid);
+                _mutationInProgress = false;
+                if (_pendingGeometry != null && !_semanticsTaskScheduled) {
+                  _debugLog('commit_pending resume after end');
+                  _commitPending();
+                }
+              });
+            });
+          } else {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) {
+                _mutationInProgress = false;
+                return;
+              }
+              widget.onMutateEnd?.call(hideGrid);
+              _mutationInProgress = false;
+              if (_pendingGeometry != null && !_semanticsTaskScheduled) {
+                _debugLog('commit_pending resume after end');
+                _commitPending();
+              }
+            });
+          }
         }
       },
-      Priority.touch,
+      priority,
       debugLabel: debugLabel,
     );
     _debugLog(
-      'geometry_schedule geometry=$_pendingGeometry notify=$_pendingNotify label=$debugLabel',
+      'geometry_schedule geometry=$_pendingGeometry notify=$_pendingNotify label=$debugLabel priority=$priority',
     );
   }
 
