@@ -30,15 +30,13 @@
 - **根拠**  
   `GridResizeStoreBinding` の mutation ラップは `WidgetsBinding.instance.addPostFrameCallback` で `endMutation()` を呼んでいる。ログから見るとアサーション直後に次フレームが継続して失敗しており、Semantics ツリーが安定する前に `GridLayoutSurface` が再度列サイズを更新している可能性が高い。
 
-- **検証**  
-  現状はコード読みの段階。`MutationController` の begin / end をロギングすることで一フレーム内に複数回呼ばれているかを確認する必要あり（後続タスク）。
+- **現状観測**  
+  2025-10-26 実機チェックでは、ウィンドウリサイズ開始直後（初回）からアサーションが再発。`mutationController.isMutating` が true の間も例外が継続したため、begin/end のタイミングがずれているか、列幅だけの変更で `onMutateStart` が呼ばれていないと推測される。ログ追加は未実施。
 
 ### 仮説C: 画像取り違えは `_GridEntry` と `viewStates` のズレが原因
 
-- **根拠**  
-  セマンティクス例外のたびに `GridViewModule` が rebuild され、`AnimatedOpacity(ObjectKey(entry))` を使っているため、再挿入タイミングで Flutter が別の要素に同じ RenderObject を使い回している可能性がある。
-- **検証案**  
-  `_logEntries()` に列幅・viewState 情報を追加し、例外発生直前に `_entries` の順序と `layoutStore.viewStates` の順序がズレていないかを確認する。現時点では未実施。
+- **現状観測**  
+  最新ビルドでは画像取り違えを再現できず、アサーションが出てもプレビュー画像は以 前と一致している。再現タイミングの違いによるものである可能性が高く、根本原因は依然不明。`_logEntries` での整合チェックは未着手。
 
 ## 現時点の結論
 
