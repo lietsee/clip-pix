@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_state_notifier/flutter_state_notifier.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -247,7 +248,9 @@ class ClipPixApp extends StatelessWidget {
         create: (_) => GridResizeController(),
       ),
       ChangeNotifierProvider<GridLayoutMutationController>(
-        create: (_) => GridLayoutMutationController(),
+        create: (_) => GridLayoutMutationController(
+          debugLoggingEnabled: kDebugMode || kProfileMode,
+        ),
       ),
       ChangeNotifierProxyProvider<GridCardPreferencesRepository,
           GridLayoutStore>(

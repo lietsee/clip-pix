@@ -47,7 +47,7 @@
 ## 次のアクション（2025-10-26 時点）
 
 1. **仮説Bの検証（進捗中）**
-   - ✅ `GridLayoutMutationController` に begin/end のロギングを導入し、フレームタイムスタンプと同フレーム再入回数を記録できるようにした。
+   - ✅ `GridLayoutMutationController` に begin/end のロギングを導入し、フレームタイムスタンプと同フレーム再入回数を記録できるようにした（デバッグ／プロファイルビルドでは自動で有効化）。
    - ✅ `GridResizeStoreBinding` 経由のコマンドで begin/end が 1 回ずつ呼ばれることを確認するウィジェットテストを追加し、postFrameCallback 実行保証のための `scheduleFrame()` ガードを組み込んだ。
    - ▶️ デスクトップ実機でリサイズ操作を再現し、`.tmp/app.log` の begin/end ログから同フレーム再入が起きていないかを確認する。
 2. **仮説Cの検証（進捗中）**

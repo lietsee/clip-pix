@@ -4,8 +4,11 @@ import 'package:flutter/widgets.dart';
 
 /// Tracks batched mutations that require the grid to be hidden/offstage.
 class GridLayoutMutationController extends ChangeNotifier {
+  GridLayoutMutationController({bool debugLoggingEnabled = false})
+      : _debugLoggingEnabled = debugLoggingEnabled;
+
   int _depth = 0;
-  bool _debugLoggingEnabled = false;
+  bool _debugLoggingEnabled;
   int debugBeginCount = 0;
   int debugEndCount = 0;
   int? _activeFrameNumber;
