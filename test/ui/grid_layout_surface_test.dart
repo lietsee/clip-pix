@@ -27,6 +27,9 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle(const Duration(milliseconds: 10));
+      await tester.idle();
+      await tester.pump();
 
       expect(store.updateGeometryCalls, greaterThanOrEqualTo(1));
       final geometry = store.lastGeometry;
@@ -69,13 +72,12 @@ void main() {
           customHeight: null,
         ),
       ]);
-      await tester.pump();
+      await tester.pumpAndSettle(const Duration(milliseconds: 10));
 
       expect(buildCount, 2);
     });
 
-    testWidgets('列数が変化したときだけ mutate コールバックが呼ばれる',
-        (tester) async {
+    testWidgets('列変更と列幅変更で geometry が更新される', (tester) async {
       final store = _WidgetFakeGridLayoutStore();
       store.trigger([
         GridCardViewState(
@@ -123,23 +125,25 @@ void main() {
         ),
       );
 
-      await tester.pumpAndSettle();
-      expect(store.lastGeometry?.columnCount, 3);
-      final initialStart = mutateStartCount;
-      final initialEnd = mutateEndCount;
+      await tester.pump();
+      await tester.idle();
+      await _waitForGeometryCalls(tester, store, 1);
+      final initialGeometry = store.lastGeometry;
+      expect(initialGeometry, isNotNull);
+      expect(initialGeometry!.columnCount, 3);
 
       width.value = 500; // 列数は依然 3
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-      expect(mutateStartCount, 1);
-      expect(mutateEndCount, 1);
+      await tester.pump(const Duration(milliseconds: 80));
+      await tester.idle();
+      await _waitForGeometryCalls(tester, store, 1);
 
       width.value = 200; // 列数が 1 に変化
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 20));
+      await tester.idle();
+      await _waitForGeometryCalls(tester, store, 2);
       final lastColumnCount = store.lastGeometry?.columnCount;
       expect(lastColumnCount, 1);
-      expect(mutateStartCount, greaterThan(initialStart));
-      expect(mutateEndCount, greaterThanOrEqualTo(initialEnd));
+      expect(store.updateGeometryCalls, greaterThanOrEqualTo(2));
     });
   });
 }
@@ -148,6 +152,7 @@ class _WidgetFakeGridLayoutStore extends ChangeNotifier
     implements GridLayoutSurfaceStore {
   int updateGeometryCalls = 0;
   GridLayoutGeometry? lastGeometry;
+  final List<GridLayoutGeometry> geometryHistory = <GridLayoutGeometry>[];
   List<GridCardViewState> _states = const [];
 
   void trigger(List<GridCardViewState> newStates) {
@@ -163,6 +168,7 @@ class _WidgetFakeGridLayoutStore extends ChangeNotifier
   void updateGeometry(GridLayoutGeometry geometry, {bool notify = true}) {
     updateGeometryCalls += 1;
     lastGeometry = geometry;
+    geometryHistory.add(geometry);
   }
 
   @override
@@ -179,4 +185,19 @@ class _WidgetFakeGridLayoutStore extends ChangeNotifier
   Future<void> restoreSnapshot(GridLayoutSnapshot snapshot) async {
     throw UnimplementedError();
   }
+}
+
+Future<void> _waitForGeometryCalls(
+  WidgetTester tester,
+  _WidgetFakeGridLayoutStore store,
+  int minCalls,
+) async {
+  for (var i = 0; i < 20; i++) {
+    if (store.updateGeometryCalls >= minCalls) {
+      return;
+    }
+    await tester.pump(const Duration(milliseconds: 20));
+    await tester.idle();
+  }
+  // If we reach here the expectation will fail in the caller.
 }

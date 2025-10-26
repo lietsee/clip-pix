@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../system/state/grid_layout_store.dart';
@@ -42,6 +43,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
   GridLayoutGeometry? _pendingGeometry;
   bool _pendingNotify = false;
   Timer? _geometryDebounceTimer;
+  bool _semanticsTaskScheduled = false;
   static const _throttleDuration = Duration(milliseconds: 40);
 
   GridLayoutSurfaceStore get _store => widget.store;
@@ -134,6 +136,12 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
         previous == null || previous.columnCount != geometry.columnCount;
     _pendingGeometry = geometry;
     _pendingNotify = _pendingNotify || shouldNotify;
+    assert(() {
+      _debugLog(
+        'geometry_pending prev=$previous next=$geometry shouldNotify=$shouldNotify pendingNotify=$_pendingNotify',
+      );
+      return true;
+    }());
     if (shouldNotify) {
       _geometryDebounceTimer?.cancel();
       _geometryDebounceTimer = null;
@@ -159,25 +167,69 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     if (!mounted) {
       return;
     }
-    final pending = _pendingGeometry;
-    if (pending == null) {
+    if (_semanticsTaskScheduled) {
+      assert(() {
+        _debugLog('commit_pending skipped because task already scheduled');
+        return true;
+      }());
+      return;
+    }
+    if (_pendingGeometry == null) {
       _pendingNotify = false;
       return;
     }
-    _pendingGeometry = null;
-    final notify = _pendingNotify;
-    _pendingNotify = false;
-    if (notify) {
-      widget.onMutateStart?.call();
-    }
-    try {
-      _store.updateGeometry(pending, notify: notify);
-    } finally {
-      if (notify) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          widget.onMutateEnd?.call();
-        });
-      }
-    }
+    _semanticsTaskScheduled = true;
+    final debugLabel = 'GridLayoutSurface.commitPending';
+    SchedulerBinding.instance.scheduleTask<void>(
+      () {
+        _semanticsTaskScheduled = false;
+        if (!mounted) {
+          _pendingGeometry = null;
+          _pendingNotify = false;
+          return;
+        }
+        final pending = _pendingGeometry;
+        final notify = _pendingNotify;
+        _pendingGeometry = null;
+        _pendingNotify = false;
+        if (pending == null) {
+          return;
+        }
+        assert(() {
+          _debugLog(
+            'geometry_commit geometry=$pending notify=$notify taskPhase=${SchedulerBinding.instance.schedulerPhase}',
+          );
+          return true;
+        }());
+        if (notify) {
+          widget.onMutateStart?.call();
+        }
+        try {
+          _store.updateGeometry(pending, notify: notify);
+        } finally {
+          if (notify) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) {
+                return;
+              }
+              widget.onMutateEnd?.call();
+            });
+          }
+        }
+      },
+      Priority.touch,
+      debugLabel: debugLabel,
+    );
+    assert(() {
+      _debugLog(
+        'geometry_schedule geometry=$_pendingGeometry notify=$_pendingNotify label=$debugLabel',
+      );
+      return true;
+    }());
+  }
+
+  void _debugLog(String message) {
+    // ignore: avoid_print
+    debugPrint('[GridLayoutSurface] $message');
   }
 }

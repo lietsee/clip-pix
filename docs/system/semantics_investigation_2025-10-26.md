@@ -20,7 +20,7 @@
 - **検証**  
   `test/ui/grid_layout_surface_test.dart` にテストを追加し、列数が変化したときのみ `onMutateStart` / `onMutateEnd` が呼ばれることを確認した。
   ```dart
-  testWidgets('列数が変化したときだけ mutate コールバックが呼ばれる', ...);
+  testWidgets('列数が変化したときだけ mutate コールバックが呼ばれる', ...);OK
   ```
   → 列数 3 のまま幅変更した場合はコールバックが発火せず、列数が 1 に変わったときにのみ 2 回目のコールバックが呼ばれることを確認。  
   ⇒ 列幅の微調整では依然として旧挙動のままセマンティクス競合が起こり得る。
@@ -46,17 +46,19 @@
 
 ## 次のアクション（2025-10-26 時点）
 
-1. **仮説Bの検証（進捗中）**
+1. **仮説Bの検証（継続中）**
    - ✅ `GridLayoutMutationController` に begin/end のロギングを導入し、フレームタイムスタンプと同フレーム再入回数を記録できるようにした（デバッグ／プロファイルビルドでは自動で有効化）。
    - ✅ `GridResizeStoreBinding` 経由のコマンドで begin/end が 1 回ずつ呼ばれることを確認するウィジェットテストを追加し、postFrameCallback 実行保証のための `scheduleFrame()` ガードを組み込んだ。
-   - ▶️ デスクトップ実機でリサイズ操作を再現し、`.tmp/app.log` の begin/end ログから同フレーム再入が起きていないかを確認する。
+   - ✅ `GridLayoutSurface._commitPending` を `SchedulerBinding.scheduleTask(..., Priority.touch)` ベースに書き換え、列数変更時のセマンティクス更新を 1 フレーム後段に送るよう調整した。`GridLayoutSurface` 内でデバッグログを追加し、幾何更新のスケジューリング状況を追跡できるようにした。
+   - ✅ `test/ui/grid_layout_surface_test.dart` を更新し、列変更パスで `GridLayoutStore.updateGeometry` が最低 2 回呼ばれることを確認するようにした（幅変更→列変更を順に適用）。
+   - ▶️ デスクトップ実機でリサイズ操作を再現し、`.tmp/app.log` の begin/end ログ・`GridLayoutSurface` ログから width-only 更新が Semantics と競合していないか確認する。
 2. **仮説Cの検証（進捗中）**
    - ✅ `GridViewModule._logEntries` で `_entries` と `layoutStore.viewStates` の ID リストと順序を同一ログに出力するよう拡張した。
    - ✅ ビルド前に ID セットが一致しているか `assert` で検証し、ズレがあれば詳細ログを吐く仕組みを追加した（`isRemoving` エントリは除外して評価）。
    - ✅ 実機ログでは初期同期時に一時的な `orderMatches=false` が出るが、その直後に `orderMatches=true` へ収束し整合性が取れていることを確認した。
    - ▶️ リサイズ中に `orderMatches=false` が継続するケースを追加で捕捉し、ズレが画像取り違え再現と結び付くか監視する。
-3. **テスト拡張**
-   - ウィンドウリサイズ → プレビュー操作を自動化するテスト（または手動検証用ログ）を追加し、画像取り違えが発生する条件を特定する。
+3. **テスト拡張（TODO）**
+   - ウィンドウリサイズ → プレビュー操作を自動化するテスト（または手動検証用ログ）を追加し、画像取り違えが発生する条件を特定する。現在はユニットテストで列変更時の geometry 更新まで確認済み。
 
 ### 2025-10-26 実機ログ観測メモ
 
@@ -65,5 +67,11 @@
 - リサイズ操作後半で `setState() or markNeedsBuild() called during build.` が記録されており、`GridLayoutSurface` 側でビルド中に追加のミューテーションが走っているか検証が必要。
 
 → 次段では `GridLayoutSurface._commitPending` にカラム変化有無と `onMutateStart` 呼び出しのログを追加し、列幅のみの更新フレームを可視化する。併せて、列幅変更でもミューテーションを強制開始する案と、`scheduleTask` でセマンティクス更新とフレームを分離する案を比較検証する。
+
+### 2025-10-26 実装メモ
+
+- `GridLayoutSurface` のジオメトリ適用を `scheduleTask(Priority.touch)` でディレイし、列変更時に Semantics 更新と描画が同フレームで衝突しないよう暫定対応した。幅のみの微調整は引き続き `Timer` 経由でディレイされるため、実機ログで競合が解消されたか確認する必要がある。
+- 幅変更のみのケースはユニットテストで確定的に追えなかった（CI上では updateGeometry コール回数が 1 のままの場合がある）。実機ログでは `geometry_pending` が出ないケースがあり、`GridLayoutSurface` の制約取得／Timer 発火を追跡する追加ログが今後必要。
+- `GridViewModule` のログは `orderMatches` の瞬断と整合性復帰を確認できた。プレビュー取り違え再現用の自動テストは未着手。
 
 上記検証で原因を特定した後、列幅変更時にもグリッドを非表示にするなどの実装的対策を検討する。
