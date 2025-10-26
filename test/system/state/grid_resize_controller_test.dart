@@ -2,18 +2,27 @@ import 'dart:collection';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:clip_pix/system/state/grid_layout_mutation_controller.dart';
 import 'package:clip_pix/system/state/grid_resize_controller.dart';
 import 'package:clip_pix/system/state/grid_layout_store.dart';
 import 'package:clip_pix/system/state/grid_resize_store_binding.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('GridResizeController × GridLayoutStore binding', () {
     late GridResizeController controller;
     late _FakeGridLayoutStore store;
+    late GridLayoutMutationController mutationController;
     setUp(() {
       controller = GridResizeController();
       store = _FakeGridLayoutStore();
-      GridResizeStoreBinding(controller: controller, store: store);
+      mutationController = GridLayoutMutationController();
+      GridResizeStoreBinding(
+        controller: controller,
+        store: store,
+        mutationController: mutationController,
+      );
     });
 
     test('applyBulkSpan はストアへ委譲し undo スタックを構成する', () async {
@@ -138,7 +147,8 @@ void main() {
 }
 
 class _FakeGridLayoutStore implements GridLayoutCommandTarget {
-  final Queue<GridLayoutSnapshot> captureResponses = Queue<GridLayoutSnapshot>();
+  final Queue<GridLayoutSnapshot> captureResponses =
+      Queue<GridLayoutSnapshot>();
   final List<int> appliedSpans = [];
   final List<GridLayoutSnapshot> restoreCalls = [];
 

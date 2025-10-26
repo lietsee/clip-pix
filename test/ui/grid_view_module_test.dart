@@ -6,6 +6,7 @@ import 'package:clip_pix/data/models/grid_layout_settings.dart';
 import 'package:clip_pix/data/models/image_item.dart';
 import 'package:clip_pix/system/clipboard_monitor.dart';
 import 'package:clip_pix/system/clipboard_copy_service.dart';
+import 'package:clip_pix/system/state/grid_layout_mutation_controller.dart';
 import 'package:clip_pix/system/state/grid_resize_controller.dart';
 import 'package:clip_pix/system/state/grid_layout_store.dart';
 import 'package:clip_pix/system/state/grid_resize_store_binding.dart';
@@ -250,9 +251,12 @@ void main() {
       ratioResolver: _TestRatioResolver(),
     );
     addTearDown(layoutStore.dispose);
+    final mutationController = GridLayoutMutationController();
+    addTearDown(mutationController.dispose);
     final storeBinding = GridResizeStoreBinding(
       controller: resizeController,
       store: layoutStore,
+      mutationController: mutationController,
     );
     addTearDown(storeBinding.dispose);
     final imageNotifier = TestImageLibraryNotifier();
@@ -290,6 +294,9 @@ void main() {
             ),
             ChangeNotifierProvider<GridLayoutStore>.value(
               value: layoutStore,
+            ),
+            ChangeNotifierProvider<GridLayoutMutationController>.value(
+              value: mutationController,
             ),
             Provider<ClipboardCopyService>.value(value: clipboardService),
             ChangeNotifierProvider<GridResizeController>.value(

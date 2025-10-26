@@ -21,6 +21,8 @@ class GridLayoutSurface extends StatefulWidget {
     required this.columnGap,
     required this.padding,
     required this.resolveColumnCount,
+    this.onMutateStart,
+    this.onMutateEnd,
   });
 
   final GridLayoutSurfaceStore store;
@@ -28,6 +30,8 @@ class GridLayoutSurface extends StatefulWidget {
   final double columnGap;
   final EdgeInsets padding;
   final GridColumnCountResolver resolveColumnCount;
+  final VoidCallback? onMutateStart;
+  final VoidCallback? onMutateEnd;
 
   @override
   State<GridLayoutSurface> createState() => _GridLayoutSurfaceState();
@@ -163,6 +167,17 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     _pendingGeometry = null;
     final notify = _pendingNotify;
     _pendingNotify = false;
-    _store.updateGeometry(pending, notify: notify);
+    if (notify) {
+      widget.onMutateStart?.call();
+    }
+    try {
+      _store.updateGeometry(pending, notify: notify);
+    } finally {
+      if (notify) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          widget.onMutateEnd?.call();
+        });
+      }
+    }
   }
 }

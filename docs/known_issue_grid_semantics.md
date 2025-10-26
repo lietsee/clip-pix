@@ -30,6 +30,33 @@ assertion: line 5669 pos 14: '!childSemantics.renderObject._needsLayout': is not
 1. 列数拡大（例: 5 → 5）や一括揃えで多くのカード幅を同時に変更すると、PinterestSliverGrid がレイアウト更新中にセマンティクスの再計算へ移行し、このタイミングで子 RenderObject から追加のレイアウト要求が発生してアサーションが出る。
 2. 一括揃えを複数回実行すると、短時間に大量の再計算が発生し Windows のメッセージキューが飽和、`Failed to post message to main thread` が連続する。
 
+### 2025-10-26 追加観測（Pull rev. c44a51f 時点）
+
+- **再現手順**: Windows デスクトップ版でウィンドウ幅を連続的に縮小・拡大する。数秒間 10〜20px 程度のドラッグを往復すると `.tmp/app.log` に `!semantics.parentDataDirty` / `!childSemantics.renderObject._needsLayout` のアサーションが連続記録される。
+- **影響範囲**:
+  - グリッド描画がフレームごとに点滅し、画像がぼやける。
+  - クリックでプレビューを開くと、別の画像が開かれる取り違えを観測（セマンティクス例外発生後に多発）。
+
+- **発生メカニズム**:
+  1. `GridLayoutSurface` が `LayoutBuilder` でウィンドウ幅を計測→ `resolveColumnCount` → `GridLayoutGeometry` を生成。
+  2. 表示幅が変わるたびに `_maybeUpdateGeometry` が `WidgetsBinding.instance.addPostFrameCallback` 経由で `GridLayoutStore.updateGeometry()` を呼び出す。  
+     - c44a51f では 40ms スロットルを導入したが、`WindowBoundsService` のメトリクス通知がそれ以下の間隔で到達するため、1 フレーム中に複数の `updateGeometry()` がキューイングされる。
+  3. `GridLayoutStore._applyGeometryAdjustments()` は全カードの幅・高さ・`columnSpan` を即座に更新し `notifyListeners()`。  
+     → 同一フレーム内に `GridViewModule` が複数回 build され、`PinterestSliverGrid` のレイアウトが完了する前にセマンティクス更新が走る。
+  4. セマンティクスの木が不安定な状態で `RenderObject.markNeedsLayout()` が重複呼び出され、`!semantics.parentDataDirty` / `!childSemantics.renderObject._needsLayout` が発火する。
+  5. 例外発生後に Flutter が現在のフレームを破棄→再描画を繰り返す過程で `_GridEntry` と `viewStates` の同期が崩れ、一時的に `AnimatedOpacity` が異なる `ImageItem` とバインドする。これがプレビューの画像取り違えにつながると推測される（特に `AnimatedOpacity` の `ObjectKey(entry)` が再利用されるケース）。
+
+- **ログ抜粋**:
+
+  ```
+  Another exception was thrown: 'package:flutter/src/rendering/object.dart':
+  Failed assertion: line 5439 pos 14: '!semantics.parentDataDirty': is not true.
+  Another exception was thrown: 'package:flutter/src/rendering/object.dart':
+  Failed assertion: line 5669 pos 14: '!childSemantics.renderObject._needsLayout': is not true.
+  ```
+
+  これがウィンドウ幅の変更サイクル（約 30〜40ms 間隔）と同期して大量に発生している。
+
 ## 課題
 
 - 列数変更／一括揃えのような大量のカード更新時は、Semantics ツリーが完全に安定した後でグリッドを再構築する仕組みが必要。

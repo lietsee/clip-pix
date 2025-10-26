@@ -15,6 +15,7 @@ import '../data/models/image_item.dart';
 import '../system/clipboard_copy_service.dart';
 import 'package:logging/logging.dart';
 import '../system/state/folder_view_mode.dart';
+import '../system/state/grid_layout_mutation_controller.dart';
 import '../system/state/grid_layout_store.dart';
 import '../system/state/image_library_notifier.dart';
 import '../system/state/image_library_state.dart';
@@ -140,8 +141,10 @@ class _GridViewModuleState extends State<GridViewModule> {
     final libraryNotifier = context.read<ImageLibraryNotifier>();
     final selectedState = context.watch<SelectedFolderState>();
     final layoutStore = context.watch<GridLayoutStore>();
+    final mutationController = context.watch<GridLayoutMutationController>();
     final settingsRepo = context.watch<GridLayoutSettingsRepository>();
     final settings = settingsRepo.value;
+    final isGridHidden = mutationController.isMutating;
 
     if (!_loggedInitialBuild) {
       _loggedInitialBuild = true;
@@ -156,6 +159,8 @@ class _GridViewModuleState extends State<GridViewModule> {
         padding: EdgeInsets.zero,
         resolveColumnCount: (availableWidth) =>
             _resolveColumnCount(availableWidth, settings),
+        onMutateStart: mutationController.beginMutation,
+        onMutateEnd: mutationController.endMutation,
         childBuilder: (context, geometry, states) {
           _orderRepository = context.watch<GridOrderRepository>();
           final controller = _resolveController(selectedState);
@@ -220,7 +225,33 @@ class _GridViewModuleState extends State<GridViewModule> {
       ),
     );
 
-    return content;
+    return Stack(
+      children: [
+        ExcludeSemantics(
+          excluding: isGridHidden,
+          child: Offstage(
+            offstage: isGridHidden,
+            child: IgnorePointer(
+              ignoring: isGridHidden,
+              child: content,
+            ),
+          ),
+        ),
+        if (isGridHidden)
+          Positioned.fill(
+            child: Container(
+              color: Colors.black.withOpacity(0.04),
+              child: const Center(
+                child: SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: CircularProgressIndicator(strokeWidth: 3),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   Widget _buildCard({
@@ -428,8 +459,7 @@ class _GridViewModuleState extends State<GridViewModule> {
     final target = math.max(1, preferred);
     final maxByWidth = math.max(
       1,
-      (availableWidth /
-              (GridLayoutPreferenceRecord.defaultWidth + _gridGap))
+      (availableWidth / (GridLayoutPreferenceRecord.defaultWidth + _gridGap))
           .floor(),
     );
     final capped = math.min(settings.maxColumns, maxByWidth);

@@ -25,6 +25,7 @@ import 'system/file_watcher.dart';
 import 'system/image_saver.dart';
 import 'system/state/app_state_provider.dart';
 import 'system/state/grid_layout_store.dart';
+import 'system/state/grid_layout_mutation_controller.dart';
 import 'system/state/grid_layout_store_adapters.dart';
 import 'system/state/grid_resize_controller.dart';
 import 'system/state/grid_resize_store_binding.dart';
@@ -245,6 +246,9 @@ class ClipPixApp extends StatelessWidget {
       ChangeNotifierProvider<GridResizeController>(
         create: (_) => GridResizeController(),
       ),
+      ChangeNotifierProvider<GridLayoutMutationController>(
+        create: (_) => GridLayoutMutationController(),
+      ),
       ChangeNotifierProxyProvider<GridCardPreferencesRepository,
           GridLayoutStore>(
         create: (context) => GridLayoutStore(
@@ -263,6 +267,7 @@ class ClipPixApp extends StatelessWidget {
         create: (context) => GridResizeStoreBinding(
           controller: context.read<GridResizeController>(),
           store: context.read<GridLayoutStore>(),
+          mutationController: context.read<GridLayoutMutationController>(),
         ),
         dispose: (_, binding) => binding.dispose(),
       ),
