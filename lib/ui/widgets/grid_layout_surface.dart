@@ -45,6 +45,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
   Timer? _geometryDebounceTimer;
   bool _semanticsTaskScheduled = false;
   bool _mutationInProgress = false;
+  bool _waitingForSemantics = false;
   static const _throttleDuration = Duration(milliseconds: 40);
 
   GridLayoutSurfaceStore get _store => widget.store;
@@ -207,35 +208,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
         try {
           _store.updateGeometry(pending, notify: notify);
         } finally {
-          if (hideGrid) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              WidgetsBinding.instance.addPostFrameCallback((__) {
-                if (!mounted) {
-                  _mutationInProgress = false;
-                  return;
-                }
-                widget.onMutateEnd?.call(hideGrid);
-                _mutationInProgress = false;
-                if (_pendingGeometry != null && !_semanticsTaskScheduled) {
-                  _debugLog('commit_pending resume after end');
-                  _commitPending();
-                }
-              });
-            });
-          } else {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!mounted) {
-                _mutationInProgress = false;
-                return;
-              }
-              widget.onMutateEnd?.call(hideGrid);
-              _mutationInProgress = false;
-              if (_pendingGeometry != null && !_semanticsTaskScheduled) {
-                _debugLog('commit_pending resume after end');
-                _commitPending();
-              }
-            });
-          }
+          _scheduleMutationEnd(hideGrid);
         }
       },
       priority,
@@ -249,5 +222,39 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
   void _debugLog(String message) {
     // ignore: avoid_print
     debugPrint('[GridLayoutSurface] $message');
+  }
+
+  void _scheduleMutationEnd(bool hideGrid) {
+    void finish() {
+      if (!mounted) {
+        _mutationInProgress = false;
+        _waitingForSemantics = false;
+        return;
+      }
+      widget.onMutateEnd?.call(hideGrid);
+      _mutationInProgress = false;
+      _waitingForSemantics = false;
+      if (_pendingGeometry != null && !_semanticsTaskScheduled) {
+        _debugLog('commit_pending resume after end');
+        _commitPending();
+      }
+    }
+
+    if (!hideGrid) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => finish());
+      return;
+    }
+
+    if (_waitingForSemantics) {
+      return;
+    }
+    _waitingForSemantics = true;
+    SchedulerBinding.instance.scheduleTask<void>(
+      () {
+        WidgetsBinding.instance.addPostFrameCallback((_) => finish());
+      },
+      Priority.idle,
+      debugLabel: 'GridLayoutSurface.waitSemantics',
+    );
   }
 }
