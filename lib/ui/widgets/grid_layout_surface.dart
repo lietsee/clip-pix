@@ -255,12 +255,20 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
       return;
     }
     _waitingForSemantics = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      WidgetsBinding.instance.addPostFrameCallback((__) {
-        _logSemanticsStatus('schedule_end_hard');
-        finish();
+    void scheduleNextWait() {
+      SchedulerBinding.instance.endOfFrame.then((_) {
+        Future.microtask(() {
+          if (_shouldWaitSemanticsIdle()) {
+            scheduleNextWait();
+            return;
+          }
+          _logSemanticsStatus('schedule_end_hard');
+          finish();
+        });
       });
-    });
+    }
+
+    scheduleNextWait();
   }
 
   void _logSemanticsStatus(String label) {
@@ -272,5 +280,21 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     debugPrint(
       '[GridLayoutSurface] semantics $label hasOwner=$hasOwner phase=$phase binding=$binding',
     );
+  }
+
+  bool _shouldWaitSemanticsIdle() {
+    final owner = RendererBinding.instance.pipelineOwner.semanticsOwner;
+    if (owner == null) {
+      return false;
+    }
+    if (!owner.hasListeners) {
+      return false;
+    }
+    SchedulerBinding.instance.scheduleTask<void>(
+      () {},
+      Priority.idle,
+      debugLabel: 'GridLayoutSurface.waitSemanticsIdle',
+    );
+    return true;
   }
 }
