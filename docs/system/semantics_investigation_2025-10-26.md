@@ -46,12 +46,14 @@
 
 ## 次のアクション（2025-10-26 時点）
 
-1. **仮説Bの検証**
-   - `GridLayoutMutationController` に begin/end のロギングを追加し、同フレーム内で再入していないか確認する。
-   - `GridResizeStoreBinding` 周辺にユニットテストを追加し、ミューテーション区間が 1 回ずつ呼ばれることを保証する。
-2. **仮説Cの検証**
-   - `GridViewModule._logEntries` で `_entries` と `layoutStore.viewStates` の ID リスト・順序を同一ログに出す。
-   - ビルド前に ID セットが一致しているか assert し、ズレがあれば詳細ログを出す。
+1. **仮説Bの検証（進捗中）**
+   - ✅ `GridLayoutMutationController` に begin/end のロギングを導入し、フレームタイムスタンプと同フレーム再入回数を記録できるようにした。
+   - ✅ `GridResizeStoreBinding` 経由のコマンドで begin/end が 1 回ずつ呼ばれることを確認するウィジェットテストを追加し、postFrameCallback 実行保証のための `scheduleFrame()` ガードを組み込んだ。
+   - ▶️ デスクトップ実機でリサイズ操作を再現し、`.tmp/app.log` の begin/end ログから同フレーム再入が起きていないかを確認する。
+2. **仮説Cの検証（進捗中）**
+   - ✅ `GridViewModule._logEntries` で `_entries` と `layoutStore.viewStates` の ID リストと順序を同一ログに出力するよう拡張した。
+   - ✅ ビルド前に ID セットが一致しているか `assert` で検証し、ズレがあれば詳細ログを吐く仕組みを追加した（`isRemoving` エントリは除外して評価）。
+   - ▶️ 追加ログを有効化した状態でリサイズ／プレビュー動作を実施し、ズレ発生時のログ断面と再現条件を記録する。
 3. **テスト拡張**
    - ウィンドウリサイズ → プレビュー操作を自動化するテスト（または手動検証用ログ）を追加し、画像取り違えが発生する条件を特定する。
 

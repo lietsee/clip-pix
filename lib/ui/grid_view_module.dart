@@ -145,6 +145,26 @@ class _GridViewModuleState extends State<GridViewModule> {
     final settingsRepo = context.watch<GridLayoutSettingsRepository>();
     final settings = settingsRepo.value;
     final isGridHidden = mutationController.isMutating;
+    assert(() {
+      final activeEntryIds = _entries
+          .where((entry) => !entry.isRemoving)
+          .map((entry) => entry.item.id)
+          .toList(growable: false);
+      final viewStateIds =
+          layoutStore.viewStates.map((state) => state.id).toList();
+      final entrySet = activeEntryIds.toSet();
+      final viewSet = viewStateIds.toSet();
+      final missingInStore = entrySet.difference(viewSet).toList()..sort();
+      final missingInEntries = viewSet.difference(entrySet).toList()..sort();
+      if (missingInStore.isNotEmpty || missingInEntries.isNotEmpty) {
+        debugPrint(
+          '[GridViewModule] assert_alignment_failed missing_store=$missingInStore missing_entries=$missingInEntries '
+          'entryOrder=${activeEntryIds.join(', ')} viewOrder=${viewStateIds.join(', ')}',
+        );
+        return false;
+      }
+      return true;
+    }());
 
     if (!_loggedInitialBuild) {
       _loggedInitialBuild = true;
@@ -564,8 +584,23 @@ class _GridViewModuleState extends State<GridViewModule> {
         .where((element) => element.value > 1)
         .map((e) => e.key)
         .toList();
+    final layoutStore = _layoutStore;
+    List<String> viewStateIds = const [];
+    if (layoutStore != null) {
+      viewStateIds = layoutStore.viewStates.map((state) => state.id).toList();
+    }
+    final entryIds = entries.map((e) => e.item.id).toList();
+    final entrySet = entryIds.toSet();
+    final viewSet = viewStateIds.toSet();
+    final missingInStore = entrySet.difference(viewSet).toList()..sort();
+    final missingInEntries = viewSet.difference(entrySet).toList()..sort();
+    final orderMatches = listEquals(entryIds, viewStateIds);
     debugPrint(
-      '[GridViewModule] $label total=${entries.length} removing=${entries.where((e) => e.isRemoving).length} duplicates=$duplicates entries=${entries.map((e) => '${e.item.id}|v${e.version}|rem=${e.isRemoving}|opacity=${e.opacity.toStringAsFixed(2)}').join(', ')}',
+      '[GridViewModule] $label total=${entries.length} removing=${entries.where((e) => e.isRemoving).length} duplicates=$duplicates '
+      'entryOrder=[${entryIds.join(', ')}] viewOrder=[${viewStateIds.join(', ')}] '
+      'orderMatches=$orderMatches '
+      'missing_store=$missingInStore missing_entries=$missingInEntries '
+      'details=${entries.map((e) => '${e.item.id}|v${e.version}|rem=${e.isRemoving}|opacity=${e.opacity.toStringAsFixed(2)}').join(', ')}',
     );
   }
 

@@ -108,6 +108,9 @@ class GridResizeStoreBinding {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _mutationController.endMutation();
       });
+      if (!WidgetsBinding.instance.hasScheduledFrame) {
+        WidgetsBinding.instance.scheduleFrame();
+      }
     }
   }
 }
