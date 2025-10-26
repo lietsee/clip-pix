@@ -53,8 +53,17 @@
 2. **仮説Cの検証（進捗中）**
    - ✅ `GridViewModule._logEntries` で `_entries` と `layoutStore.viewStates` の ID リストと順序を同一ログに出力するよう拡張した。
    - ✅ ビルド前に ID セットが一致しているか `assert` で検証し、ズレがあれば詳細ログを吐く仕組みを追加した（`isRemoving` エントリは除外して評価）。
-   - ▶️ 追加ログを有効化した状態でリサイズ／プレビュー動作を実施し、ズレ発生時のログ断面と再現条件を記録する。
+   - ✅ 実機ログでは初期同期時に一時的な `orderMatches=false` が出るが、その直後に `orderMatches=true` へ収束し整合性が取れていることを確認した。
+   - ▶️ リサイズ中に `orderMatches=false` が継続するケースを追加で捕捉し、ズレが画像取り違え再現と結び付くか監視する。
 3. **テスト拡張**
    - ウィンドウリサイズ → プレビュー操作を自動化するテスト（または手動検証用ログ）を追加し、画像取り違えが発生する条件を特定する。
+
+### 2025-10-26 実機ログ観測メモ
+
+- `[GridLayoutMutationController]` の begin/end ログはリサイズ操作全体で 3 ペアのみ。いずれも `phase=SchedulerPhase.postFrameCallbacks` かつ `concurrentBegins=1` で、ミューテーション深度に再入は確認できなかった。
+- 上記 begin/end ログが出ていないタイミングでも `!semantics.parentDataDirty` アサーションが継続発生しており、列数が変わらない幅調整経路でグリッドが非表示化されていない（仮説A/B）の可能性が高い。
+- リサイズ操作後半で `setState() or markNeedsBuild() called during build.` が記録されており、`GridLayoutSurface` 側でビルド中に追加のミューテーションが走っているか検証が必要。
+
+→ 次段では `GridLayoutSurface._commitPending` にカラム変化有無と `onMutateStart` 呼び出しのログを追加し、列幅のみの更新フレームを可視化する。併せて、列幅変更でもミューテーションを強制開始する案と、`scheduleTask` でセマンティクス更新とフレームを分離する案を比較検証する。
 
 上記検証で原因を特定した後、列幅変更時にもグリッドを非表示にするなどの実装的対策を検討する。
