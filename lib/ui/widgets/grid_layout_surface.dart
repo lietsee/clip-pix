@@ -247,11 +247,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
           }
         }
 
-        if (hideGrid) {
-          WidgetsBinding.instance.addPostFrameCallback((_) => performUpdate());
-        } else {
-          performUpdate();
-        }
+        WidgetsBinding.instance.addPostFrameCallback((_) => performUpdate());
       },
       priority,
       debugLabel: debugLabel,

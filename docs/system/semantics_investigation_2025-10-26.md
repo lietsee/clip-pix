@@ -110,3 +110,10 @@
    - セマンティクス切り離し中は `_pendingGeometry` を蓄積してまとめて適用し、復帰直前に最新の 1 つだけをコミットする。これにより幅変更が短時間に複数回走っても、Semantics 復帰後に過去のジオメトリが再適用されるのを防ぐ。
 
 本方針をドキュメントに明記した上で、GridLayoutSurface / GridViewModule に実装を追加していく。
+
+### 実装更新ログ（2025-10-26 18:47）
+
+- `GridLayoutSurface` でミューテーション開始時に `ExcludeSemantics(excluding: true)` を必ず建て、列数／列幅どちらの更新でもセマンティクスを完全に切断するよう変更。
+- 幾何更新の本体はフレーム末尾（`addPostFrameCallback`）にディレイし、ExcludeSemantics が反映された後で `GridLayoutStore.updateGeometry` を実行する。
+- ミューテーション終了時は `endOfFrame` と `semanticsOwnerNeedsUpdate` / `hasScheduledSemanticsUpdate` をポーリングし、dirty が解消し次第にのみセマンティクスを再接続する。
+- 上記更新により最新ログでは `!semantics.parentDataDirty` アサーションが初期数回まで大幅に減少。引き続き幅変更連続時の長期安定をモニタリングする。
