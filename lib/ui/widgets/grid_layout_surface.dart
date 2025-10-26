@@ -277,9 +277,25 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     final semanticsOwner =
         RendererBinding.instance.pipelineOwner.semanticsOwner;
     final hasOwner = semanticsOwner != null;
+    var needsUpdate = false;
+    // `semanticsOwnerNeedsUpdate` は Flutter 3.22 以降で追加されたプロパティ。
+    // 互換性を保つため dynamic 経由で参照し、存在しない場合は false 扱いにする。
+    try {
+      final pipelineOwner = RendererBinding.instance.pipelineOwner;
+      // ignore: avoid_dynamic_calls
+      final dynamicNeedsUpdate =
+          (pipelineOwner as dynamic).semanticsOwnerNeedsUpdate;
+      if (dynamicNeedsUpdate is bool) {
+        needsUpdate = dynamicNeedsUpdate;
+      }
+    } catch (_) {
+      needsUpdate = false;
+    }
+    final semanticsEnabled = binding?.semanticsEnabled ?? false;
     final phase = SchedulerBinding.instance.schedulerPhase;
     debugPrint(
-      '[GridLayoutSurface] semantics $label hasOwner=$hasOwner phase=$phase binding=$binding',
+      '[GridLayoutSurface] semantics $label hasOwner=$hasOwner needsUpdate=$needsUpdate '
+      'semanticsEnabled=$semanticsEnabled schedulerPhase=$phase',
     );
   }
 
