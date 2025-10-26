@@ -51,6 +51,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
   bool _semanticsExcluded = false;
   bool _gridHiddenForReset = false;
   Key _gridResetKey = UniqueKey();
+  bool _waitingForPreCommitSemantics = false;
   static const _throttleDuration = Duration(milliseconds: 40);
 
   GridLayoutSurfaceStore get _store => widget.store;
@@ -208,6 +209,27 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
         }
         _semanticsExcluded = true;
       });
+      if (_hasPendingSemanticsUpdates()) {
+        if (_waitingForPreCommitSemantics) {
+          _debugLog('commit_pending waiting for semantics detach');
+          return;
+        }
+        _waitingForPreCommitSemantics = true;
+        SchedulerBinding.instance.endOfFrame.then((_) {
+          Future.microtask(() {
+            _waitingForPreCommitSemantics = false;
+            if (!mounted) {
+              return;
+            }
+            if (_semanticsTaskScheduled) {
+              return;
+            }
+            _debugLog('commit_pending retry after semantics detach');
+            _commitPending();
+          });
+        });
+        return;
+      }
     }
     _semanticsTaskScheduled = true;
     final debugLabel = 'GridLayoutSurface.commitPending';
