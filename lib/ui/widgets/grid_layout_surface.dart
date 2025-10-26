@@ -31,8 +31,8 @@ class GridLayoutSurface extends StatefulWidget {
   final double columnGap;
   final EdgeInsets padding;
   final GridColumnCountResolver resolveColumnCount;
-  final VoidCallback? onMutateStart;
-  final VoidCallback? onMutateEnd;
+  final void Function(bool hideGrid)? onMutateStart;
+  final void Function(bool hideGrid)? onMutateEnd;
 
   @override
   State<GridLayoutSurface> createState() => _GridLayoutSurfaceState();
@@ -44,6 +44,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
   bool _pendingNotify = false;
   Timer? _geometryDebounceTimer;
   bool _semanticsTaskScheduled = false;
+  bool _mutationInProgress = false;
   static const _throttleDuration = Duration(milliseconds: 40);
 
   GridLayoutSurfaceStore get _store => widget.store;
@@ -136,16 +137,12 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
         previous == null || previous.columnCount != geometry.columnCount;
     _pendingGeometry = geometry;
     _pendingNotify = _pendingNotify || shouldNotify;
-    assert(() {
-      final deltaWidth = previous != null
-          ? (geometry.columnWidth - previous.columnWidth)
-          : null;
-      _debugLog(
-        'geometry_pending prev=$previous next=$geometry shouldNotify=$shouldNotify pendingNotify=$_pendingNotify '
-        'deltaWidth=${deltaWidth?.toStringAsFixed(3)}',
-      );
-      return true;
-    }());
+    final deltaWidth =
+        previous != null ? (geometry.columnWidth - previous.columnWidth) : null;
+    _debugLog(
+      'geometry_pending prev=$previous next=$geometry shouldNotify=$shouldNotify pendingNotify=$_pendingNotify '
+      'deltaWidth=${deltaWidth?.toStringAsFixed(3)}',
+    );
     if (shouldNotify) {
       _geometryDebounceTimer?.cancel();
       _geometryDebounceTimer = null;
@@ -172,10 +169,11 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
       return;
     }
     if (_semanticsTaskScheduled) {
-      assert(() {
-        _debugLog('commit_pending skipped because task already scheduled');
-        return true;
-      }());
+      _debugLog('commit_pending skipped because task already scheduled');
+      return;
+    }
+    if (_mutationInProgress) {
+      _debugLog('commit_pending deferred: mutation in progress');
       return;
     }
     if (_pendingGeometry == null) {
@@ -199,37 +197,34 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
         if (pending == null) {
           return;
         }
-        assert(() {
-          _debugLog(
-            'geometry_commit geometry=$pending notify=$notify taskPhase=${SchedulerBinding.instance.schedulerPhase}',
-          );
-          return true;
-        }());
-        if (notify) {
-          widget.onMutateStart?.call();
-        }
+        _debugLog(
+          'geometry_commit geometry=$pending notify=$notify taskPhase=${SchedulerBinding.instance.schedulerPhase}',
+        );
+        final hideGrid = notify;
+        widget.onMutateStart?.call(hideGrid);
+        _mutationInProgress = true;
         try {
           _store.updateGeometry(pending, notify: notify);
         } finally {
-          if (notify) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!mounted) {
-                return;
-              }
-              widget.onMutateEnd?.call();
-            });
-          }
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) {
+              return;
+            }
+            widget.onMutateEnd?.call(hideGrid);
+            _mutationInProgress = false;
+            if (_pendingGeometry != null && !_semanticsTaskScheduled) {
+              _debugLog('commit_pending resume after end');
+              _commitPending();
+            }
+          });
         }
       },
       Priority.touch,
       debugLabel: debugLabel,
     );
-    assert(() {
-      _debugLog(
-        'geometry_schedule geometry=$_pendingGeometry notify=$_pendingNotify label=$debugLabel',
-      );
-      return true;
-    }());
+    _debugLog(
+      'geometry_schedule geometry=$_pendingGeometry notify=$_pendingNotify label=$debugLabel',
+    );
   }
 
   void _debugLog(String message) {

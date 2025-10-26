@@ -37,11 +37,11 @@ void main() {
       expect(geometry!.gap, equals(3));
       expect(geometry.columnCount, greaterThanOrEqualTo(1));
       expect(geometry.columnWidth, greaterThanOrEqualTo(0));
-  });
+    });
 
-  testWidgets('store の通知で childBuilder が再評価される', (tester) async {
-    final store = _WidgetFakeGridLayoutStore();
-    var buildCount = 0;
+    testWidgets('store の通知で childBuilder が再評価される', (tester) async {
+      final store = _WidgetFakeGridLayoutStore();
+      var buildCount = 0;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -91,8 +91,8 @@ void main() {
       ]);
 
       final width = ValueNotifier<double>(600);
-      int mutateStartCount = 0;
-      int mutateEndCount = 0;
+      final List<bool> mutateStartFlags = <bool>[];
+      final List<bool> mutateEndFlags = <bool>[];
 
       await tester.pumpWidget(
         MaterialApp(
@@ -109,8 +109,9 @@ void main() {
                       padding: EdgeInsets.zero,
                       resolveColumnCount: (available) =>
                           available >= 400 ? 3 : 1,
-                      onMutateStart: () => mutateStartCount += 1,
-                      onMutateEnd: () => mutateEndCount += 1,
+                      onMutateStart: (hideGrid) =>
+                          mutateStartFlags.add(hideGrid),
+                      onMutateEnd: (hideGrid) => mutateEndFlags.add(hideGrid),
                       childBuilder: (context, geometry, states) {
                         return Text(
                           'cols=${geometry.columnCount}',
@@ -132,18 +133,34 @@ void main() {
       expect(initialGeometry, isNotNull);
       expect(initialGeometry!.columnCount, 3);
 
+      final initialCallCount = store.updateGeometryCalls;
       width.value = 500; // 列数は依然 3
       await tester.pump(const Duration(milliseconds: 80));
       await tester.idle();
-      await _waitForGeometryCalls(tester, store, 1);
+      await _waitForGeometryCalls(tester, store, initialCallCount + 1);
+      await tester.pumpAndSettle(const Duration(milliseconds: 10));
+      await tester.idle();
+      expect(mutateStartFlags, isNotEmpty);
 
+      final afterWidthCallCount = store.updateGeometryCalls;
       width.value = 200; // 列数が 1 に変化
       await tester.pump(const Duration(milliseconds: 20));
       await tester.idle();
-      await _waitForGeometryCalls(tester, store, 2);
+      await _waitForGeometryCalls(tester, store, afterWidthCallCount + 1);
+      await tester.pumpAndSettle(const Duration(milliseconds: 10));
+      await tester.idle();
       final lastColumnCount = store.lastGeometry?.columnCount;
       expect(lastColumnCount, 1);
       expect(store.updateGeometryCalls, greaterThanOrEqualTo(2));
+      for (var i = 0; i < 30; i++) {
+        if (mutateStartFlags.length == mutateEndFlags.length) {
+          break;
+        }
+        await tester.pump(const Duration(milliseconds: 16));
+        await tester.idle();
+      }
+      expect(mutateEndFlags, isNotEmpty);
+      expect(mutateStartFlags.any((flag) => flag), isTrue);
     });
   });
 }

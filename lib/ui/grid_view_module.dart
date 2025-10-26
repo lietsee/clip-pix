@@ -144,7 +144,8 @@ class _GridViewModuleState extends State<GridViewModule> {
     final mutationController = context.watch<GridLayoutMutationController>();
     final settingsRepo = context.watch<GridLayoutSettingsRepository>();
     final settings = settingsRepo.value;
-    final isGridHidden = mutationController.isMutating;
+    final isMutating = mutationController.isMutating;
+    final shouldHideGrid = mutationController.shouldHideGrid;
     assert(() {
       final activeEntryIds = _entries
           .where((entry) => !entry.isRemoving)
@@ -179,8 +180,10 @@ class _GridViewModuleState extends State<GridViewModule> {
         padding: EdgeInsets.zero,
         resolveColumnCount: (availableWidth) =>
             _resolveColumnCount(availableWidth, settings),
-        onMutateStart: mutationController.beginMutation,
-        onMutateEnd: mutationController.endMutation,
+        onMutateStart: (hideGrid) =>
+            mutationController.beginMutation(hideGrid: hideGrid),
+        onMutateEnd: (hideGrid) =>
+            mutationController.endMutation(hideGrid: hideGrid),
         childBuilder: (context, geometry, states) {
           _orderRepository = context.watch<GridOrderRepository>();
           final controller = _resolveController(selectedState);
@@ -248,16 +251,16 @@ class _GridViewModuleState extends State<GridViewModule> {
     return Stack(
       children: [
         ExcludeSemantics(
-          excluding: isGridHidden,
+          excluding: isMutating,
           child: Offstage(
-            offstage: isGridHidden,
+            offstage: shouldHideGrid,
             child: IgnorePointer(
-              ignoring: isGridHidden,
+              ignoring: isMutating,
               child: content,
             ),
           ),
         ),
-        if (isGridHidden)
+        if (shouldHideGrid)
           Positioned.fill(
             child: Container(
               color: Colors.black.withOpacity(0.04),
