@@ -188,6 +188,20 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     GridLayoutGeometry geometry, {
     bool notify = true,
   }) {
+    final current = _geometry;
+    assert(() {
+      final deltaColumns = current != null
+          ? geometry.columnCount - current.columnCount
+          : null;
+      final deltaWidth = current != null
+          ? geometry.columnWidth - current.columnWidth
+          : null;
+      debugPrint(
+        '[GridLayoutStore] updateGeometry geometry=$geometry notify=$notify '
+        'deltaColumns=$deltaColumns deltaWidth=${deltaWidth?.toStringAsFixed(3)}',
+      );
+      return true;
+    }());
     _geometry = geometry;
     _applyGeometryAdjustments(notify: notify);
   }

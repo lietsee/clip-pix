@@ -137,8 +137,12 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     _pendingGeometry = geometry;
     _pendingNotify = _pendingNotify || shouldNotify;
     assert(() {
+      final deltaWidth = previous != null
+          ? (geometry.columnWidth - previous.columnWidth)
+          : null;
       _debugLog(
-        'geometry_pending prev=$previous next=$geometry shouldNotify=$shouldNotify pendingNotify=$_pendingNotify',
+        'geometry_pending prev=$previous next=$geometry shouldNotify=$shouldNotify pendingNotify=$_pendingNotify '
+        'deltaWidth=${deltaWidth?.toStringAsFixed(3)}',
       );
       return true;
     }());
