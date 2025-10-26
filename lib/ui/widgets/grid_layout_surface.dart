@@ -198,6 +198,17 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
       _pendingNotify = false;
       return;
     }
+    final shouldHideGrid = _pendingNotify;
+    final shouldExcludeSemantics = !_semanticsExcluded || shouldHideGrid;
+    if (shouldExcludeSemantics) {
+      setState(() {
+        if (shouldHideGrid) {
+          _gridHiddenForReset = true;
+          _gridResetKey = UniqueKey();
+        }
+        _semanticsExcluded = true;
+      });
+    }
     _semanticsTaskScheduled = true;
     final debugLabel = 'GridLayoutSurface.commitPending';
     final priority = _pendingNotify ? Priority.animation : Priority.touch;
@@ -220,17 +231,6 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
           'geometry_commit geometry=$pending notify=$notify taskPhase=${SchedulerBinding.instance.schedulerPhase}',
         );
         _logSemanticsStatus('commit_start notify=$notify');
-        if (notify) {
-          setState(() {
-            _gridHiddenForReset = true;
-            _gridResetKey = UniqueKey();
-            _semanticsExcluded = true;
-          });
-        } else if (!_semanticsExcluded) {
-          setState(() {
-            _semanticsExcluded = true;
-          });
-        }
         final hideGrid = notify;
         widget.onMutateStart?.call(hideGrid);
         _mutationInProgress = true;

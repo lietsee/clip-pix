@@ -117,3 +117,4 @@
 - 幾何更新の本体はフレーム末尾（`addPostFrameCallback`）にディレイし、ExcludeSemantics が反映された後で `GridLayoutStore.updateGeometry` を実行する。
 - ミューテーション終了時は `endOfFrame` と `semanticsOwnerNeedsUpdate` / `hasScheduledSemanticsUpdate` をポーリングし、dirty が解消し次第にのみセマンティクスを再接続する。
 - 上記更新により最新ログでは `!semantics.parentDataDirty` アサーションが初期数回まで大幅に減少。引き続き幅変更連続時の長期安定をモニタリングする。
+- 幅更新が入った瞬間にセマンティクス除外フラグを立てるよう `_commitPending` を再調整し、ジオメトリコミットのスケジュールより前にツリーを切断できるようにした。
