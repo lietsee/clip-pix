@@ -262,6 +262,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
             scheduleNextWait();
             return;
           }
+          RendererBinding.instance.pipelineOwner.flushSemantics();
           _logSemanticsStatus('schedule_end_hard');
           finish();
         });
