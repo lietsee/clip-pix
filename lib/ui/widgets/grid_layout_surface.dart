@@ -48,6 +48,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
   bool _semanticsTaskScheduled = false;
   bool _mutationInProgress = false;
   bool _waitingForSemantics = false;
+  int _childGeneration = 0;
   static const _throttleDuration = Duration(milliseconds: 40);
 
   GridLayoutSurfaceStore get _store => widget.store;
@@ -112,12 +113,16 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
           _store.viewStates,
         );
 
-        if (widget.padding == EdgeInsets.zero) {
-          return child;
+        Widget built = child;
+        if (widget.padding != EdgeInsets.zero) {
+          built = Padding(
+            padding: widget.padding,
+            child: child,
+          );
         }
-        return Padding(
-          padding: widget.padding,
-          child: child,
+        return KeyedSubtree(
+          key: ValueKey<int>(_childGeneration),
+          child: built,
         );
       },
     );
@@ -205,6 +210,11 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
           'geometry_commit geometry=$pending notify=$notify taskPhase=${SchedulerBinding.instance.schedulerPhase}',
         );
         _logSemanticsStatus('commit_start notify=$notify');
+        if (notify) {
+          setState(() {
+            _childGeneration += 1;
+          });
+        }
         final hideGrid = notify;
         widget.onMutateStart?.call(hideGrid);
         _mutationInProgress = true;
