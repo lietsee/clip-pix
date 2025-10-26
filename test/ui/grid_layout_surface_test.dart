@@ -34,11 +34,11 @@ void main() {
       expect(geometry!.gap, equals(3));
       expect(geometry.columnCount, greaterThanOrEqualTo(1));
       expect(geometry.columnWidth, greaterThanOrEqualTo(0));
-    });
+  });
 
-    testWidgets('store の通知で childBuilder が再評価される', (tester) async {
-      final store = _WidgetFakeGridLayoutStore();
-      var buildCount = 0;
+  testWidgets('store の通知で childBuilder が再評価される', (tester) async {
+    final store = _WidgetFakeGridLayoutStore();
+    var buildCount = 0;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -72,6 +72,74 @@ void main() {
       await tester.pump();
 
       expect(buildCount, 2);
+    });
+
+    testWidgets('列数が変化したときだけ mutate コールバックが呼ばれる',
+        (tester) async {
+      final store = _WidgetFakeGridLayoutStore();
+      store.trigger([
+        GridCardViewState(
+          id: 'a',
+          width: 200,
+          height: 200,
+          scale: 1,
+          columnSpan: 1,
+          customHeight: null,
+        ),
+      ]);
+
+      final width = ValueNotifier<double>(600);
+      int mutateStartCount = 0;
+      int mutateEndCount = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ValueListenableBuilder<double>(
+            valueListenable: width,
+            builder: (context, currentWidth, _) {
+              return Scaffold(
+                body: Center(
+                  child: SizedBox(
+                    width: currentWidth,
+                    child: GridLayoutSurface(
+                      store: store,
+                      columnGap: 4,
+                      padding: EdgeInsets.zero,
+                      resolveColumnCount: (available) =>
+                          available >= 400 ? 3 : 1,
+                      onMutateStart: () => mutateStartCount += 1,
+                      onMutateEnd: () => mutateEndCount += 1,
+                      childBuilder: (context, geometry, states) {
+                        return Text(
+                          'cols=${geometry.columnCount}',
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+      expect(store.lastGeometry?.columnCount, 3);
+      final initialStart = mutateStartCount;
+      final initialEnd = mutateEndCount;
+
+      width.value = 500; // 列数は依然 3
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(mutateStartCount, 1);
+      expect(mutateEndCount, 1);
+
+      width.value = 200; // 列数が 1 に変化
+      await tester.pumpAndSettle();
+      final lastColumnCount = store.lastGeometry?.columnCount;
+      expect(lastColumnCount, 1);
+      expect(mutateStartCount, greaterThan(initialStart));
+      expect(mutateEndCount, greaterThanOrEqualTo(initialEnd));
     });
   });
 }
