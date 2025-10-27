@@ -6,6 +6,7 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter/rendering.dart';
 
+import '../../system/state/grid_geometry_queue.dart';
 import '../../system/state/grid_layout_store.dart';
 
 typedef GridLayoutChildBuilder = Widget Function(
@@ -42,17 +43,18 @@ class GridLayoutSurface extends StatefulWidget {
 
 class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
   GridLayoutGeometry? _lastReportedGeometry;
-  GridLayoutGeometry? _pendingGeometry;
-  bool _pendingNotify = false;
-  Timer? _geometryDebounceTimer;
-  bool _semanticsTaskScheduled = false;
   bool _mutationInProgress = false;
   bool _waitingForSemantics = false;
   bool _semanticsExcluded = false;
   bool _gridHiddenForReset = false;
   Key _gridResetKey = UniqueKey();
   bool _waitingForPreCommitSemantics = false;
-  static const _throttleDuration = Duration(milliseconds: 40);
+  static const _throttleDuration = Duration(milliseconds: 60);
+  GridLayoutGeometry? _frontGeometry;
+  List<GridCardViewState>? _frontStates;
+  GridLayoutGeometry? _stagingGeometry;
+  List<GridCardViewState>? _stagingStates;
+  late final GeometryMutationQueue _geometryQueue;
 
   GridLayoutSurfaceStore get _store => widget.store;
 
@@ -60,6 +62,11 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
   void initState() {
     super.initState();
     _store.addListener(_handleStoreChanged);
+    _geometryQueue = GeometryMutationQueue(
+      worker: _processGeometryMutation,
+      throttle: _throttleDuration,
+    );
+    _frontStates = _cloneStates(_store.viewStates);
   }
 
   @override
@@ -75,7 +82,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
   @override
   void dispose() {
     _store.removeListener(_handleStoreChanged);
-    _geometryDebounceTimer?.cancel();
+    _geometryQueue.dispose();
     super.dispose();
   }
 
@@ -110,32 +117,69 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
         );
         _maybeUpdateGeometry(geometry);
 
-        final child = widget.childBuilder(
-          context,
-          geometry,
-          _store.viewStates,
-        );
-
         if (_gridHiddenForReset) {
           return const SizedBox.shrink();
         }
 
-        Widget built = child;
-        if (widget.padding != EdgeInsets.zero) {
-          built = Padding(
-            padding: widget.padding,
-            child: child,
+        final frontGeometry =
+            _frontGeometry ?? _lastReportedGeometry ?? geometry;
+        final frontStates =
+            _frontStates ?? _cloneStates(_store.viewStates);
+        final frontChild = _buildGridContent(
+          context,
+          frontGeometry,
+          frontStates,
+          excludeSemantics: _semanticsExcluded,
+        );
+
+        final List<Widget> stackChildren = [frontChild];
+
+        if (_stagingGeometry != null && _stagingStates != null) {
+          stackChildren.add(
+            Offstage(
+              offstage: true,
+              child: _buildGridContent(
+                context,
+                _stagingGeometry!,
+                _stagingStates!,
+                excludeSemantics: false,
+              ),
+            ),
           );
         }
-        built = ExcludeSemantics(
-          excluding: _semanticsExcluded,
-          child: built,
-        );
+
         return KeyedSubtree(
           key: _gridResetKey,
-          child: built,
+          child: Stack(
+            fit: StackFit.passthrough,
+            children: stackChildren,
+          ),
         );
       },
+    );
+  }
+
+  Widget _buildGridContent(
+    BuildContext context,
+    GridLayoutGeometry geometry,
+    List<GridCardViewState> states, {
+    required bool excludeSemantics,
+  }) {
+    Widget child = widget.childBuilder(
+      context,
+      geometry,
+      states,
+    );
+
+    if (widget.padding != EdgeInsets.zero) {
+      child = Padding(
+        padding: widget.padding,
+        child: child,
+      );
+    }
+    return ExcludeSemantics(
+      excluding: excludeSemantics,
+      child: child,
     );
   }
 
@@ -143,7 +187,11 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     if (!mounted) {
       return;
     }
-    setState(() {});
+    setState(() {
+      if (!_mutationInProgress) {
+        _frontStates = _cloneStates(_store.viewStates);
+      }
+    });
   }
 
   void _maybeUpdateGeometry(GridLayoutGeometry geometry) {
@@ -154,27 +202,13 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     _lastReportedGeometry = geometry;
     final shouldNotify =
         previous == null || previous.columnCount != geometry.columnCount;
-    _pendingGeometry = geometry;
-    _pendingNotify = _pendingNotify || shouldNotify;
     final deltaWidth =
         previous != null ? (geometry.columnWidth - previous.columnWidth) : null;
     _debugLog(
-      'geometry_pending prev=$previous next=$geometry shouldNotify=$shouldNotify pendingNotify=$_pendingNotify '
+      'geometry_enqueued prev=$previous next=$geometry shouldNotify=$shouldNotify '
       'deltaWidth=${deltaWidth?.toStringAsFixed(3)}',
     );
-    if (shouldNotify) {
-      _geometryDebounceTimer?.cancel();
-      _geometryDebounceTimer = null;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _commitPending());
-      return;
-    }
-    if (_geometryDebounceTimer != null) {
-      return;
-    }
-    _geometryDebounceTimer = Timer(_throttleDuration, () {
-      _geometryDebounceTimer = null;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _commitPending());
-    });
+    _geometryQueue.enqueue(geometry, notify: shouldNotify);
   }
 
   bool _geometryEquals(GridLayoutGeometry a, GridLayoutGeometry b) {
@@ -183,101 +217,83 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
         (a.gap - b.gap).abs() < 0.1;
   }
 
-  void _commitPending() {
-    if (!mounted) {
+  Future<void> _processGeometryMutation(GeometryMutationJob job) async {
+    if (!mounted || job.ticket.isCancelled) {
       return;
     }
-    if (_semanticsTaskScheduled) {
-      _debugLog('commit_pending skipped because task already scheduled');
-      return;
-    }
-    if (_mutationInProgress) {
-      _debugLog('commit_pending deferred: mutation in progress');
-      return;
-    }
-    if (_pendingGeometry == null) {
-      _pendingNotify = false;
-      return;
-    }
-    final shouldHideGrid = _pendingNotify;
-    final shouldExcludeSemantics = !_semanticsExcluded || shouldHideGrid;
+
+    final geometry = job.geometry;
+    final notify = job.notify;
+    final shouldExcludeSemantics = !_semanticsExcluded || notify;
+
     if (shouldExcludeSemantics) {
       setState(() {
-        if (shouldHideGrid) {
-          _gridHiddenForReset = true;
-          _gridResetKey = UniqueKey();
-        }
         _semanticsExcluded = true;
       });
       if (_hasPendingSemanticsUpdates()) {
         if (_waitingForPreCommitSemantics) {
-          _debugLog('commit_pending waiting for semantics detach');
           return;
         }
         _waitingForPreCommitSemantics = true;
+        final waitCompleter = Completer<void>();
         SchedulerBinding.instance.endOfFrame.then((_) {
           Future.microtask(() {
             _waitingForPreCommitSemantics = false;
-            if (!mounted) {
-              return;
-            }
-            if (_semanticsTaskScheduled) {
-              return;
-            }
-            _debugLog('commit_pending retry after semantics detach');
-            _commitPending();
+            waitCompleter.complete();
           });
         });
-        return;
+        await waitCompleter.future;
+        if (!mounted || job.ticket.isCancelled) {
+          return;
+        }
       }
     }
-    _semanticsTaskScheduled = true;
-    final debugLabel = 'GridLayoutSurface.commitPending';
-    final priority = _pendingNotify ? Priority.animation : Priority.touch;
-    SchedulerBinding.instance.scheduleTask<void>(
-      () {
-        _semanticsTaskScheduled = false;
-        if (!mounted) {
-          _pendingGeometry = null;
-          _pendingNotify = false;
-          return;
+
+    widget.onMutateStart?.call(notify);
+    _mutationInProgress = true;
+
+    final mutationCompleter = Completer<void>();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || job.ticket.isCancelled) {
+        _mutationInProgress = false;
+        _waitingForSemantics = false;
+        if (!mutationCompleter.isCompleted) {
+          mutationCompleter.complete();
         }
-        final pending = _pendingGeometry;
-        final notify = _pendingNotify;
-        _pendingGeometry = null;
-        _pendingNotify = false;
-        if (pending == null) {
-          return;
-        }
+        return;
+      }
+      try {
         _debugLog(
-          'geometry_commit geometry=$pending notify=$notify taskPhase=${SchedulerBinding.instance.schedulerPhase}',
+          'geometry_commit geometry=$geometry notify=$notify taskPhase=${SchedulerBinding.instance.schedulerPhase}',
         );
         _logSemanticsStatus('commit_start notify=$notify');
-        final hideGrid = notify;
-        widget.onMutateStart?.call(hideGrid);
-        _mutationInProgress = true;
-        void performUpdate() {
-          if (!mounted) {
-            _mutationInProgress = false;
-            _waitingForSemantics = false;
-            return;
+        _store.updateGeometry(geometry, notify: notify);
+        final snapshot = _cloneStates(_store.viewStates);
+        setState(() {
+          _stagingGeometry = geometry;
+          _stagingStates = snapshot;
+        });
+      } finally {
+        _scheduleMutationEnd(notify, job.ticket).whenComplete(() {
+          if (mounted && !job.ticket.isCancelled) {
+            setState(() {
+              if (_stagingGeometry != null && _stagingStates != null) {
+                _frontGeometry = _stagingGeometry;
+                _frontStates = _stagingStates;
+                _stagingGeometry = null;
+                _stagingStates = null;
+                _gridHiddenForReset = false;
+              }
+            });
           }
-          try {
-            _store.updateGeometry(pending, notify: notify);
-          } finally {
-            _scheduleMutationEnd(hideGrid);
+          if (!mutationCompleter.isCompleted) {
+            mutationCompleter.complete();
           }
-        }
+        });
+      }
+    });
 
-        WidgetsBinding.instance.addPostFrameCallback((_) => performUpdate());
-      },
-      priority,
-      debugLabel: debugLabel,
-    );
-    _debugLog(
-      'geometry_schedule geometry=$_pendingGeometry notify=$_pendingNotify label=$debugLabel priority=$priority',
-    );
-    _logSemanticsStatus('schedule_done notify=$_pendingNotify');
+    await mutationCompleter.future;
   }
 
   void _debugLog(String message) {
@@ -285,11 +301,19 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     debugPrint('[GridLayoutSurface] $message');
   }
 
-  void _scheduleMutationEnd(bool hideGrid) {
+  Future<void> _scheduleMutationEnd(
+    bool hideGrid,
+    GeometryMutationTicket ticket,
+  ) {
+    final completer = Completer<void>();
+
     void finish() {
       if (!mounted) {
         _mutationInProgress = false;
         _waitingForSemantics = false;
+        if (!completer.isCompleted) {
+          completer.complete();
+        }
         return;
       }
       widget.onMutateEnd?.call(hideGrid);
@@ -308,22 +332,24 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
           }
         });
       }
-      if (_pendingGeometry != null && !_semanticsTaskScheduled) {
-        _debugLog('commit_pending resume after end');
-        _commitPending();
+      if (!completer.isCompleted) {
+        completer.complete();
       }
     }
 
-    final shouldWaitForSemantics = _semanticsExcluded;
+    final shouldWaitForSemantics = _semanticsExcluded && hideGrid;
     if (!shouldWaitForSemantics) {
       WidgetsBinding.instance.addPostFrameCallback((_) => finish());
       _logSemanticsStatus(
           hideGrid ? 'schedule_end_soft' : 'schedule_end_immediate');
-      return;
+      return completer.future;
     }
 
     if (_waitingForSemantics) {
-      return;
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
+      return completer.future;
     }
     _waitingForSemantics = true;
     var retries = 0;
@@ -332,6 +358,10 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     void scheduleNextWait() {
       SchedulerBinding.instance.endOfFrame.then((_) {
         Future.microtask(() {
+          if (ticket.isCancelled) {
+            finish();
+            return;
+          }
           if (_hasPendingSemanticsUpdates()) {
             retries += 1;
             if (retries >= maxRetries) {
@@ -353,6 +383,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     }
 
     scheduleNextWait();
+    return completer.future;
   }
 
   void _logSemanticsStatus(String label) {
@@ -412,5 +443,20 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
       }
     }
     return false;
+  }
+
+  List<GridCardViewState> _cloneStates(List<GridCardViewState> states) {
+    return states
+        .map(
+          (s) => GridCardViewState(
+            id: s.id,
+            width: s.width,
+            height: s.height,
+            scale: s.scale,
+            columnSpan: s.columnSpan,
+            customHeight: s.customHeight,
+          ),
+        )
+        .toList(growable: false);
   }
 }
