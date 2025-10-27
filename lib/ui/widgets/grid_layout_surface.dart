@@ -8,7 +8,6 @@ import 'package:flutter/rendering.dart';
 
 import '../../system/state/grid_geometry_queue.dart';
 import '../../system/state/grid_layout_store.dart';
-import 'grid_semantics_bundle.dart';
 
 typedef GridLayoutChildBuilder = Widget Function(
   BuildContext context,
@@ -55,10 +54,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
   List<GridCardViewState>? _frontStates;
   GridLayoutGeometry? _stagingGeometry;
   List<GridCardViewState>? _stagingStates;
-  GridSemanticsBundle? _frontSemantics;
-  GridSemanticsBundle? _stagingSemantics;
   late final GeometryMutationQueue _geometryQueue;
-  late final GridSemanticsBuilder _semanticsBuilder;
 
   GridLayoutSurfaceStore get _store => widget.store;
 
@@ -70,9 +66,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
       worker: _processGeometryMutation,
       throttle: _throttleDuration,
     );
-    _semanticsBuilder = GridSemanticsBuilder();
     _frontStates = _cloneStates(_store.viewStates);
-    _frontGeometry = null;
   }
 
   @override
@@ -129,7 +123,8 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
 
         final frontGeometry =
             _frontGeometry ?? _lastReportedGeometry ?? geometry;
-        final frontStates = _frontStates ?? _cloneStates(_store.viewStates);
+        final frontStates =
+            _frontStates ?? _cloneStates(_store.viewStates);
         final frontChild = _buildGridContent(
           context,
           frontGeometry,
@@ -138,10 +133,6 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
         );
 
         final List<Widget> stackChildren = [frontChild];
-
-        if (_frontSemantics != null) {
-          stackChildren.add(_buildSemanticsOverlay(_frontSemantics!));
-        }
 
         if (_stagingGeometry != null && _stagingStates != null) {
           stackChildren.add(
@@ -192,41 +183,6 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     );
   }
 
-  Widget _buildSemanticsOverlay(GridSemanticsBundle bundle) {
-    Widget overlay = IgnorePointer(
-      ignoring: true,
-      child: Semantics(
-        container: true,
-        explicitChildNodes: true,
-        child: Stack(
-          fit: StackFit.passthrough,
-          children: [
-            for (final entry in bundle.entries)
-              Positioned(
-                left: entry.rect.left,
-                top: entry.rect.top,
-                width: entry.rect.width,
-                height: entry.rect.height,
-                child: Semantics(
-                  container: true,
-                  focusable: true,
-                  label: entry.label,
-                  child: const SizedBox.shrink(),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-    if (widget.padding != EdgeInsets.zero) {
-      overlay = Padding(
-        padding: widget.padding,
-        child: overlay,
-      );
-    }
-    return overlay;
-  }
-
   void _handleStoreChanged() {
     if (!mounted) {
       return;
@@ -234,12 +190,6 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     setState(() {
       if (!_mutationInProgress) {
         _frontStates = _cloneStates(_store.viewStates);
-        if (_frontGeometry != null && _frontStates != null) {
-          _frontSemantics = _semanticsBuilder.build(
-            geometry: _frontGeometry!,
-            states: _frontStates!,
-          );
-        }
       }
     });
   }
@@ -250,15 +200,6 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
       return;
     }
     _lastReportedGeometry = geometry;
-    if (_frontGeometry == null && !_mutationInProgress) {
-      _frontGeometry = geometry;
-      if (_frontStates != null) {
-        _frontSemantics = _semanticsBuilder.build(
-          geometry: geometry,
-          states: _frontStates!,
-        );
-      }
-    }
     final shouldNotify =
         previous == null || previous.columnCount != geometry.columnCount;
     final deltaWidth =
@@ -328,14 +269,9 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
         _logSemanticsStatus('commit_start notify=$notify');
         _store.updateGeometry(geometry, notify: notify);
         final snapshot = _cloneStates(_store.viewStates);
-        final semanticsBundle = _semanticsBuilder.build(
-          geometry: geometry,
-          states: snapshot,
-        );
         setState(() {
           _stagingGeometry = geometry;
           _stagingStates = snapshot;
-          _stagingSemantics = semanticsBundle;
         });
       } finally {
         _scheduleMutationEnd(notify, job.ticket).whenComplete(() {
@@ -344,10 +280,8 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
               if (_stagingGeometry != null && _stagingStates != null) {
                 _frontGeometry = _stagingGeometry;
                 _frontStates = _stagingStates;
-                _frontSemantics = _stagingSemantics;
                 _stagingGeometry = null;
                 _stagingStates = null;
-                _stagingSemantics = null;
                 _gridHiddenForReset = false;
               }
             });
