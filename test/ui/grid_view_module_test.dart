@@ -313,8 +313,6 @@ void main() {
               child: GridViewModule(
                 state: imageNotifier.state,
                 enableGridSemantics: false,
-                usePinterestGrid: false,
-                geometryQueueEnabled: false,
               ),
             ),
           ),
