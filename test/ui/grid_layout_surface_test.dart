@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -76,6 +78,48 @@ void main() {
       await tester.pumpAndSettle(const Duration(milliseconds: 10));
 
       expect(buildCount, greaterThanOrEqualTo(2));
+    });
+
+    testWidgets('childBuilder に latestSnapshot が渡される', (tester) async {
+      final store = _WidgetFakeGridLayoutStore();
+      store.trigger([
+        GridCardViewState(
+          id: 'a',
+          width: 200,
+          height: 160,
+          scale: 1,
+          columnSpan: 1,
+          customHeight: null,
+        ),
+      ]);
+
+      layout.LayoutSnapshot? received;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: GridLayoutSurface(
+              store: store,
+              columnGap: 4,
+              padding: EdgeInsets.zero,
+              resolveColumnCount: (_) => 1,
+              childBuilder: (context, geometry, states, snapshot) {
+                received = snapshot;
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+      await tester.idle();
+      await _waitForGeometryCalls(tester, store, 1);
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(received, isNotNull);
+      expect(received!.entries, isNotEmpty);
+      expect(received!.geometry.columnCount, 1);
     });
 
     testWidgets('列変更と列幅変更で geometry が更新される', (tester) async {
@@ -192,10 +236,23 @@ class _WidgetFakeGridLayoutStore extends ChangeNotifier
     updateGeometryCalls += 1;
     lastGeometry = geometry;
     geometryHistory.add(geometry);
+    final entries = <layout.LayoutSnapshotEntry>[];
+    double offsetY = 0;
+    for (final state in _states) {
+      final rect = Rect.fromLTWH(0, offsetY, state.width, state.height);
+      entries.add(
+        layout.LayoutSnapshotEntry(
+          id: state.id,
+          rect: rect,
+          columnSpan: state.columnSpan,
+        ),
+      );
+      offsetY += state.height;
+    }
     _latestSnapshot = layout.LayoutSnapshot(
       id: 'fake_${updateGeometryCalls}',
       geometry: geometry,
-      entries: const [],
+      entries: entries,
     );
   }
 

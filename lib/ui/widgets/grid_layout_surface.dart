@@ -9,6 +9,7 @@ import 'package:flutter/rendering.dart';
 import '../../system/grid_layout_layout_engine.dart' as layout;
 import '../../system/state/grid_geometry_queue.dart';
 import '../../system/state/grid_layout_store.dart';
+import 'grid_semantics_tree.dart';
 
 typedef GridLayoutChildBuilder = Widget Function(
   BuildContext context,
@@ -153,6 +154,24 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
                 _stagingStates!,
                 snapshot: _stagingSnapshot,
                 excludeSemantics: false,
+              ),
+            ),
+          );
+        }
+
+        final semanticsSnapshot =
+            _semanticsExcluded ? null : frontSnapshot ?? _frontSnapshot;
+        if (semanticsSnapshot != null) {
+          final textDirection = Directionality.of(context);
+          stackChildren.add(
+            IgnorePointer(
+              ignoring: true,
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: GridSemanticsTree(
+                  snapshot: semanticsSnapshot,
+                  textDirection: textDirection,
+                ),
               ),
             ),
           );
