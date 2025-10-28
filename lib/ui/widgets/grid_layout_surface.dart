@@ -64,6 +64,8 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
   GridLayoutGeometry? _stagingGeometry;
   List<GridCardViewState>? _stagingStates;
   layout.LayoutSnapshot? _stagingSnapshot;
+  layout.LayoutSnapshot? _semanticsSnapshot;
+  bool _semanticsUpdateScheduled = false;
   late final GeometryMutationQueue _geometryQueue;
 
   GridLayoutSurfaceStore get _store => widget.store;
@@ -175,7 +177,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
 
         final semanticsSnapshot =
             widget.semanticsOverlayEnabled && !_semanticsExcluded
-                ? frontSnapshot ?? _frontSnapshot
+                ? _semanticsSnapshot
                 : null;
         if (semanticsSnapshot != null) {
           final textDirection = Directionality.of(context);
@@ -247,6 +249,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
         }
       }
     });
+    _scheduleSemanticsUpdate();
   }
 
   void _maybeUpdateGeometry(GridLayoutGeometry geometry) {
@@ -275,10 +278,81 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
           _frontStates = _cloneStates(_store.viewStates);
           _frontSnapshot = _store.latestSnapshot;
         });
+        _scheduleSemanticsUpdate();
       });
       return;
     }
     _geometryQueue.enqueue(geometry, notify: shouldNotify);
+  }
+
+  void _scheduleSemanticsUpdate() {
+    if (!widget.semanticsOverlayEnabled) {
+      if (_semanticsSnapshot != null && !_semanticsUpdateScheduled) {
+        _semanticsUpdateScheduled = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _semanticsUpdateScheduled = false;
+          if (!mounted) return;
+          if (_semanticsSnapshot != null) {
+            setState(() {
+              _semanticsSnapshot = null;
+            });
+          }
+        });
+      }
+      return;
+    }
+
+    final target = _frontSnapshot;
+    if (target == null) {
+      if (_semanticsSnapshot != null && !_semanticsUpdateScheduled) {
+        _semanticsUpdateScheduled = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _semanticsUpdateScheduled = false;
+          if (!mounted) return;
+          if (_semanticsSnapshot != null) {
+            setState(() {
+              _semanticsSnapshot = null;
+            });
+          }
+        });
+      }
+      return;
+    }
+
+    if (_semanticsSnapshot?.id == target.id || _semanticsUpdateScheduled) {
+      return;
+    }
+
+    _semanticsUpdateScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _semanticsUpdateScheduled = false;
+      if (!mounted) {
+        return;
+      }
+      if (!widget.semanticsOverlayEnabled) {
+        if (_semanticsSnapshot != null) {
+          setState(() {
+            _semanticsSnapshot = null;
+          });
+        }
+        return;
+      }
+      final current = _frontSnapshot;
+      if (current == null) {
+        if (_semanticsSnapshot != null) {
+          setState(() {
+            _semanticsSnapshot = null;
+          });
+        }
+        return;
+      }
+      if (_semanticsSnapshot?.id == current.id) {
+        return;
+      }
+      setState(() {
+        _semanticsSnapshot = current;
+      });
+    });
   }
 
   bool _geometryEquals(GridLayoutGeometry a, GridLayoutGeometry b) {
@@ -348,6 +422,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
             _debugLog('staging_snapshot_ready id=${latestSnapshot.id}');
           }
         });
+        _scheduleSemanticsUpdate();
       } finally {
         _scheduleMutationEnd(notify, job.ticket).whenComplete(() {
           if (mounted && !job.ticket.isCancelled) {
@@ -365,6 +440,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
                 }
               }
             });
+            _scheduleSemanticsUpdate();
           }
           if (!mutationCompleter.isCompleted) {
             mutationCompleter.complete();
