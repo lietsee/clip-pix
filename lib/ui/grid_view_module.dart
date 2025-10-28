@@ -184,7 +184,7 @@ class _GridViewModuleState extends State<GridViewModule> {
             mutationController.beginMutation(hideGrid: hideGrid),
         onMutateEnd: (hideGrid) =>
             mutationController.endMutation(hideGrid: hideGrid),
-        childBuilder: (context, geometry, states) {
+        childBuilder: (context, geometry, states, snapshot) {
           _orderRepository = context.watch<GridOrderRepository>();
           final controller = _resolveController(selectedState);
           final backgroundColor = _backgroundForTone(settings.background);

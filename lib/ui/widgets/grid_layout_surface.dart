@@ -6,6 +6,7 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter/rendering.dart';
 
+import '../../system/grid_layout_layout_engine.dart' as layout;
 import '../../system/state/grid_geometry_queue.dart';
 import '../../system/state/grid_layout_store.dart';
 
@@ -13,6 +14,7 @@ typedef GridLayoutChildBuilder = Widget Function(
   BuildContext context,
   GridLayoutGeometry geometry,
   List<GridCardViewState> states,
+  layout.LayoutSnapshot? snapshot,
 );
 
 typedef GridColumnCountResolver = int Function(double availableWidth);
@@ -52,8 +54,10 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
   static const _throttleDuration = Duration(milliseconds: 60);
   GridLayoutGeometry? _frontGeometry;
   List<GridCardViewState>? _frontStates;
+  layout.LayoutSnapshot? _frontSnapshot;
   GridLayoutGeometry? _stagingGeometry;
   List<GridCardViewState>? _stagingStates;
+  layout.LayoutSnapshot? _stagingSnapshot;
   late final GeometryMutationQueue _geometryQueue;
 
   GridLayoutSurfaceStore get _store => widget.store;
@@ -67,6 +71,8 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
       throttle: _throttleDuration,
     );
     _frontStates = _cloneStates(_store.viewStates);
+    _frontSnapshot = _store.latestSnapshot;
+    _frontGeometry = _frontSnapshot?.geometry ?? _frontGeometry;
   }
 
   @override
@@ -121,14 +127,17 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
           return const SizedBox.shrink();
         }
 
-        final frontGeometry =
-            _frontGeometry ?? _lastReportedGeometry ?? geometry;
-        final frontStates =
-            _frontStates ?? _cloneStates(_store.viewStates);
+        final frontSnapshot = _frontSnapshot;
+        final frontGeometry = frontSnapshot?.geometry ??
+            _frontGeometry ??
+            _lastReportedGeometry ??
+            geometry;
+        final frontStates = _frontStates ?? _cloneStates(_store.viewStates);
         final frontChild = _buildGridContent(
           context,
           frontGeometry,
           frontStates,
+          snapshot: frontSnapshot,
           excludeSemantics: _semanticsExcluded,
         );
 
@@ -142,6 +151,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
                 context,
                 _stagingGeometry!,
                 _stagingStates!,
+                snapshot: _stagingSnapshot,
                 excludeSemantics: false,
               ),
             ),
@@ -163,12 +173,14 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     BuildContext context,
     GridLayoutGeometry geometry,
     List<GridCardViewState> states, {
+    layout.LayoutSnapshot? snapshot,
     required bool excludeSemantics,
   }) {
     Widget child = widget.childBuilder(
       context,
       geometry,
       states,
+      snapshot,
     );
 
     if (widget.padding != EdgeInsets.zero) {
@@ -187,9 +199,14 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     if (!mounted) {
       return;
     }
+    final latestSnapshot = _store.latestSnapshot;
     setState(() {
       if (!_mutationInProgress) {
         _frontStates = _cloneStates(_store.viewStates);
+        _frontSnapshot = latestSnapshot;
+        if (latestSnapshot != null) {
+          _frontGeometry = latestSnapshot.geometry;
+        }
       }
     });
   }
@@ -268,20 +285,24 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
         );
         _logSemanticsStatus('commit_start notify=$notify');
         _store.updateGeometry(geometry, notify: notify);
-        final snapshot = _cloneStates(_store.viewStates);
+        final states = _cloneStates(_store.viewStates);
+        final latestSnapshot = _store.latestSnapshot;
         setState(() {
           _stagingGeometry = geometry;
-          _stagingStates = snapshot;
+          _stagingStates = states;
+          _stagingSnapshot = latestSnapshot;
         });
       } finally {
         _scheduleMutationEnd(notify, job.ticket).whenComplete(() {
           if (mounted && !job.ticket.isCancelled) {
             setState(() {
               if (_stagingGeometry != null && _stagingStates != null) {
-                _frontGeometry = _stagingGeometry;
+                _frontGeometry = _stagingSnapshot?.geometry ?? _stagingGeometry;
                 _frontStates = _stagingStates;
+                _frontSnapshot = _stagingSnapshot;
                 _stagingGeometry = null;
                 _stagingStates = null;
+                _stagingSnapshot = null;
                 _gridHiddenForReset = false;
               }
             });

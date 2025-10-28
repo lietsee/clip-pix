@@ -50,6 +50,7 @@ abstract class GridLayoutSurfaceStore extends Listenable
     implements GridLayoutCommandTarget {
   List<GridCardViewState> get viewStates;
   void updateGeometry(GridLayoutGeometry geometry, {bool notify = true});
+  layout.LayoutSnapshot? get latestSnapshot;
 }
 
 class GridLayoutGeometry {
@@ -138,6 +139,7 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
             .toList(growable: false),
       );
 
+  @override
   layout.LayoutSnapshot? get latestSnapshot => _latestSnapshot;
 
   void syncLibrary(
