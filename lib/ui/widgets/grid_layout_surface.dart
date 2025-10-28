@@ -395,61 +395,96 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
 
     widget.onMutateStart?.call(notify);
     _mutationInProgress = true;
+    bool mutationEndScheduled = false;
 
-    final mutationCompleter = Completer<void>();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || job.ticket.isCancelled) {
-        _mutationInProgress = false;
-        _waitingForSemantics = false;
-        if (!mutationCompleter.isCompleted) {
-          mutationCompleter.complete();
-        }
-        return;
-      }
-      try {
-        _debugLog(
-          'geometry_commit geometry=$geometry notify=$notify taskPhase=${SchedulerBinding.instance.schedulerPhase}',
-        );
-        _logSemanticsStatus('commit_start notify=$notify');
-        _store.updateGeometry(geometry, notify: notify);
-        final states = _cloneStates(_store.viewStates);
-        final latestSnapshot = _store.latestSnapshot;
-        setState(() {
-          _stagingGeometry = geometry;
-          _stagingStates = states;
-          _stagingSnapshot = latestSnapshot;
-          if (latestSnapshot != null) {
-            _debugLog('staging_snapshot_ready id=${latestSnapshot.id}');
-          }
-        });
-        _scheduleSemanticsUpdate();
-      } finally {
-        _scheduleMutationEnd(notify, job.ticket).whenComplete(() {
-          if (mounted && !job.ticket.isCancelled) {
-            setState(() {
-              if (_stagingGeometry != null && _stagingStates != null) {
-                _frontGeometry = _stagingSnapshot?.geometry ?? _stagingGeometry;
-                _frontStates = _stagingStates;
-                _frontSnapshot = _stagingSnapshot;
-                _stagingGeometry = null;
-                _stagingStates = null;
-                _stagingSnapshot = null;
-                _gridHiddenForReset = false;
-                if (_frontSnapshot != null) {
-                  _debugLog('front_snapshot_swapped id=${_frontSnapshot!.id}');
-                }
-              }
-            });
-            _scheduleSemanticsUpdate();
-          }
+    try {
+      final mutationCompleter = Completer<void>();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || job.ticket.isCancelled) {
+          _mutationInProgress = false;
+          _waitingForSemantics = false;
           if (!mutationCompleter.isCompleted) {
             mutationCompleter.complete();
           }
-        });
-      }
-    });
+          return;
+        }
+        try {
+          _debugLog(
+            'geometry_commit geometry=$geometry notify=$notify taskPhase=${SchedulerBinding.instance.schedulerPhase}',
+          );
+          _logSemanticsStatus('commit_start notify=$notify');
+          _store.updateGeometry(geometry, notify: notify);
+          final states = _cloneStates(_store.viewStates);
+          final latestSnapshot = _store.latestSnapshot;
+          setState(() {
+            _stagingGeometry = geometry;
+            _stagingStates = states;
+            _stagingSnapshot = latestSnapshot;
+            if (latestSnapshot != null) {
+              _debugLog('staging_snapshot_ready id=${latestSnapshot.id}');
+            }
+          });
+          _scheduleSemanticsUpdate();
+        } catch (error, stackTrace) {
+          _debugLog('geometry_commit error: $error');
+          debugPrintStack(stackTrace: stackTrace, label: 'geometry_commit');
+        } finally {
+          if (!mutationEndScheduled) {
+            mutationEndScheduled = true;
+            _scheduleMutationEnd(notify, job.ticket).whenComplete(() {
+              if (mounted && !job.ticket.isCancelled) {
+                try {
+                  setState(() {
+                    if (_stagingGeometry != null && _stagingStates != null) {
+                      _frontGeometry =
+                          _stagingSnapshot?.geometry ?? _stagingGeometry;
+                      _frontStates = _stagingStates;
+                      _frontSnapshot = _stagingSnapshot;
+                      _stagingGeometry = null;
+                      _stagingStates = null;
+                      _stagingSnapshot = null;
+                      _gridHiddenForReset = false;
+                      if (_frontSnapshot != null) {
+                        _debugLog(
+                            'front_snapshot_swapped id=${_frontSnapshot!.id}');
+                      }
+                    }
+                  });
+                  _scheduleSemanticsUpdate();
+                } catch (error, stackTrace) {
+                  _debugLog('front_snapshot_swap error: $error');
+                  debugPrintStack(
+                      stackTrace: stackTrace, label: 'front_snapshot_swap');
+                }
+              }
+              if (!mutationCompleter.isCompleted) {
+                mutationCompleter.complete();
+              }
+            });
+          }
+        }
+      });
 
-    await mutationCompleter.future;
+      await mutationCompleter.future;
+    } catch (error, stackTrace) {
+      _debugLog('_processGeometryMutation error: $error');
+      debugPrintStack(
+          stackTrace: stackTrace, label: '_processGeometryMutation');
+    } finally {
+      // 最終フォールバック: もし何らかの理由で endMutation が呼ばれていなければ、ここで呼ぶ
+      if (!mutationEndScheduled) {
+        _debugLog(
+            'FALLBACK: calling onMutateEnd because _scheduleMutationEnd was never invoked');
+        widget.onMutateEnd?.call(notify);
+        _mutationInProgress = false;
+        _waitingForSemantics = false;
+        if (_semanticsExcluded) {
+          setState(() {
+            _semanticsExcluded = false;
+          });
+        }
+      }
+    }
   }
 
   void _debugLog(String message) {
@@ -462,6 +497,8 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     GeometryMutationTicket ticket,
   ) {
     final completer = Completer<void>();
+    final startTime = DateTime.now();
+    const absoluteTimeout = Duration(seconds: 5);
 
     void finish() {
       if (!mounted) {
@@ -479,14 +516,19 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
       final shouldRestoreGrid = hideGrid && _gridHiddenForReset;
       final shouldRestoreSemantics = _semanticsExcluded;
       if (shouldRestoreGrid || shouldRestoreSemantics) {
-        setState(() {
-          if (shouldRestoreGrid) {
-            _gridHiddenForReset = false;
-          }
-          if (shouldRestoreSemantics) {
-            _semanticsExcluded = false;
-          }
-        });
+        try {
+          setState(() {
+            if (shouldRestoreGrid) {
+              _gridHiddenForReset = false;
+            }
+            if (shouldRestoreSemantics) {
+              _semanticsExcluded = false;
+            }
+          });
+        } catch (error, stackTrace) {
+          _debugLog('finish setState error: $error');
+          debugPrintStack(stackTrace: stackTrace, label: 'finish_setState');
+        }
       }
       if (!completer.isCompleted) {
         completer.complete();
@@ -514,6 +556,16 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     void scheduleNextWait() {
       SchedulerBinding.instance.endOfFrame.then((_) {
         Future.microtask(() {
+          // 絶対タイムアウトチェック
+          final elapsed = DateTime.now().difference(startTime);
+          if (elapsed > absoluteTimeout) {
+            _debugLog(
+              'semantics wait ABSOLUTE TIMEOUT reached (${elapsed.inMilliseconds}ms); forcing finish()',
+            );
+            finish();
+            return;
+          }
+
           if (ticket.isCancelled) {
             finish();
             return;
@@ -535,6 +587,12 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
           );
           finish();
         });
+      }).catchError((error, stackTrace) {
+        // endOfFrame の Future が失敗した場合の保険
+        _debugLog('scheduleNextWait endOfFrame error: $error; forcing finish()');
+        debugPrintStack(
+            stackTrace: stackTrace, label: 'scheduleNextWait_endOfFrame');
+        finish();
       });
     }
 

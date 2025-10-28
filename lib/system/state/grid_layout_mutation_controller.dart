@@ -25,6 +25,25 @@ class GridLayoutMutationController extends ChangeNotifier {
     _debugLoggingEnabled = value;
   }
 
+  /// 状態が不整合になっている場合に強制的にリセットする。
+  /// begin/end の呼び出し不一致が発生した場合の緊急リセット用。
+  void resetIfInconsistent() {
+    if (_depth > 10 || _hideDepth > 5) {
+      if (_debugLoggingEnabled) {
+        debugPrint(
+          '[GridLayoutMutationController] INCONSISTENT STATE DETECTED: '
+          'depth=$_depth hideDepth=$_hideDepth beginCount=$debugBeginCount endCount=$debugEndCount; forcing reset',
+        );
+      }
+      _depth = 0;
+      _hideDepth = 0;
+      _hideStack.clear();
+      _activeFrameNumber = null;
+      _concurrentFrameBegins = 0;
+      notifyListeners();
+    }
+  }
+
   void beginMutation({bool hideGrid = true}) {
     _depth += 1;
     debugBeginCount += 1;
@@ -60,6 +79,9 @@ class GridLayoutMutationController extends ChangeNotifier {
   }
 
   void endMutation({bool? hideGrid}) {
+    // 不整合状態を検出してリセット
+    resetIfInconsistent();
+
     if (_depth == 0) {
       return;
     }
