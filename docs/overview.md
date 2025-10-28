@@ -31,17 +31,25 @@ UI操作(Ctrl+C) → ClipboardCopyService → (ガード付クリップボード
 - 出典情報：画像と同階層に `image_xxxx.json`
 - ログ出力：アプリケーションディレクトリ配下 `./logs/app.log`
 
-## 6. MasonryGridView 検証方針
-- `flutter_staggered_grid_view` を採用し、Windows デスクトップ(Releaseモード)で FPS とメモリ利用を確認する。
-- チェックリスト: ①カードリサイズ時のレイアウト安定性、②ホイールズームのヒットテスト、③1,000枚画像読み込み時のスクロールスムーズさ。
-- 計測手順: `flutter run -d windows --profile` 実行 → DevTools の Performance タブでタイムライン、`Frame build` の平均を 16ms 以下に。
-- ドラッグリサイズ検証: `WidgetTester` での自動化が難しいため、`integration_test/resize_flow_test.dart` を用意し、`flutter drive` で手動確認ログを残す。
-- 問題発生時は `GridView.custom` への切替を比較ベースラインとして記録する。
+## 6. MasonryGridView 実装状況 ✅
+- **実装完了**: `flutter_staggered_grid_view` から `PinterestSliverGrid` カスタム実装に移行完了
+- **パフォーマンス**: ウィンドウリサイズ時のFPS安定（60ms スロットリング適用）
+- **レイアウト安定性**: Front/Backバッファアーキテクチャによるちらつき防止
+- **セマンティクス問題解決**: ExcludeSemanticsとオーバーレイ方式でアサーション解決
+- **詳細**: `docs/system/pinterest_grid_migration.md`, `docs/system/grid_layout_surface.md` 参照
 
-## 7. URL画像保存方針（たたき台）
-- 使用パッケージ: `http`（リトライは将来的に `retry` 導入を検討）。
-- フロー: ①クリップボード文字列から URL 抽出 → ② GET でバイナリ取得 → ③ `content-type` と拡張子を突合 → ④ 保存ファイル名は `image_{timestamp}.{ext}`。
-- タイムアウト: デフォルト 10 秒。失敗時はログに `download_timeout` と URL を記録し保存処理を中断。
-- 同名ファイル回避: 生成名が既存と衝突した場合は `_1` `_2` を付与してリトライ。
-- セキュリティ: HTTP→HTTPS 自動昇格は行わず、HTTP の場合はユーザーに警告ダイアログで確認を求める案を検討。
-- ダウンロードは UI スレッドをブロックしないよう `compute` または isolate を検討し、完了後に JSON メタデータを作成して保存する。
+## 7. URL画像保存 ✅ 実装完了
+- **実装状況**: `UrlDownloadService` として実装完了（2025-10-25）
+- **使用パッケージ**: `http` パッケージ
+- **サポート形式**: JPEG (`image/jpeg` → `.jpg`), PNG (`image/png` → `.png`)
+- **タイムアウト**: 10秒（カスタマイズ可能）
+- **フロー**: クリップボードURL → HTTP GET → Content-Type検証 → ImageSaverで保存
+- **ファイル名**: `clipboard_{timestamp}.{ext}`（タイムスタンプでユニーク性保証）
+- **エラーハンドリング**: ステータスコード、Content-Type、タイムアウト、ネットワークエラーすべて考慮
+- **詳細**: `docs/system/url_download_service.md` 参照
+
+## 8. 新機能
+- **ウィンドウ位置永続化** ✅: `WindowBoundsService` による位置・サイズの自動保存/復元（`docs/system/window_bounds_service.md`）
+- **クリップボード監視ON/OFF** ✅: AppBarにトグルスイッチ追加（commit: 26b3a38）
+- **グリッド設定UI** ✅: カラム数、背景色、一括リサイズ、Undo/Redo（`docs/ui/grid_settings_dialog.md`）
+- **GridLayoutStore** ✅: 中央集約型レイアウト管理、Front/Backバッファ、差分検出（`docs/system/grid_layout_surface.md`）
