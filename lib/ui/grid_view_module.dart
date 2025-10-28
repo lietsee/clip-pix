@@ -27,10 +27,20 @@ import 'widgets/pinterest_grid.dart';
 import 'package:path/path.dart' as p;
 
 class GridViewModule extends StatefulWidget {
-  const GridViewModule({super.key, required this.state, this.controller});
+  const GridViewModule({
+    super.key,
+    required this.state,
+    this.controller,
+    this.enableGridSemantics = true,
+    this.usePinterestGrid = true,
+    this.geometryQueueEnabled = true,
+  });
 
   final ImageLibraryState state;
   final ScrollController? controller;
+  final bool enableGridSemantics;
+  final bool usePinterestGrid;
+  final bool geometryQueueEnabled;
 
   @override
   State<GridViewModule> createState() => _GridViewModuleState();
@@ -184,17 +194,16 @@ class _GridViewModuleState extends State<GridViewModule> {
             mutationController.beginMutation(hideGrid: hideGrid),
         onMutateEnd: (hideGrid) =>
             mutationController.endMutation(hideGrid: hideGrid),
-        childBuilder: (context, geometry, states, snapshot) {
+        semanticsOverlayEnabled: widget.enableGridSemantics,
+        geometryQueueEnabled: widget.geometryQueueEnabled,
+        childBuilder:
+            (context, geometry, states, snapshot, {bool isStaging = false}) {
           _orderRepository = context.watch<GridOrderRepository>();
           final controller = _resolveController(selectedState);
           final backgroundColor = _backgroundForTone(settings.background);
           final cardBackgroundColor =
               _cardBackgroundForTone(settings.background);
           final columnCount = math.max(1, geometry.columnCount).toInt();
-          final gridDelegate = PinterestGridDelegate(
-            columnCount: columnCount,
-            gap: _gridGap,
-          );
           _currentBuildKeys.clear();
 
           return Container(
@@ -208,38 +217,75 @@ class _GridViewModuleState extends State<GridViewModule> {
                     horizontal: _outerPadding,
                     vertical: _outerPadding,
                   ).copyWith(bottom: _outerPadding + 68),
-                  sliver: PinterestSliverGrid(
-                    gridDelegate: gridDelegate,
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        if (index >= _entries.length) {
-                          return null;
-                        }
-                        final entry = _entries[index];
-                        final viewState = layoutStore.viewStateFor(
-                          entry.item.id,
-                        );
-                        final span =
-                            viewState.columnSpan.clamp(1, columnCount).toInt();
-                        final cardWidget = _buildCard(
-                          entry: entry,
-                          viewState: viewState,
-                          columnWidth: geometry.columnWidth,
-                          columnCount: columnCount,
-                          span: span,
-                          backgroundColor: cardBackgroundColor,
-                        );
-                        return PinterestGridTile(
-                          span: span,
-                          child: cardWidget,
-                        );
-                      },
-                      childCount: _entries.length,
-                      addAutomaticKeepAlives: false,
-                      addRepaintBoundaries: false,
-                      addSemanticIndexes: false,
-                    ),
-                  ),
+                  sliver: widget.usePinterestGrid
+                      ? PinterestSliverGrid(
+                          gridDelegate: PinterestGridDelegate(
+                            columnCount: columnCount,
+                            gap: _gridGap,
+                          ),
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              if (index >= _entries.length) {
+                                return null;
+                              }
+                              final entry = _entries[index];
+                              final viewState = layoutStore.viewStateFor(
+                                entry.item.id,
+                              );
+                              final span = viewState.columnSpan
+                                  .clamp(1, columnCount)
+                                  .toInt();
+                              final cardWidget = _buildCard(
+                                entry: entry,
+                                viewState: viewState,
+                                columnWidth: geometry.columnWidth,
+                                columnCount: columnCount,
+                                span: span,
+                                backgroundColor: cardBackgroundColor,
+                                usePersistentKey: !isStaging,
+                                snapshotId: snapshot?.id,
+                              );
+                              return PinterestGridTile(
+                                span: span,
+                                child: cardWidget,
+                              );
+                            },
+                            childCount: _entries.length,
+                            addAutomaticKeepAlives: false,
+                            addRepaintBoundaries: false,
+                            addSemanticIndexes: false,
+                          ),
+                        )
+                      : SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              if (index >= _entries.length) {
+                                return null;
+                              }
+                              final entry = _entries[index];
+                              final viewState = layoutStore.viewStateFor(
+                                entry.item.id,
+                              );
+                              final span = viewState.columnSpan
+                                  .clamp(1, columnCount)
+                                  .toInt();
+                              return _buildCard(
+                                entry: entry,
+                                viewState: viewState,
+                                columnWidth: geometry.columnWidth,
+                                columnCount: columnCount,
+                                span: span,
+                                backgroundColor: cardBackgroundColor,
+                                usePersistentKey: !isStaging,
+                                snapshotId: snapshot?.id,
+                              );
+                            },
+                            childCount: _entries.length,
+                            addAutomaticKeepAlives: false,
+                            addRepaintBoundaries: false,
+                            addSemanticIndexes: false,
+                          ),
+                        ),
                 ),
               ],
             ),
@@ -284,9 +330,15 @@ class _GridViewModuleState extends State<GridViewModule> {
     required int columnCount,
     required int span,
     required Color backgroundColor,
+    required bool usePersistentKey,
+    String? snapshotId,
   }) {
     final item = entry.item;
-    final animatedKey = ObjectKey(entry);
+    final animatedKey = usePersistentKey
+        ? ObjectKey(entry)
+        : ValueKey(
+            'staging-${entry.item.id}-${snapshotId ?? 'none'}-${identityHashCode(entry)}',
+          );
     final entryHash = identityHashCode(entry);
     // debugPrint(
     //   '[GridViewModule] build_child key=$animatedKey entryHash=$entryHash removing=${entry.isRemoving} dragging=${entry.isDragging} opacity=${entry.opacity.toStringAsFixed(2)}',
@@ -296,7 +348,9 @@ class _GridViewModuleState extends State<GridViewModule> {
         '[GridViewModule] duplicate_detected key=$animatedKey entryHash=$entryHash',
       );
     }
-    final cardKey = _cardKeys.putIfAbsent(item.id, () => GlobalKey());
+    final cardKey = usePersistentKey
+        ? _cardKeys.putIfAbsent(item.id, () => GlobalKey())
+        : null;
     return SizedBox(
       key: cardKey,
       child: AnimatedOpacity(

@@ -16,6 +16,7 @@ typedef GridLayoutChildBuilder = Widget Function(
   GridLayoutGeometry geometry,
   List<GridCardViewState> states,
   layout.LayoutSnapshot? snapshot,
+  {bool isStaging}
 );
 
 typedef GridColumnCountResolver = int Function(double availableWidth);
@@ -30,6 +31,8 @@ class GridLayoutSurface extends StatefulWidget {
     required this.resolveColumnCount,
     this.onMutateStart,
     this.onMutateEnd,
+    this.semanticsOverlayEnabled = true,
+    this.geometryQueueEnabled = true,
   });
 
   final GridLayoutSurfaceStore store;
@@ -39,6 +42,8 @@ class GridLayoutSurface extends StatefulWidget {
   final GridColumnCountResolver resolveColumnCount;
   final void Function(bool hideGrid)? onMutateStart;
   final void Function(bool hideGrid)? onMutateEnd;
+  final bool semanticsOverlayEnabled;
+  final bool geometryQueueEnabled;
 
   @override
   State<GridLayoutSurface> createState() => _GridLayoutSurfaceState();
@@ -67,10 +72,17 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
   void initState() {
     super.initState();
     _store.addListener(_handleStoreChanged);
-    _geometryQueue = GeometryMutationQueue(
-      worker: _processGeometryMutation,
-      throttle: _throttleDuration,
-    );
+    if (widget.geometryQueueEnabled) {
+      _geometryQueue = GeometryMutationQueue(
+        worker: _processGeometryMutation,
+        throttle: _throttleDuration,
+      );
+    } else {
+      _geometryQueue = GeometryMutationQueue(
+        worker: _processGeometryMutation,
+        throttle: Duration.zero,
+      );
+    }
     _frontStates = _cloneStates(_store.viewStates);
     _frontSnapshot = _store.latestSnapshot;
     _frontGeometry = _frontSnapshot?.geometry ?? _frontGeometry;
@@ -140,6 +152,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
           frontStates,
           snapshot: frontSnapshot,
           excludeSemantics: _semanticsExcluded,
+          isStaging: false,
         );
 
         final List<Widget> stackChildren = [frontChild];
@@ -154,13 +167,16 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
                 _stagingStates!,
                 snapshot: _stagingSnapshot,
                 excludeSemantics: false,
+                isStaging: true,
               ),
             ),
           );
         }
 
         final semanticsSnapshot =
-            _semanticsExcluded ? null : frontSnapshot ?? _frontSnapshot;
+            widget.semanticsOverlayEnabled && !_semanticsExcluded
+                ? frontSnapshot ?? _frontSnapshot
+                : null;
         if (semanticsSnapshot != null) {
           final textDirection = Directionality.of(context);
           stackChildren.add(
@@ -194,12 +210,14 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     List<GridCardViewState> states, {
     layout.LayoutSnapshot? snapshot,
     required bool excludeSemantics,
+    required bool isStaging,
   }) {
     Widget child = widget.childBuilder(
       context,
       geometry,
       states,
       snapshot,
+      isStaging: isStaging,
     );
 
     if (widget.padding != EdgeInsets.zero) {
@@ -245,6 +263,21 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
       'geometry_enqueued prev=$previous next=$geometry shouldNotify=$shouldNotify '
       'deltaWidth=${deltaWidth?.toStringAsFixed(3)}',
     );
+    if (!widget.geometryQueueEnabled) {
+      final geometryCopy = geometry;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        _store.updateGeometry(geometryCopy, notify: false);
+        setState(() {
+          _frontGeometry = geometryCopy;
+          _frontStates = _cloneStates(_store.viewStates);
+          _frontSnapshot = _store.latestSnapshot;
+        });
+      });
+      return;
+    }
     _geometryQueue.enqueue(geometry, notify: shouldNotify);
   }
 

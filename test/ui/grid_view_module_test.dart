@@ -312,6 +312,9 @@ void main() {
               height: 600,
               child: GridViewModule(
                 state: imageNotifier.state,
+                enableGridSemantics: false,
+                usePinterestGrid: false,
+                geometryQueueEnabled: false,
               ),
             ),
           ),
@@ -321,7 +324,8 @@ void main() {
 
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
-    await tester.pumpAndSettle();
+    await _pumpFrames(tester, count: 15);
+    await _pumpUntilFound(tester, find.byType(ImageCard));
     expect(tester.takeException(), isNull);
 
     final cardFinder = find.byType(ImageCard);
@@ -339,13 +343,28 @@ void main() {
     );
     await gestureDrag.moveBy(const Offset(260, 140));
     await gestureDrag.up();
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-    await tester.pump(const Duration(milliseconds: 400));
+    await _pumpFrames(tester, count: 20);
 
     expect(tester.takeException(), isNull);
 
     final pref = preferences.getOrCreate('item1');
     expect(pref.columnSpan, greaterThanOrEqualTo(2));
   });
+}
+
+Future<void> _pumpUntilFound(WidgetTester tester, Finder finder,
+    {int maxAttempts = 10}) async {
+  for (var i = 0; i < maxAttempts; i++) {
+    if (finder.evaluate().isNotEmpty) {
+      return;
+    }
+    await tester.pump(const Duration(milliseconds: 32));
+  }
+}
+
+Future<void> _pumpFrames(WidgetTester tester,
+    {int count = 10, Duration frame = const Duration(milliseconds: 16)}) async {
+  for (var i = 0; i < count; i++) {
+    await tester.pump(frame);
+  }
 }

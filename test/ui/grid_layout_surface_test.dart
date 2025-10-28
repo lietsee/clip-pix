@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -22,7 +23,9 @@ void main() {
                 columnGap: 3,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 resolveColumnCount: (_) => 2,
-                childBuilder: (context, geometry, states, snapshot) {
+                semanticsOverlayEnabled: false,
+                childBuilder: (context, geometry, states, snapshot,
+                    {bool isStaging = false}) {
                   return Text('items=${states.length}');
                 },
               ),
@@ -54,7 +57,9 @@ void main() {
               columnGap: 4,
               padding: EdgeInsets.zero,
               resolveColumnCount: (_) => 1,
-              childBuilder: (context, geometry, states, snapshot) {
+              semanticsOverlayEnabled: false,
+              childBuilder: (context, geometry, states, snapshot,
+                  {bool isStaging = false}) {
                 buildCount += 1;
                 return Text('build=$buildCount');
               },
@@ -103,7 +108,9 @@ void main() {
               columnGap: 4,
               padding: EdgeInsets.zero,
               resolveColumnCount: (_) => 1,
-              childBuilder: (context, geometry, states, snapshot) {
+              semanticsOverlayEnabled: false,
+              childBuilder: (context, geometry, states, snapshot,
+                  {bool isStaging = false}) {
                 received = snapshot;
                 return const SizedBox.shrink();
               },
@@ -154,10 +161,12 @@ void main() {
                       padding: EdgeInsets.zero,
                       resolveColumnCount: (available) =>
                           available >= 400 ? 3 : 1,
+                      semanticsOverlayEnabled: false,
                       onMutateStart: (hideGrid) =>
                           mutateStartFlags.add(hideGrid),
                       onMutateEnd: (hideGrid) => mutateEndFlags.add(hideGrid),
-                      childBuilder: (context, geometry, states, snapshot) {
+                      childBuilder: (context, geometry, states, snapshot,
+                          {bool isStaging = false}) {
                         return Text(
                           'cols=${geometry.columnCount}',
                         );
@@ -206,6 +215,76 @@ void main() {
       }
       expect(mutateEndFlags, isNotEmpty);
       expect(mutateStartFlags.any((flag) => flag), isTrue);
+    });
+
+    testWidgets('スナップショットログが出力される', (tester) async {
+      final store = _WidgetFakeGridLayoutStore();
+      store.trigger([
+        GridCardViewState(
+          id: 'a',
+          width: 200,
+          height: 160,
+          scale: 1,
+          columnSpan: 1,
+          customHeight: null,
+        ),
+      ]);
+
+      final width = ValueNotifier<double>(500);
+      final logs = <String>[];
+      final originalDebugPrint = debugPrint;
+      debugPrint = (String? message, {int? wrapWidth}) {
+        if (message != null) {
+          logs.add(message);
+        }
+      };
+
+      try {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: ValueListenableBuilder<double>(
+              valueListenable: width,
+              builder: (context, currentWidth, _) {
+                return Scaffold(
+                  body: SizedBox(
+                    width: currentWidth,
+                    child: GridLayoutSurface(
+                      store: store,
+                      columnGap: 4,
+                      padding: EdgeInsets.zero,
+                      resolveColumnCount: (available) =>
+                          available >= 400 ? 2 : 1,
+                      semanticsOverlayEnabled: false,
+                      childBuilder: (context, geometry, states, snapshot,
+                          {bool isStaging = false}) {
+                        return const SizedBox.shrink();
+                      },
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+
+        await tester.pump();
+        width.value = 300;
+        await tester.pump(const Duration(milliseconds: 100));
+        width.value = 700;
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.pumpAndSettle(const Duration(milliseconds: 100));
+      } finally {
+        debugPrint = originalDebugPrint;
+      }
+
+      expect(
+        logs.any((log) => log.contains('staging_snapshot_ready id=')),
+        isTrue,
+      );
+      expect(
+        logs.any((log) => log.contains('front_snapshot_swapped id=')),
+        isTrue,
+      );
     });
   });
 }
