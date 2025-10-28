@@ -289,8 +289,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     if (!widget.semanticsOverlayEnabled) {
       if (_semanticsSnapshot != null && !_semanticsUpdateScheduled) {
         _semanticsUpdateScheduled = true;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _semanticsUpdateScheduled = false;
+        _scheduleNextFrameSemanticsUpdate(() {
           if (!mounted) return;
           if (_semanticsSnapshot != null) {
             setState(() {
@@ -306,8 +305,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     if (target == null) {
       if (_semanticsSnapshot != null && !_semanticsUpdateScheduled) {
         _semanticsUpdateScheduled = true;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _semanticsUpdateScheduled = false;
+        _scheduleNextFrameSemanticsUpdate(() {
           if (!mounted) return;
           if (_semanticsSnapshot != null) {
             setState(() {
@@ -324,8 +322,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     }
 
     _semanticsUpdateScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _semanticsUpdateScheduled = false;
+    _scheduleNextFrameSemanticsUpdate(() {
       if (!mounted) {
         return;
       }
@@ -352,6 +349,43 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
       setState(() {
         _semanticsSnapshot = current;
       });
+    });
+  }
+
+  /// セマンティクス更新を次のフレームまで遅延させる。
+  ///
+  /// endOfFrame → addPostFrameCallback のパターンを使用することで、
+  /// スナップショットスワップと同じフレームではなく、次のフレームで
+  /// セマンティクス更新が行われる。これにより、PinterestSliverGrid の
+  /// レイアウトが完了した後にセマンティクスが更新され、
+  /// _needsLayout アサーションを回避できる。
+  void _scheduleNextFrameSemanticsUpdate(VoidCallback updateCallback) {
+    final startTime = DateTime.now();
+    const maxDelay = Duration(seconds: 3);
+
+    SchedulerBinding.instance.endOfFrame.then((_) {
+      final elapsed = DateTime.now().difference(startTime);
+      if (elapsed > maxDelay) {
+        _debugLog(
+            'semantics update timeout (${elapsed.inMilliseconds}ms); forcing update');
+      }
+
+      // 次のフレームの postFrameCallbacks で実行
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _semanticsUpdateScheduled = false;
+        try {
+          updateCallback();
+        } catch (error, stackTrace) {
+          _debugLog('semantics update error: $error');
+          debugPrintStack(
+              stackTrace: stackTrace, label: 'semantics_update_error');
+        }
+      });
+    }).catchError((error, stackTrace) {
+      // endOfFrame の Future が失敗した場合
+      _debugLog('endOfFrame error: $error; skipping semantics update');
+      debugPrintStack(stackTrace: stackTrace, label: 'endOfFrame_error');
+      _semanticsUpdateScheduled = false;
     });
   }
 
