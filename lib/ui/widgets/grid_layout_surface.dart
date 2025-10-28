@@ -487,7 +487,6 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
                       _stagingStates = null;
                       _stagingSnapshot = null;
                       _gridHiddenForReset = false;
-                      _gridResetKey = UniqueKey();
                       if (_frontSnapshot != null) {
                         _debugLog(
                             'front_snapshot_swapped id=${_frontSnapshot!.id}');
