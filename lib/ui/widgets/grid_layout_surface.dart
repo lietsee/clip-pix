@@ -225,6 +225,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
         _frontSnapshot = latestSnapshot;
         if (latestSnapshot != null) {
           _frontGeometry = latestSnapshot.geometry;
+          _debugLog('front_snapshot_updated id=${latestSnapshot.id}');
         }
       }
     });
@@ -310,6 +311,9 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
           _stagingGeometry = geometry;
           _stagingStates = states;
           _stagingSnapshot = latestSnapshot;
+          if (latestSnapshot != null) {
+            _debugLog('staging_snapshot_ready id=${latestSnapshot.id}');
+          }
         });
       } finally {
         _scheduleMutationEnd(notify, job.ticket).whenComplete(() {
@@ -323,6 +327,9 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
                 _stagingStates = null;
                 _stagingSnapshot = null;
                 _gridHiddenForReset = false;
+                if (_frontSnapshot != null) {
+                  _debugLog('front_snapshot_swapped id=${_frontSnapshot!.id}');
+                }
               }
             });
           }

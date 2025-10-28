@@ -321,6 +321,7 @@ void main() {
 
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
 
     final cardFinder = find.byType(ImageCard);
