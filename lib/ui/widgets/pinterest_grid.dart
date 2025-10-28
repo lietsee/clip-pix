@@ -58,11 +58,14 @@ class PinterestGridTile extends ParentDataWidget<PinterestGridParentData> {
       parentData.columnSpan = span;
       final targetParent = renderObject.parent;
       if (targetParent is RenderObject) {
-        // Defer markNeedsLayout() to next frame to avoid parentDataDirty assertion
-        SchedulerBinding.instance.addPostFrameCallback((_) {
-          if (targetParent.attached) {
-            targetParent.markNeedsLayout();
-          }
+        // Defer markNeedsLayout() to next frame using endOfFrame pattern
+        // This ensures it runs after current frame completes, avoiding parentDataDirty assertion
+        SchedulerBinding.instance.endOfFrame.then((_) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (targetParent.attached) {
+              targetParent.markNeedsLayout();
+            }
+          });
         });
       }
     }
