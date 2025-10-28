@@ -738,7 +738,7 @@ class _ImageCardState extends State<ImageCard> {
 
   void _attachImageStream(Size size, double scale) {
     final signature =
-        '${widget.item.filePath}_${_imageKey}_${scale.toStringAsFixed(2)}';
+        '${widget.item.filePath}_${_imageKey}_${size.width.toStringAsFixed(1)}_${size.height.toStringAsFixed(1)}_${scale.toStringAsFixed(2)}';
     if (_resolvedSignature == signature) {
       // debugPrint(
       //     '[ImageCard] stream_skip id=${widget.item.id} signature=$signature');
