@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 
 /// Describes how a [PinterestGrid] should layout its children.
 class PinterestGridDelegate {
@@ -57,7 +58,12 @@ class PinterestGridTile extends ParentDataWidget<PinterestGridParentData> {
       parentData.columnSpan = span;
       final targetParent = renderObject.parent;
       if (targetParent is RenderObject) {
-        targetParent.markNeedsLayout();
+        // Defer markNeedsLayout() to next frame to avoid parentDataDirty assertion
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          if (targetParent.attached) {
+            targetParent.markNeedsLayout();
+          }
+        });
       }
     }
   }

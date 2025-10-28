@@ -352,17 +352,18 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     });
   }
 
-  /// セマンティクス更新を次のフレームまで遅延させる。
+  /// セマンティクス更新を2フレーム後まで遅延させる。
   ///
-  /// endOfFrame → addPostFrameCallback のパターンを使用することで、
-  /// スナップショットスワップと同じフレームではなく、次のフレームで
-  /// セマンティクス更新が行われる。これにより、PinterestSliverGrid の
-  /// レイアウトが完了した後にセマンティクスが更新され、
-  /// _needsLayout アサーションを回避できる。
+  /// endOfFrame → endOfFrame → addPostFrameCallback のパターンを使用することで、
+  /// スナップショットスワップから2フレーム後にセマンティクス更新が行われる。
+  /// これにより、PinterestSliverGrid のレイアウトと parentData の更新が
+  /// 完全に完了した後にセマンティクスが更新され、_needsLayout と
+  /// parentDataDirty アサーションの両方を回避できる。
   void _scheduleNextFrameSemanticsUpdate(VoidCallback updateCallback) {
     final startTime = DateTime.now();
     const maxDelay = Duration(seconds: 3);
 
+    // 1フレーム目の終わりまで待つ
     SchedulerBinding.instance.endOfFrame.then((_) {
       final elapsed = DateTime.now().difference(startTime);
       if (elapsed > maxDelay) {
@@ -370,21 +371,29 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
             'semantics update timeout (${elapsed.inMilliseconds}ms); forcing update');
       }
 
-      // 次のフレームの postFrameCallbacks で実行
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      // 2フレーム目の終わりまで待つ
+      SchedulerBinding.instance.endOfFrame.then((_) {
+        // 3フレーム目の postFrameCallbacks で実行
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _semanticsUpdateScheduled = false;
+          try {
+            updateCallback();
+          } catch (error, stackTrace) {
+            _debugLog('semantics update error: $error');
+            debugPrintStack(
+                stackTrace: stackTrace, label: 'semantics_update_error');
+          }
+        });
+      }).catchError((error, stackTrace) {
+        // 2フレーム目の endOfFrame の Future が失敗した場合
+        _debugLog('endOfFrame(2nd) error: $error; skipping semantics update');
+        debugPrintStack(stackTrace: stackTrace, label: 'endOfFrame_2nd_error');
         _semanticsUpdateScheduled = false;
-        try {
-          updateCallback();
-        } catch (error, stackTrace) {
-          _debugLog('semantics update error: $error');
-          debugPrintStack(
-              stackTrace: stackTrace, label: 'semantics_update_error');
-        }
       });
     }).catchError((error, stackTrace) {
-      // endOfFrame の Future が失敗した場合
-      _debugLog('endOfFrame error: $error; skipping semantics update');
-      debugPrintStack(stackTrace: stackTrace, label: 'endOfFrame_error');
+      // 1フレーム目の endOfFrame の Future が失敗した場合
+      _debugLog('endOfFrame(1st) error: $error; skipping semantics update');
+      debugPrintStack(stackTrace: stackTrace, label: 'endOfFrame_1st_error');
       _semanticsUpdateScheduled = false;
     });
   }
