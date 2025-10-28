@@ -154,6 +154,7 @@ class _MainScreenState extends State<MainScreen> {
               controller: folderState.viewMode == FolderViewMode.root
                   ? _rootScrollController
                   : null,
+              enableGridSemantics: false,
             ),
           ),
         ),
