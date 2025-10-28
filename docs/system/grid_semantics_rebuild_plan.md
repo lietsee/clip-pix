@@ -56,9 +56,9 @@
 3. ヒットテスト検証（手動ログ監視）で `parentDataDirty` が発生しないことを確認。
 
 ### フェーズ 5: 統合・最適化
-1. リサイズ・列変更を連打する自動化シナリオを用意し、`.tmp/app.log` を監視して例外復帰がないことを検証。  
+1. リサイズ・列変更を連打する自動化シナリオを用意し、`.tmp/app.log` と `GridLayoutSurface` のスナップショットログを監視して例外復帰がないことを検証。  
 2. バックバッファ構築の CPU/メモリを計測し、必要なら差分更新やスケジューリング (`SchedulerBinding.instance.scheduleTask`) を調整。  
-3. `docs/known_issue_grid_semantics.md` など周辺ドキュメントを改訂。
+3. `docs/known_issue_grid_semantics.md` など周辺ドキュメントを改訂し、ログ採取手順や検証スクリプトも併記する。
 
 ## 4. 連動機能と対応方針
 | 機能 | 影響内容 | 対応方針 |
@@ -86,4 +86,7 @@
 ## 7. 実施準備と直近アクション
 1. チームで再設計ゴールと優先順位（最優先タスク）を再確認する。  
 2. フェーズ 0/1 の具体的な作業項目と担当者を決定し、スケジュールを確定する。  
-3. ベースラインログ収集とテストケース整理を実施し、リグレッション検知体制を整える。
+3. ベースラインログ収集とテストケース整理を実施し、リグレッション検知体制を整える。  
+4. GridViewModule に導入した `usePinterestGrid` / `geometryQueueEnabled` オプションを本番コードに反映し、Pinterest グリッド＋セマンティクス有効状態での挙動を実機検証する。  
+5. `PinterestSliverGrid` の差分更新・キー生成ポリシーを見直し、二重バッファ更新後も `SliverMultiBoxAdaptor` のアサートが発生しないよう堅牢化する。  
+6. 追加した snapshot ログ（例: `staging_snapshot_ready`, `front_snapshot_swapped`）を CI でも収集し、期待するシーケンスとの不整合を検出できる仕組みとドキュメントを整備する。
