@@ -90,3 +90,12 @@
 4. GridViewModule に導入した `usePinterestGrid` / `geometryQueueEnabled` オプションを本番コードに反映し、Pinterest グリッド＋セマンティクス有効状態での挙動を実機検証する。  
 5. `PinterestSliverGrid` の差分更新・キー生成ポリシーを見直し、二重バッファ更新後も `SliverMultiBoxAdaptor` のアサートが発生しないよう堅牢化する。  
 6. 追加した snapshot ログ（例: `staging_snapshot_ready`, `front_snapshot_swapped`）を CI でも収集し、期待するシーケンスとの不整合を検出できる仕組みとドキュメントを整備する。
+
+## 8. 進捗サマリー（2025-10-28 時点）
+- **フェーズ 1 完了**: `GridLayoutLayoutEngine` と `LayoutSnapshot` を導入し、`GridLayoutStore.updateGeometry` がエンジン経由でビュー状態とスナップショットを更新するよう移行済み。  
+- **フェーズ 3 完了**: `GridLayoutSurface` へ Front/Back バッファと `GeometryMutationQueue` を実装。ログ (`front_snapshot_updated` / `staging_snapshot_ready` / `front_snapshot_swapped`) でスナップショットの入れ替えシーケンスを追跡可能にした。  
+- **フェーズ 4 プロトタイプ**: `GridSemanticsTree` を追加し、スナップショットとかみ合わせてセマンティクスツリーを構築。レイアウト完了前に Flush しないよう `SchedulerBinding.endOfFrame` → 次フレームの `addPostFrameCallback` を経由してセマンティクスを更新することで `!semantics.parentDataDirty` / `_needsLayout` アサーションを抑制している。  
+- **テスト整備**: `GridViewModule` リサイズシナリオを安定化させるため固定フレーム待機ヘルパーを導入。`GridLayoutSurface` のスナップショットログを検証するウィジェットテストを追加し、セマンティクス遅延更新も合わせてカバーした。  
+- **ログ基盤**: `.tmp/app.log` に加え `GridLayoutSurface` が吐き出すスナップショットログを参照することで、実機でのリサイズ連打時も差し替え順序のトラブルシューティングが可能。
+
+> この時点までのコードは `bd3c24b fix: defer grid semantics update until post-layout` までコミット済み。残タスクとして、上記「実施準備と直近アクション」の 4〜6 を次フェーズで進める。
