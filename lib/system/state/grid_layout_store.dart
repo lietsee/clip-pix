@@ -1,10 +1,10 @@
 import 'dart:collection';
-import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 
 import '../../data/models/image_item.dart';
+import '../grid_layout_layout_engine.dart' as layout;
 
 /// 永続層に対してカードレイアウトを読み書きするためのゲートウェイ。
 abstract class GridLayoutPersistence {
@@ -112,19 +112,23 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
   GridLayoutStore({
     required GridLayoutPersistence persistence,
     required GridIntrinsicRatioResolver ratioResolver,
+    layout.GridLayoutLayoutEngine? layoutEngine,
   })  : _persistence = persistence,
-        _ratioResolver = ratioResolver;
+        _ratioResolver = ratioResolver,
+        _layoutEngine = layoutEngine ?? layout.GridLayoutLayoutEngine();
 
   static const double _epsilon = 0.0001;
 
   final GridLayoutPersistence _persistence;
   final GridIntrinsicRatioResolver _ratioResolver;
+  final layout.GridLayoutLayoutEngine _layoutEngine;
 
   final Map<String, GridCardViewState> _viewStates = {};
   final List<String> _orderedIds = [];
   String? _directoryPath;
   GridLayoutGeometry? _geometry;
   final Map<String, ImageItem> _items = {};
+  layout.LayoutSnapshot? _latestSnapshot;
 
   @override
   List<GridCardViewState> get viewStates => UnmodifiableListView(
@@ -133,6 +137,8 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
             .map((id) => _viewStates[id]!)
             .toList(growable: false),
       );
+
+  layout.LayoutSnapshot? get latestSnapshot => _latestSnapshot;
 
   void syncLibrary(
     List<ImageItem> items, {
@@ -173,6 +179,7 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     if (notify && (orderChanged || contentChanged)) {
       notifyListeners();
     }
+    _invalidateSnapshot();
   }
 
   GridCardViewState viewStateFor(String id) {
@@ -197,8 +204,34 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
       '[GridLayoutStore] updateGeometry geometry=$geometry notify=$notify '
       'deltaColumns=$deltaColumns deltaWidth=${deltaWidth?.toStringAsFixed(3)}',
     );
+    final previousGeometry = _geometry;
     _geometry = geometry;
-    _applyGeometryAdjustments(notify: notify);
+    final orderedStates = _orderedIds
+        .map((id) => _viewStates[id])
+        .whereType<GridCardViewState>()
+        .toList(growable: false);
+    final result = _layoutEngine.compute(
+      geometry: geometry,
+      states: orderedStates,
+    );
+    var changed = result.changed;
+    final geometryChanged = previousGeometry == null ||
+        previousGeometry.columnCount != geometry.columnCount ||
+        (previousGeometry.columnWidth - geometry.columnWidth).abs() >
+            _epsilon ||
+        (previousGeometry.gap - geometry.gap).abs() > _epsilon;
+    changed = changed || geometryChanged;
+    for (final state in result.viewStates) {
+      final existing = _viewStates[state.id];
+      if (!changed && existing != null && !_viewStateEquals(existing, state)) {
+        changed = true;
+      }
+      _viewStates[state.id] = state;
+    }
+    _latestSnapshot = result.snapshot;
+    if (changed && notify) {
+      notifyListeners();
+    }
   }
 
   @override
@@ -251,6 +284,7 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     if (changed) {
       notifyListeners();
     }
+    _invalidateSnapshot();
   }
 
   @override
@@ -308,6 +342,7 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     if (changed) {
       notifyListeners();
     }
+    _invalidateSnapshot();
   }
 
   Future<void> updateCard({
@@ -368,6 +403,7 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     _viewStates[id] = nextState;
     await _persistence.saveBatch([_recordFromState(nextState)]);
     notifyListeners();
+    _invalidateSnapshot();
   }
 
   bool _statesEqual(
@@ -426,46 +462,7 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     return 1.0;
   }
 
-  void _applyGeometryAdjustments({required bool notify}) {
-    final geometry = _geometry;
-    if (geometry == null || _viewStates.isEmpty) {
-      return;
-    }
-    bool changed = false;
-    for (final id in _orderedIds) {
-      final current = _viewStates[id];
-      if (current == null) {
-        continue;
-      }
-      var span = current.columnSpan.clamp(1, geometry.columnCount);
-      if (span <= 0) {
-        span = 1;
-      }
-      final width =
-          geometry.columnWidth * span + geometry.gap * math.max(0, span - 1);
-      if (width <= 0) {
-        continue;
-      }
-      final ratio = current.width > 0 && current.height > 0
-          ? current.height / current.width
-          : 1.0;
-      final height = ratio.isFinite && ratio > 0 ? width * ratio : width;
-      if ((width - current.width).abs() > _epsilon ||
-          (height - current.height).abs() > _epsilon ||
-          span != current.columnSpan) {
-        _viewStates[id] = GridCardViewState(
-          id: current.id,
-          width: width,
-          height: height,
-          scale: current.scale,
-          columnSpan: span,
-          customHeight: height,
-        );
-        changed = true;
-      }
-    }
-    if (changed && notify) {
-      notifyListeners();
-    }
+  void _invalidateSnapshot() {
+    _latestSnapshot = null;
   }
 }

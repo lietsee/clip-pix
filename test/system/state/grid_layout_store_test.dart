@@ -176,5 +176,36 @@ void main() {
       expect(updated.width, closeTo(90, 0.0001));
       expect(updated.height, closeTo(90 * (320 / 220), 0.5));
     });
+
+    test('updateGeometry 実行で最新スナップショットが生成される', () {
+      expect(store.latestSnapshot, isNull);
+
+      store.updateGeometry(
+        const GridLayoutGeometry(columnCount: 3, columnWidth: 120, gap: 4),
+        notify: true,
+      );
+
+      final snapshot = store.latestSnapshot;
+      expect(snapshot, isNotNull);
+      expect(snapshot!.geometry.columnCount, 3);
+      expect(snapshot.entries, hasLength(3));
+      final firstEntry = snapshot.entries.firstWhere((e) => e.id == 'a');
+      expect(firstEntry.columnSpan, store.viewStateFor('a').columnSpan);
+    });
+
+    test('カード更新後はスナップショットが無効化される', () async {
+      store.updateGeometry(
+        const GridLayoutGeometry(columnCount: 3, columnWidth: 120, gap: 4),
+        notify: true,
+      );
+      expect(store.latestSnapshot, isNotNull);
+
+      await store.updateCard(
+        id: 'b',
+        customSize: const Size(320, 200),
+      );
+
+      expect(store.latestSnapshot, isNull);
+    });
   });
 }
