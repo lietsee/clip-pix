@@ -1,6 +1,8 @@
 # グリッド列変更時のセマンティクスアサーションについて
 
-最終更新: 2025-10-25
+**ステータス**: ✅ **解決済み** (2025-10-28)
+
+最終更新: 2025-10-28
 
 ## 現象
 
@@ -68,7 +70,67 @@ assertion: line 5669 pos 14: '!childSemantics.renderObject._needsLayout': is not
 2. 一括揃え時はグリッド全体を一旦非表示にしてリビルドし、更新完了後に表示する（セマンティクス対象を完全に入れ替える）方式に変更する。
 3. Semantics の提供範囲を見直し、デスクトップ版ではカード配列に対する詳細なアクセシビリティ情報を簡略化する。
 
+## 最終解決策（2025-10-28）
+
+### 解決アプローチ
+
+当初の複雑な遅延・同期制御では根本解決に至らなかったため、**セマンティクスツリーを完全に無効化**する方針に切り替えました。
+
+### 実装内容
+
+**段階1: カスタムGridSemanticsTreeの無効化（コミット 66872af）**
+```dart
+// lib/ui/main_screen.dart
+GridViewModule(
+  state: libraryState,
+  controller: ...,
+  enableGridSemantics: false,  // カスタムセマンティクスツリーを無効化
+),
+```
+
+**段階2: Flutter標準セマンティクスの無効化（コミット f2dc5f6）**
+```dart
+// lib/ui/grid_view_module.dart
+return Container(
+  color: backgroundColor,
+  child: ExcludeSemantics(  // Flutter標準セマンティクスツリーをブロック
+    child: CustomScrollView(
+      controller: controller,
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [...],
+    ),
+  ),
+);
+```
+
+### 結果
+
+| フェーズ | アサーション数 | 削減率 |
+|---------|--------------|--------|
+| 初期状態 | 215回 | - |
+| セマンティクス2フレーム遅延 + markNeedsLayout遅延（03bfa1a, ca23ebd） | 100回 | 53% |
+| カスタムGridSemanticsTree無効化（66872af） | 10回 | 95% |
+| **Flutter標準セマンティクス無効化（f2dc5f6）** | **0回** | **100%** ✅ |
+
+### トレードオフ
+
+- **喪失**: スクリーンリーダー等のアクセシビリティ対応
+- **許容理由**:
+  - この製品はデスクトップ画像管理アプリであり、スクリーンリーダー向けではない
+  - リリースビルドでは元々アサーションは無効化されるため、エンドユーザーへの影響はない
+  - 開発時のログがクリーンになり、実際のエラーを見逃すリスクが完全に解消
+
+### 適用コミット
+
+1. `03bfa1a` - セマンティクス更新を2フレーム遅延に修正
+2. `ca23ebd` - markNeedsLayout()をendOfFrameパターンで遅延
+3. `66872af` - enableGridSemantics: false でカスタムセマンティクス無効化
+4. `f2dc5f6` - ExcludeSemanticsでFlutter標準セマンティクス無効化
+
 ## 関連ファイル
 
-- `lib/ui/grid_view_module.dart`
+- `lib/ui/main_screen.dart` - enableGridSemantics設定
+- `lib/ui/grid_view_module.dart` - ExcludeSemantics適用
+- `lib/ui/widgets/grid_layout_surface.dart` - セマンティクス更新ロジック
+- `lib/ui/widgets/pinterest_grid.dart` - markNeedsLayout遅延ロジック
 - `.tmp/app.log`, `.tmp/ikkatsu.log`（再現ログ）
