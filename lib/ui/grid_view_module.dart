@@ -204,54 +204,56 @@ class _GridViewModuleState extends State<GridViewModule> {
 
           return Container(
             color: backgroundColor,
-            child: CustomScrollView(
-              controller: controller,
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                SliverPadding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: _outerPadding,
-                    vertical: _outerPadding,
-                  ).copyWith(bottom: _outerPadding + 68),
-                  sliver: PinterestSliverGrid(
-                    gridDelegate: PinterestGridDelegate(
-                      columnCount: columnCount,
-                      gap: _gridGap,
-                    ),
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        if (index >= _entries.length) {
-                          return null;
-                        }
-                        final entry = _entries[index];
-                        final viewState = layoutStore.viewStateFor(
-                          entry.item.id,
-                        );
-                        final span =
-                            viewState.columnSpan.clamp(1, columnCount).toInt();
-                        final cardWidget = _buildCard(
-                          entry: entry,
-                          viewState: viewState,
-                          columnWidth: geometry.columnWidth,
-                          columnCount: columnCount,
-                          span: span,
-                          backgroundColor: cardBackgroundColor,
-                          usePersistentKey: !isStaging,
-                          snapshotId: snapshot?.id,
-                        );
-                        return PinterestGridTile(
-                          span: span,
-                          child: cardWidget,
-                        );
-                      },
-                      childCount: _entries.length,
-                      addAutomaticKeepAlives: false,
-                      addRepaintBoundaries: false,
-                      addSemanticIndexes: false,
+            child: ExcludeSemantics(
+              child: CustomScrollView(
+                controller: controller,
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  SliverPadding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: _outerPadding,
+                      vertical: _outerPadding,
+                    ).copyWith(bottom: _outerPadding + 68),
+                    sliver: PinterestSliverGrid(
+                      gridDelegate: PinterestGridDelegate(
+                        columnCount: columnCount,
+                        gap: _gridGap,
+                      ),
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          if (index >= _entries.length) {
+                            return null;
+                          }
+                          final entry = _entries[index];
+                          final viewState = layoutStore.viewStateFor(
+                            entry.item.id,
+                          );
+                          final span =
+                              viewState.columnSpan.clamp(1, columnCount).toInt();
+                          final cardWidget = _buildCard(
+                            entry: entry,
+                            viewState: viewState,
+                            columnWidth: geometry.columnWidth,
+                            columnCount: columnCount,
+                            span: span,
+                            backgroundColor: cardBackgroundColor,
+                            usePersistentKey: !isStaging,
+                            snapshotId: snapshot?.id,
+                          );
+                          return PinterestGridTile(
+                            span: span,
+                            child: cardWidget,
+                          );
+                        },
+                        childCount: _entries.length,
+                        addAutomaticKeepAlives: false,
+                        addRepaintBoundaries: false,
+                        addSemanticIndexes: false,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         },
