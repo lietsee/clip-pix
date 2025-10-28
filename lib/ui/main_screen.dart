@@ -38,6 +38,7 @@ class _MainScreenState extends State<MainScreen> {
   String? _restoringForPath;
   final Set<String> _restoredRootScrollPaths = <String>{};
   bool _controllerLogScheduled = false;
+  bool _clipboardMonitorEnabled = true;
 
   @override
   void initState() {
@@ -66,6 +67,22 @@ class _MainScreenState extends State<MainScreen> {
       appBar: AppBar(
         title: _Breadcrumb(selectedState: selectedState),
         actions: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.content_paste, size: 20),
+                const SizedBox(width: 4),
+                Switch(
+                  value: _clipboardMonitorEnabled,
+                  onChanged: (value) {
+                    _toggleClipboardMonitor(context, value);
+                  },
+                ),
+              ],
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: '再読み込み',
@@ -357,6 +374,20 @@ class _MainScreenState extends State<MainScreen> {
     _restoringForPath = null;
     _restoredRootScrollPaths.add(path);
     debugPrint('[ScrollDebug] restore completed for $path');
+  }
+
+  Future<void> _toggleClipboardMonitor(
+      BuildContext context, bool enabled) async {
+    setState(() {
+      _clipboardMonitorEnabled = enabled;
+    });
+
+    final monitor = context.read<ClipboardMonitor>();
+    if (enabled) {
+      await monitor.start();
+    } else {
+      await monitor.stop();
+    }
   }
 
   Future<void> _requestFolderSelection(BuildContext context) async {
