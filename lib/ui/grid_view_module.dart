@@ -537,10 +537,12 @@ class _GridViewModuleState extends State<GridViewModule> {
       'alwaysOnTop': false,
     });
     try {
-      Process.start(
-        exePath,
-        ['--preview', payload],
-        mode: ProcessStartMode.detached,
+      unawaited(
+        Process.start(
+          exePath,
+          ['--preview', payload],
+          mode: ProcessStartMode.detached,
+        ),
       );
       return true;
     } catch (error, stackTrace) {

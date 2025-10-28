@@ -299,13 +299,10 @@ class _ImageCardState extends State<ImageCard> {
               },
             ),
             Positioned.fill(
-              child: Material(
-                type: MaterialType.transparency,
-                child: InkWell(
-                  onTap: () => widget.onOpenPreview(widget.item),
-                  onDoubleTap: () => widget.onOpenPreview(widget.item),
-                  onTapDown: (_) => _focusNode.requestFocus(),
-                ),
+              child: GestureDetector(
+                onTap: () => widget.onOpenPreview(widget.item),
+                onDoubleTap: () => widget.onOpenPreview(widget.item),
+                onTapDown: (_) => _focusNode.requestFocus(),
               ),
             ),
           ],
