@@ -335,6 +335,7 @@ class _GridViewModuleState extends State<GridViewModule> {
                 onFavoriteToggle: _handleFavorite,
                 onCopyText: _handleCopyText,
                 onOpenPreview: _showTextPreviewDialog,
+                onSaveText: _handleSaveText,
                 columnWidth: columnWidth,
                 columnCount: columnCount,
                 columnGap: _gridGap,
@@ -394,6 +395,25 @@ class _GridViewModuleState extends State<GridViewModule> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('テキストプレビュー機能は実装中です')));
+  }
+
+  void _handleSaveText(String textId, String text) async {
+    try {
+      // テキストファイルに書き込み
+      final item = widget.state.images.firstWhere((img) => img.id == textId);
+      final file = File(item.filePath);
+      await file.writeAsString(text);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('テキストを保存しました')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('テキストの保存に失敗しました')));
+    }
   }
 
   void _handleEditMemo(String imageId, String memo) async {

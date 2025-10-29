@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../data/models/text_content_item.dart';
 import '../../system/state/grid_layout_store.dart';
 import 'memo_edit_dialog.dart';
+import 'text_inline_editor.dart';
 
 /// テキストコンテンツを表示するカード
 class TextCard extends StatefulWidget {
@@ -17,6 +18,7 @@ class TextCard extends StatefulWidget {
     required this.onFavoriteToggle,
     required this.onCopyText,
     required this.onOpenPreview,
+    required this.onSaveText,
     required this.columnWidth,
     required this.columnCount,
     required this.columnGap,
@@ -30,6 +32,7 @@ class TextCard extends StatefulWidget {
   final void Function(String id, int favorite) onFavoriteToggle;
   final void Function(TextContentItem item) onCopyText;
   final void Function(TextContentItem item) onOpenPreview;
+  final void Function(String id, String text) onSaveText;
   final double columnWidth;
   final int columnCount;
   final double columnGap;
@@ -42,6 +45,7 @@ class TextCard extends StatefulWidget {
 class _TextCardState extends State<TextCard> {
   bool _showControls = false;
   bool _isResizing = false;
+  bool _isEditing = false;
   Size? _resizeStartSize;
   Offset? _resizeStartGlobalPosition;
   String _textContent = '';
@@ -94,8 +98,8 @@ class _TextCardState extends State<TextCard> {
       onEnter: (_) => setState(() => _showControls = true),
       onExit: (_) => setState(() => _showControls = false),
       child: GestureDetector(
-        onTap: _handleSingleTap,
-        onDoubleTap: _handleDoubleTap,
+        onTap: _isEditing ? null : _handleSingleTap,
+        onDoubleTap: _isEditing ? null : _handleDoubleTap,
         child: Container(
           width: widget.viewState.width,
           height: widget.viewState.height,
@@ -107,24 +111,35 @@ class _TextCardState extends State<TextCard> {
           child: Stack(
             children: [
               // テキストコンテンツ
-              Positioned.fill(
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: _isLoading
-                      ? const Center(child: CircularProgressIndicator())
-                      : SingleChildScrollView(
-                          child: Text(
-                            _textContent,
-                            style: TextStyle(
-                              fontSize: widget.item.fontSize,
-                              color: Colors.black87,
+              if (!_isEditing)
+                Positioned.fill(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: _isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : SingleChildScrollView(
+                            child: Text(
+                              _textContent,
+                              style: TextStyle(
+                                fontSize: widget.item.fontSize,
+                                color: Colors.black87,
+                              ),
                             ),
                           ),
-                        ),
+                  ),
                 ),
-              ),
+              // インラインエディタ
+              if (_isEditing)
+                Positioned.fill(
+                  child: TextInlineEditor(
+                    initialText: _textContent,
+                    onSave: _handleSaveText,
+                    onCancel: _handleCancelEdit,
+                  ),
+                ),
               // ホバーコントロール
-              if (_showControls && !_isResizing) _buildHoverControls(),
+              if (_showControls && !_isResizing && !_isEditing)
+                _buildHoverControls(),
               // リサイズハンドル
               if (_showControls || _isResizing) _buildResizeHandle(),
             ],
@@ -223,13 +238,27 @@ class _TextCardState extends State<TextCard> {
   }
 
   void _handleSingleTap() {
-    // TODO: TextInlineEditorを開く（Phase 3で実装）
-    debugPrint('TextCard: single tap on ${widget.item.id}');
+    setState(() {
+      _isEditing = true;
+    });
   }
 
   void _handleDoubleTap() {
-    // TODO: TextPreviewWindowを開く（Phase 3で実装）
     widget.onOpenPreview(widget.item);
+  }
+
+  void _handleSaveText(String text) async {
+    widget.onSaveText(widget.item.id, text);
+    setState(() {
+      _textContent = text;
+      _isEditing = false;
+    });
+  }
+
+  void _handleCancelEdit() {
+    setState(() {
+      _isEditing = false;
+    });
   }
 
   Future<void> _handleEditMemo() async {
