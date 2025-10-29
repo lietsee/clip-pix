@@ -23,6 +23,7 @@ class TextCard extends StatefulWidget {
     required this.columnCount,
     required this.columnGap,
     required this.backgroundColor,
+    this.onSpanChange,
     this.onReorderPointerDown,
     this.onStartReorder,
     this.onReorderUpdate,
@@ -33,6 +34,7 @@ class TextCard extends StatefulWidget {
   final TextContentItem item;
   final GridCardViewState viewState;
   final void Function(String id, Size newSize) onResize;
+  final void Function(String id, int span)? onSpanChange;
   final void Function(String id, String memo) onEditMemo;
   final void Function(String id, int favorite) onFavoriteToggle;
   final void Function(TextContentItem item) onCopyText;
@@ -58,12 +60,15 @@ class _TextCardState extends State<TextCard> {
   bool _isEditing = false;
   Size? _resizeStartSize;
   Offset? _resizeStartGlobalPosition;
+  int _currentSpan = 1;
+  int? _resizeStartSpan;
   String _textContent = '';
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
+    _currentSpan = widget.viewState.columnSpan;
     _loadTextContent();
   }
 
@@ -72,6 +77,14 @@ class _TextCardState extends State<TextCard> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.item.filePath != widget.item.filePath) {
       _loadTextContent();
+    }
+    if (oldWidget.columnWidth != widget.columnWidth ||
+        oldWidget.columnGap != widget.columnGap ||
+        oldWidget.columnCount != widget.columnCount) {
+      _currentSpan = widget.viewState.columnSpan;
+    }
+    if (oldWidget.viewState.columnSpan != widget.viewState.columnSpan) {
+      _currentSpan = widget.viewState.columnSpan;
     }
   }
 
@@ -353,6 +366,7 @@ class _TextCardState extends State<TextCard> {
       _isResizing = true;
       _resizeStartSize = Size(widget.viewState.width, widget.viewState.height);
       _resizeStartGlobalPosition = details.globalPosition;
+      _resizeStartSpan = _currentSpan;
     });
   }
 
@@ -362,11 +376,18 @@ class _TextCardState extends State<TextCard> {
     }
 
     final delta = details.globalPosition - _resizeStartGlobalPosition!;
-    final newWidth = (_resizeStartSize!.width + delta.dx).clamp(100.0, 1920.0);
+    final targetWidth = (_resizeStartSize!.width + delta.dx).clamp(100.0, 1920.0);
+    final snappedSpan = _snapSpan(targetWidth);
+    final snappedWidth = _widthForSpan(snappedSpan);
     final newHeight =
         (_resizeStartSize!.height + delta.dy).clamp(100.0, 1080.0);
 
-    widget.onResize(widget.item.id, Size(newWidth, newHeight));
+    widget.onResize(widget.item.id, Size(snappedWidth, newHeight));
+    if (snappedSpan != _currentSpan) {
+      setState(() {
+        _currentSpan = snappedSpan;
+      });
+    }
   }
 
   void _handleResizeEnd(DragEndDetails details) {
@@ -375,5 +396,32 @@ class _TextCardState extends State<TextCard> {
       _resizeStartSize = null;
       _resizeStartGlobalPosition = null;
     });
+    if (_resizeStartSpan != null && _currentSpan != _resizeStartSpan) {
+      widget.onSpanChange?.call(widget.item.id, _currentSpan);
+    }
+    _resizeStartSpan = null;
+  }
+
+  int _snapSpan(double targetWidth) {
+    if (widget.columnCount <= 1) {
+      return 1;
+    }
+    int bestSpan = 1;
+    double bestDiff = double.infinity;
+    for (int span = 1; span <= widget.columnCount; span++) {
+      final width = _widthForSpan(span);
+      final diff = (width - targetWidth).abs();
+      if (diff < bestDiff - 0.1) {
+        bestDiff = diff;
+        bestSpan = span;
+      }
+    }
+    return bestSpan.clamp(1, widget.columnCount);
+  }
+
+  double _widthForSpan(int span) {
+    final clamped = span.clamp(1, widget.columnCount);
+    return widget.columnWidth * clamped +
+        widget.columnGap * (clamped - 1).clamp(0, double.infinity);
   }
 }
