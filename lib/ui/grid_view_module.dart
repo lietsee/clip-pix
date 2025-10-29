@@ -333,6 +333,7 @@ class _GridViewModuleState extends State<GridViewModule> {
           onOpenPreview: _showPreviewDialog,
           onCopyImage: _handleCopy,
           onEditMemo: _handleEditMemo,
+          onFavoriteToggle: _handleFavorite,
           columnWidth: columnWidth,
           columnCount: columnCount,
           columnGap: _gridGap,
@@ -376,6 +377,19 @@ class _GridViewModuleState extends State<GridViewModule> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('メモの保存に失敗しました')));
+    }
+  }
+
+  void _handleFavorite(String imageId, int favorite) async {
+    final notifier = context.read<ImageLibraryNotifier>();
+    try {
+      await notifier.updateFavorite(imageId, favorite);
+      // お気に入りはサイレント更新（SnackBar表示なし）
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('お気に入りの更新に失敗しました')));
     }
   }
 

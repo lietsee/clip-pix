@@ -26,6 +26,7 @@ class ImageCard extends StatefulWidget {
     required this.onOpenPreview,
     required this.onCopyImage,
     required this.onEditMemo,
+    required this.onFavoriteToggle,
     required this.columnWidth,
     required this.columnCount,
     required this.columnGap,
@@ -46,6 +47,7 @@ class ImageCard extends StatefulWidget {
   final void Function(ImageItem item) onOpenPreview;
   final void Function(ImageItem item) onCopyImage;
   final void Function(String id, String memo) onEditMemo;
+  final void Function(String id, int favorite) onFavoriteToggle;
   final double columnWidth;
   final int columnCount;
   final double columnGap;
@@ -426,6 +428,30 @@ class _ImageCardState extends State<ImageCard> {
             ),
           ),
         ),
+        // お気に入りボタン（左下）
+        Positioned(
+          bottom: 12,
+          left: 12,
+          child: _fadeChild(
+            child: Tooltip(
+              message: 'お気に入り',
+              child: ElevatedButton(
+                onPressed: _handleFavoriteToggle,
+                style: ElevatedButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  shape: const CircleBorder(),
+                  minimumSize: const Size(32, 32),
+                  backgroundColor: _backgroundColorForFavorite(widget.item.favorite),
+                ),
+                child: Icon(
+                  widget.item.favorite > 0 ? Icons.favorite : Icons.favorite_border,
+                  size: 18,
+                  color: widget.item.favorite > 0 ? Colors.white : null,
+                ),
+              ),
+            ),
+          ),
+        ),
         Positioned(
           left: 0,
           right: 0,
@@ -723,6 +749,24 @@ class _ImageCardState extends State<ImageCard> {
     );
     if (newMemo != null && mounted) {
       widget.onEditMemo(widget.item.id, newMemo);
+    }
+  }
+
+  void _handleFavoriteToggle() {
+    final next = (widget.item.favorite + 1) % 4;
+    widget.onFavoriteToggle(widget.item.id, next);
+  }
+
+  Color? _backgroundColorForFavorite(int level) {
+    switch (level) {
+      case 1:
+        return Colors.green;
+      case 2:
+        return Colors.orange;
+      case 3:
+        return Colors.pink;
+      default:
+        return null;
     }
   }
 

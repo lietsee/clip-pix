@@ -75,6 +75,7 @@ class ImageRepository {
         savedAt: metadata?.savedAt ?? stat.modified.toUtc(),
         source: metadata?.source,
         memo: metadata?.memo ?? '',
+        favorite: metadata?.favorite ?? 0,
       );
     } catch (error, stackTrace) {
       _logger.warning(
@@ -99,6 +100,7 @@ class ImageRepository {
             source: entry.source,
             savedAt: entry.savedAt,
             memo: entry.memo,
+            favorite: entry.favorite,
           );
         }
       } catch (error, stackTrace) {
@@ -131,6 +133,7 @@ class ImageRepository {
         source: json['source'] as String?,
         savedAt: savedAt,
         memo: json['memo'] as String? ?? '', // 旧JSONにmemoがあれば読み込み
+        favorite: json['favorite'] as int? ?? 0, // favoriteがあれば読み込み
       );
     } catch (error, stackTrace) {
       _logger.warning(
@@ -144,6 +147,7 @@ class ImageRepository {
         source: null,
         savedAt: null,
         memo: '',
+        favorite: 0,
       );
     }
   }
@@ -166,6 +170,7 @@ class _Metadata {
     required this.source,
     required this.savedAt,
     this.memo = '',
+    this.favorite = 0,
   });
 
   final String? metadataPath;
@@ -173,4 +178,5 @@ class _Metadata {
   final String? source;
   final DateTime? savedAt;
   final String memo;
+  final int favorite;
 }

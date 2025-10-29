@@ -125,6 +125,43 @@ class ImageLibraryNotifier extends StateNotifier<ImageLibraryState> {
     }
   }
 
+  Future<void> updateFavorite(String imageId, int favorite) async {
+    if (_fileInfoManager == null) {
+      _logger.warning('FileInfoManager not available for favorite update');
+      return;
+    }
+
+    // Find the image item by ID
+    final index = state.images.indexWhere((item) => item.id == imageId);
+    if (index < 0) {
+      _logger.warning('Image not found for favorite update: $imageId');
+      return;
+    }
+
+    final item = state.images[index];
+
+    try {
+      // Update favorite in FileInfoManager
+      await _fileInfoManager!.updateFavorite(
+        imageFilePath: item.filePath,
+        favorite: favorite,
+        savedAt: item.savedAt,
+        source: item.source ?? 'Unknown',
+        sourceType: item.sourceType,
+      );
+
+      // Update in-memory state
+      final updated = <ImageItem>[...state.images];
+      updated[index] = item.copyWith(favorite: favorite);
+      state = state.copyWith(images: updated, clearError: true);
+
+      _logger.info('Favorite updated for ${item.filePath}');
+    } catch (error, stackTrace) {
+      _logger.severe('Failed to update favorite', error, stackTrace);
+      setError('お気に入りの更新に失敗しました');
+    }
+  }
+
   void setError(String message) {
     state = state.copyWith(error: message);
   }

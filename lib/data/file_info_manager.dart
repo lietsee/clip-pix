@@ -39,6 +39,7 @@ class FileInfoManager {
     required String source,
     required ImageSourceType sourceType,
     String memo = '',
+    int favorite = 0,
   }) async {
     final folderPath = p.dirname(imageFilePath);
 
@@ -52,6 +53,7 @@ class FileInfoManager {
       source: source,
       sourceType: sourceType,
       memo: memo,
+      favorite: favorite,
     );
 
     _logger.info('Metadata upserted: $fileName in $folderPath');
@@ -98,6 +100,50 @@ class FileInfoManager {
     }
 
     _logger.info('Memo updated: $fileName -> "$memo"');
+
+    // デバウンス保存をスケジュール
+    _scheduleFlush(folderPath);
+  }
+
+  /// お気に入りを更新（エントリが存在しない場合は新規作成）
+  Future<void> updateFavorite({
+    required String imageFilePath,
+    required int favorite,
+    required DateTime savedAt,
+    required String source,
+    required ImageSourceType sourceType,
+  }) async {
+    final folderPath = p.dirname(imageFilePath);
+    final fileName = p.basename(imageFilePath);
+
+    // キャッシュにない場合は読み込み
+    if (!_cache.containsKey(folderPath)) {
+      await _loadFromFile(folderPath);
+    }
+
+    // キャッシュ初期化（フォルダエントリがない場合）
+    _cache[folderPath] ??= {};
+
+    final folderCache = _cache[folderPath]!;
+
+    // エントリが存在しない場合は新規作成
+    if (!folderCache.containsKey(fileName)) {
+      _logger.info('Creating new metadata entry for favorite: $fileName');
+      folderCache[fileName] = ImageMetadataEntry(
+        file: fileName,
+        savedAt: savedAt.toUtc(),
+        source: source,
+        sourceType: sourceType,
+        memo: '',
+        favorite: favorite,
+      );
+    } else {
+      // 既存エントリを更新
+      final current = folderCache[fileName]!;
+      folderCache[fileName] = current.copyWith(favorite: favorite);
+    }
+
+    _logger.info('Favorite updated: $fileName -> $favorite');
 
     // デバウンス保存をスケジュール
     _scheduleFlush(folderPath);
@@ -238,6 +284,7 @@ class ImageMetadataEntry {
     required this.source,
     required this.sourceType,
     this.memo = '',
+    this.favorite = 0,
   });
 
   final String file;
@@ -245,6 +292,7 @@ class ImageMetadataEntry {
   final String source;
   final ImageSourceType sourceType;
   final String memo;
+  final int favorite;
 
   Map<String, dynamic> toJson() {
     return {
@@ -253,6 +301,7 @@ class ImageMetadataEntry {
       'source': source,
       'source_type': imageSourceTypeToString(sourceType),
       'memo': memo,
+      'favorite': favorite,
     };
   }
 
@@ -270,6 +319,7 @@ class ImageMetadataEntry {
         json['source_type'] as String? ?? 'unknown',
       ),
       memo: json['memo'] as String? ?? '',
+      favorite: json['favorite'] as int? ?? 0,
     );
   }
 
@@ -279,6 +329,7 @@ class ImageMetadataEntry {
     String? source,
     ImageSourceType? sourceType,
     String? memo,
+    int? favorite,
   }) {
     return ImageMetadataEntry(
       file: file ?? this.file,
@@ -286,6 +337,7 @@ class ImageMetadataEntry {
       source: source ?? this.source,
       sourceType: sourceType ?? this.sourceType,
       memo: memo ?? this.memo,
+      favorite: favorite ?? this.favorite,
     );
   }
 }

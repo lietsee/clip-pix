@@ -13,6 +13,7 @@ class ImageMetadataRecord {
     required this.source,
     required this.sourceType,
     this.memo = '',
+    this.favorite = 0,
     this.extra,
   });
 
@@ -21,6 +22,7 @@ class ImageMetadataRecord {
   final String source;
   final ImageSourceType sourceType;
   final String memo;
+  final int favorite;
   final Map<String, dynamic>? extra;
 
   Map<String, dynamic> toJson() {
@@ -30,6 +32,7 @@ class ImageMetadataRecord {
       'source': source,
       'source_type': imageSourceTypeToString(sourceType),
       'memo': memo,
+      'favorite': favorite,
     };
     if (extra != null && extra!.isNotEmpty) {
       json['extra'] = extra;
@@ -69,6 +72,7 @@ class MetadataWriter {
         source: record.source,
         sourceType: record.sourceType,
         memo: record.memo,
+        favorite: record.favorite,
       );
     }
 
