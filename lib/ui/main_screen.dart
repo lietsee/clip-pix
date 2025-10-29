@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../data/models/image_entry.dart';
 import '../data/models/image_item.dart';
+import '../data/models/image_source_type.dart';
 import '../system/clipboard_monitor.dart';
 import '../system/file_watcher.dart';
 import '../system/folder_picker_service.dart';
