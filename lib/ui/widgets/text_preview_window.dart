@@ -334,6 +334,7 @@ class _TextPreviewWindowState extends State<TextPreviewWindow> {
               focusNode: _focusNode,
               maxLines: null,
               expands: true,
+              textAlignVertical: TextAlignVertical.top,
               onChanged: (_) => _handleTextChange(),
               decoration: const InputDecoration(
                 border: OutlineInputBorder(),
