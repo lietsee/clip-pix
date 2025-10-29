@@ -40,11 +40,11 @@ void main() {
 
       await notifier.loadForDirectory(tempDir);
 
-      expect(notifier.exposedState.images.length, 2);
+      expect(notifier.exposedState.images.length, 3); // Now includes .txt files
       expect(notifier.exposedState.isLoading, false);
       expect(
-          notifier.exposedState.images.first.filePath.endsWith('image_2.png'),
-          isTrue);
+          notifier.exposedState.images.first.filePath.endsWith('note.txt'),
+          isTrue); // Most recent file is note.txt
     });
 
     test('addOrUpdate inserts new file at head', () async {

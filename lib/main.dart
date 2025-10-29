@@ -29,6 +29,7 @@ import 'system/clipboard_monitor.dart';
 import 'system/folder_picker_service.dart';
 import 'system/file_watcher.dart';
 import 'system/image_saver.dart';
+import 'system/text_saver.dart';
 import 'system/state/app_state_provider.dart';
 import 'system/state/grid_layout_store.dart';
 import 'system/state/grid_layout_mutation_controller.dart';
@@ -329,6 +330,15 @@ class ClipPixApp extends StatelessWidget {
           metadataWriter: context.read<MetadataWriter>(),
         ),
       ),
+      Provider<TextSaver>(
+        create: (context) => TextSaver(
+          getSelectedFolder: () {
+            final state = context.read<SelectedFolderState>();
+            return state.viewDirectory ?? state.current;
+          },
+          metadataWriter: context.read<MetadataWriter>(),
+        ),
+      ),
       if (Platform.isWindows)
         Provider<WindowBoundsService>(
           lazy: false,
@@ -340,11 +350,12 @@ class ClipPixApp extends StatelessWidget {
           },
           dispose: (_, service) => service.dispose(),
         ),
-      ProxyProvider4<ImageSaver, ClipboardCopyService, UrlDownloadService,
-          ImageLibraryNotifier, ClipboardMonitor>(
+      ProxyProvider5<ImageSaver, TextSaver, ClipboardCopyService,
+          UrlDownloadService, ImageLibraryNotifier, ClipboardMonitor>(
         update: (
           context,
           imageSaver,
+          textSaver,
           copyService,
           downloadService,
           imageLibrary,
@@ -433,14 +444,31 @@ class ClipPixApp extends StatelessWidget {
               monitor.onSaveCompleted(saveResult);
             },
             onTextCaptured: (text) async {
-              // TODO Phase 2: Implement text saving with TextSaver
-              // For now, just acknowledge the event
-              monitor.onSaveCompleted(
-                SaveResult.completed(
-                  filePath: 'placeholder.txt',
-                  metadataPath: 'placeholder.json',
-                ),
-              );
+              SaveResult saveResult;
+              try {
+                saveResult = await textSaver.saveTextData(
+                  text,
+                  sourceType: ImageSourceType.local,
+                );
+              } catch (error, stackTrace) {
+                Logger(
+                  'ClipboardMonitorHandler',
+                ).severe('Text save failed', error, stackTrace);
+                saveResult = SaveResult.failed(error: error);
+              }
+              if (saveResult.isSuccess) {
+                final historyNotifier = context.read<ImageHistoryNotifier>();
+                historyNotifier.addEntry(
+                  ImageEntry(
+                    filePath: saveResult.filePath!,
+                    metadataPath: saveResult.metadataPath!,
+                    sourceType: ImageSourceType.local,
+                    savedAt: DateTime.now().toUtc(),
+                  ),
+                );
+                await imageLibrary.addOrUpdate(File(saveResult.filePath!));
+              }
+              monitor.onSaveCompleted(saveResult);
             },
           );
           copyService.registerMonitor(monitor);

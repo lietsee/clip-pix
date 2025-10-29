@@ -5,6 +5,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 
 import '../data/models/image_entry.dart';
+import '../data/models/image_item.dart';
 import '../system/clipboard_monitor.dart';
 import '../system/file_watcher.dart';
 import '../system/folder_picker_service.dart';
@@ -16,6 +17,7 @@ import '../system/state/folder_view_mode.dart';
 import '../system/state/selected_folder_state.dart';
 import '../system/state/watcher_status_notifier.dart';
 import '../system/state/watcher_status_state.dart';
+import '../system/text_saver.dart';
 import 'package:path/path.dart' as p;
 import 'grid_view_module.dart';
 import 'widgets/grid_settings_dialog.dart';
@@ -82,6 +84,13 @@ class _MainScreenState extends State<MainScreen> {
                 ),
               ],
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.note_add),
+            tooltip: '新規テキスト作成',
+            onPressed: libraryState.activeDirectory == null
+                ? null
+                : () => _createNewText(context),
           ),
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -387,6 +396,37 @@ class _MainScreenState extends State<MainScreen> {
       await monitor.start();
     } else {
       await monitor.stop();
+    }
+  }
+
+  Future<void> _createNewText(BuildContext context) async {
+    final textSaver = context.read<TextSaver>();
+    final imageLibrary = context.read<ImageLibraryNotifier>();
+
+    try {
+      final saveResult = await textSaver.saveTextData(
+        '',
+        sourceType: ImageSourceType.local,
+      );
+
+      if (saveResult.isSuccess && saveResult.filePath != null) {
+        await imageLibrary.addOrUpdate(File(saveResult.filePath!));
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('新しいテキストファイルを作成しました')),
+        );
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('作成失敗: ${saveResult.error}')),
+        );
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('エラー: $error')),
+      );
     }
   }
 

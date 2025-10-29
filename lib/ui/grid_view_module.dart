@@ -383,11 +383,19 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   void _handleCopyText(TextContentItem item) async {
-    // TODO Phase 3: Implement text copy to clipboard
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('テキストコピー機能は実装中です')));
+    final copyService = context.read<ClipboardCopyService>();
+    try {
+      await copyService.copyText(item);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('クリップボードにコピーしました')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('コピー失敗: $error')));
+    }
   }
 
   void _showTextPreviewDialog(TextContentItem item) {
