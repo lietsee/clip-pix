@@ -332,6 +332,7 @@ class _GridViewModuleState extends State<GridViewModule> {
           onRetry: _handleRetry,
           onOpenPreview: _showPreviewDialog,
           onCopyImage: _handleCopy,
+          onEditMemo: _handleEditMemo,
           columnWidth: columnWidth,
           columnCount: columnCount,
           columnGap: _gridGap,
@@ -359,6 +360,22 @@ class _GridViewModuleState extends State<GridViewModule> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('コピーに失敗しました')));
+    }
+  }
+
+  void _handleEditMemo(String imageId, String memo) async {
+    final notifier = context.read<ImageLibraryNotifier>();
+    try {
+      await notifier.updateMemo(imageId, memo);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('メモを保存しました')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('メモの保存に失敗しました')));
     }
   }
 

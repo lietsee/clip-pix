@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import 'file_info_manager.dart';
 import 'models/image_source_type.dart';
 
 class ImageMetadataRecord {
@@ -11,6 +12,7 @@ class ImageMetadataRecord {
     required this.savedAt,
     required this.source,
     required this.sourceType,
+    this.memo = '',
     this.extra,
   });
 
@@ -18,6 +20,7 @@ class ImageMetadataRecord {
   final DateTime savedAt;
   final String source;
   final ImageSourceType sourceType;
+  final String memo;
   final Map<String, dynamic>? extra;
 
   Map<String, dynamic> toJson() {
@@ -26,6 +29,7 @@ class ImageMetadataRecord {
       'saved_at': savedAt.toUtc().toIso8601String(),
       'source': source,
       'source_type': imageSourceTypeToString(sourceType),
+      'memo': memo,
     };
     if (extra != null && extra!.isNotEmpty) {
       json['extra'] = extra;
@@ -35,10 +39,14 @@ class ImageMetadataRecord {
 }
 
 class MetadataWriter {
-  const MetadataWriter({JsonEncoder? encoder})
-      : _encoder = encoder ?? _defaultEncoder;
+  const MetadataWriter({
+    JsonEncoder? encoder,
+    FileInfoManager? fileInfoManager,
+  })  : _encoder = encoder ?? _defaultEncoder,
+        _fileInfoManager = fileInfoManager;
 
   final JsonEncoder _encoder;
+  final FileInfoManager? _fileInfoManager;
 
   static const JsonEncoder _defaultEncoder = JsonEncoder();
 
@@ -51,6 +59,19 @@ class MetadataWriter {
     final metadataFile = File(p.join(directory.path, metadataName));
     final jsonString = _encoder.convert(record.toJson());
     await metadataFile.writeAsString(jsonString, flush: true);
+
+    // .fileInfo.json にも追加（新仕様）
+    if (_fileInfoManager != null) {
+      await _fileInfoManager!.upsertMetadata(
+        imageFilePath: imageFile.path,
+        fileName: record.fileName,
+        savedAt: record.savedAt,
+        source: record.source,
+        sourceType: record.sourceType,
+        memo: record.memo,
+      );
+    }
+
     return metadataFile;
   }
 

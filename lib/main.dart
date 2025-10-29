@@ -10,15 +10,18 @@ import 'package:logging/logging.dart';
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 
+import 'data/file_info_manager.dart';
 import 'data/grid_card_preferences_repository.dart';
 import 'data/grid_layout_settings_repository.dart';
 import 'data/grid_order_repository.dart';
+import 'data/image_repository.dart';
+import 'data/metadata_writer.dart';
 import 'data/models/grid_card_pref.dart';
 import 'data/models/grid_layout_settings.dart';
 import 'data/models/image_entry.dart';
 import 'data/models/image_item.dart';
-import 'data/image_repository.dart';
 import 'data/models/image_source_type.dart';
+import 'system/app_lifecycle_service.dart';
 import 'system/clipboard_copy_service.dart';
 import 'system/clipboard_monitor.dart';
 import 'system/folder_picker_service.dart';
@@ -274,10 +277,32 @@ class ClipPixApp extends StatelessWidget {
         ),
         dispose: (_, binding) => binding.dispose(),
       ),
-      Provider<ImageRepository>(create: (_) => ImageRepository()),
-      StateNotifierProvider<ImageLibraryNotifier, ImageLibraryState>(
+      Provider<FileInfoManager>(
+        create: (_) => FileInfoManager(),
+        dispose: (_, manager) => manager.dispose(),
+      ),
+      Provider<AppLifecycleService>(
+        lazy: false,
+        create: (context) {
+          final service = AppLifecycleService(context.read<FileInfoManager>());
+          service.init();
+          return service;
+        },
+        dispose: (_, service) => service.dispose(),
+      ),
+      Provider<MetadataWriter>(
         create: (context) =>
-            ImageLibraryNotifier(context.read<ImageRepository>()),
+            MetadataWriter(fileInfoManager: context.read<FileInfoManager>()),
+      ),
+      Provider<ImageRepository>(
+        create: (context) =>
+            ImageRepository(fileInfoManager: context.read<FileInfoManager>()),
+      ),
+      StateNotifierProvider<ImageLibraryNotifier, ImageLibraryState>(
+        create: (context) => ImageLibraryNotifier(
+          context.read<ImageRepository>(),
+          fileInfoManager: context.read<FileInfoManager>(),
+        ),
       ),
       Provider<FolderPickerService>(create: (_) => FolderPickerService()),
       Provider<UrlDownloadService>(
@@ -291,6 +316,7 @@ class ClipPixApp extends StatelessWidget {
             final state = context.read<SelectedFolderState>();
             return state.viewDirectory ?? state.current;
           },
+          metadataWriter: context.read<MetadataWriter>(),
         ),
       ),
       if (Platform.isWindows)

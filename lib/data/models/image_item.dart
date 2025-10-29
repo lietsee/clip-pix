@@ -10,6 +10,7 @@ class ImageItem extends HiveObject {
     this.sourceType = ImageSourceType.unknown,
     DateTime? savedAt,
     this.source,
+    this.memo = '',
   }) : savedAt = savedAt ?? DateTime.now().toUtc();
 
   final String id;
@@ -18,6 +19,7 @@ class ImageItem extends HiveObject {
   final ImageSourceType sourceType;
   final DateTime savedAt;
   final String? source;
+  final String memo;
 
   ImageItem copyWith({
     String? id,
@@ -26,6 +28,7 @@ class ImageItem extends HiveObject {
     ImageSourceType? sourceType,
     DateTime? savedAt,
     String? source,
+    String? memo,
   }) {
     return ImageItem(
       id: id ?? this.id,
@@ -34,6 +37,7 @@ class ImageItem extends HiveObject {
       sourceType: sourceType ?? this.sourceType,
       savedAt: savedAt ?? this.savedAt,
       source: source ?? this.source,
+      memo: memo ?? this.memo,
     );
   }
 }
@@ -50,6 +54,8 @@ class ImageItemAdapter extends TypeAdapter<ImageItem> {
     final sourceType = ImageSourceType.values[reader.readByte()];
     final savedAtMillis = reader.readInt();
     final source = reader.read();
+    // 後方互換性: 古いデータにmemoがない場合は空文字列をデフォルトに
+    final memo = reader.availableBytes > 0 ? reader.readString() : '';
     return ImageItem(
       id: id,
       filePath: filePath,
@@ -57,6 +63,7 @@ class ImageItemAdapter extends TypeAdapter<ImageItem> {
       sourceType: sourceType,
       savedAt: DateTime.fromMillisecondsSinceEpoch(savedAtMillis, isUtc: true),
       source: source as String?,
+      memo: memo,
     );
   }
 
@@ -68,6 +75,7 @@ class ImageItemAdapter extends TypeAdapter<ImageItem> {
       ..write(obj.metadataPath)
       ..writeByte(obj.sourceType.index)
       ..writeInt(obj.savedAt.millisecondsSinceEpoch)
-      ..write(obj.source);
+      ..write(obj.source)
+      ..writeString(obj.memo);
   }
 }

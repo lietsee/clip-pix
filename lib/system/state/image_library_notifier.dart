@@ -3,16 +3,22 @@ import 'dart:io';
 import 'package:logging/logging.dart';
 import 'package:state_notifier/state_notifier.dart';
 
+import '../../data/file_info_manager.dart';
 import '../../data/image_repository.dart';
 import '../../data/models/image_item.dart';
 import 'image_library_state.dart';
 
 class ImageLibraryNotifier extends StateNotifier<ImageLibraryState> {
-  ImageLibraryNotifier(this._repository, {Logger? logger})
-      : _logger = logger ?? Logger('ImageLibraryNotifier'),
+  ImageLibraryNotifier(
+    this._repository, {
+    FileInfoManager? fileInfoManager,
+    Logger? logger,
+  })  : _fileInfoManager = fileInfoManager,
+        _logger = logger ?? Logger('ImageLibraryNotifier'),
         super(ImageLibraryState.initial());
 
   final ImageRepository _repository;
+  final FileInfoManager? _fileInfoManager;
   final Logger _logger;
   Future<void>? _loadingTask;
 
@@ -80,6 +86,40 @@ class ImageLibraryNotifier extends StateNotifier<ImageLibraryState> {
       return;
     }
     state = state.copyWith(images: updated, clearError: true);
+  }
+
+  Future<void> updateMemo(String imageId, String memo) async {
+    if (_fileInfoManager == null) {
+      _logger.warning('FileInfoManager not available for memo update');
+      return;
+    }
+
+    // Find the image item by ID
+    final index = state.images.indexWhere((item) => item.id == imageId);
+    if (index < 0) {
+      _logger.warning('Image not found for memo update: $imageId');
+      return;
+    }
+
+    final item = state.images[index];
+
+    try {
+      // Update memo in FileInfoManager
+      await _fileInfoManager!.updateMemo(
+        imageFilePath: item.filePath,
+        memo: memo,
+      );
+
+      // Update in-memory state
+      final updated = <ImageItem>[...state.images];
+      updated[index] = item.copyWith(memo: memo);
+      state = state.copyWith(images: updated, clearError: true);
+
+      _logger.info('Memo updated for ${item.filePath}');
+    } catch (error, stackTrace) {
+      _logger.severe('Failed to update memo', error, stackTrace);
+      setError('メモの更新に失敗しました');
+    }
   }
 
   void setError(String message) {

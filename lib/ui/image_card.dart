@@ -8,8 +8,11 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:meta/meta.dart';
 
+import 'package:path/path.dart' as p;
+
 import '../data/models/image_item.dart';
 import '../system/state/grid_layout_store.dart';
+import 'widgets/memo_edit_dialog.dart';
 
 class ImageCard extends StatefulWidget {
   const ImageCard({
@@ -22,6 +25,7 @@ class ImageCard extends StatefulWidget {
     required this.onRetry,
     required this.onOpenPreview,
     required this.onCopyImage,
+    required this.onEditMemo,
     required this.columnWidth,
     required this.columnCount,
     required this.columnGap,
@@ -41,6 +45,7 @@ class ImageCard extends StatefulWidget {
   final void Function(String id) onRetry;
   final void Function(ImageItem item) onOpenPreview;
   final void Function(ImageItem item) onCopyImage;
+  final void Function(String id, String memo) onEditMemo;
   final double columnWidth;
   final int columnCount;
   final double columnGap;
@@ -345,6 +350,32 @@ class _ImageCardState extends State<ImageCard> {
   Widget _buildHoverControls() {
     return Stack(
       children: [
+        // メモボタン（左上）
+        Positioned(
+          top: 12,
+          left: 12,
+          child: _fadeChild(
+            child: Tooltip(
+              message: widget.item.memo.isEmpty ? 'メモを追加' : 'メモを編集',
+              child: ElevatedButton(
+                onPressed: _handleEditMemo,
+                style: ElevatedButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  shape: const CircleBorder(),
+                  minimumSize: const Size(32, 32),
+                  backgroundColor: widget.item.memo.isEmpty
+                      ? null
+                      : Theme.of(context).colorScheme.primaryContainer,
+                ),
+                child: Icon(
+                  widget.item.memo.isEmpty ? Icons.note_add : Icons.edit_note,
+                  size: 18,
+                ),
+              ),
+            ),
+          ),
+        ),
+        // コピーボタン（右上）
         Positioned(
           top: 12,
           right: 12,
@@ -680,6 +711,19 @@ class _ImageCardState extends State<ImageCard> {
     });
     _retryStreamLocally();
     widget.onRetry(widget.item.id);
+  }
+
+  Future<void> _handleEditMemo() async {
+    final newMemo = await showDialog<String>(
+      context: context,
+      builder: (context) => MemoEditDialog(
+        initialMemo: widget.item.memo,
+        fileName: p.basename(widget.item.filePath),
+      ),
+    );
+    if (newMemo != null && mounted) {
+      widget.onEditMemo(widget.item.id, newMemo);
+    }
   }
 
   void _handleTimeoutRetry() {

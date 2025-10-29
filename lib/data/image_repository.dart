@@ -4,14 +4,19 @@ import 'dart:io';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
 
+import 'file_info_manager.dart';
 import 'models/image_item.dart';
 import 'models/image_source_type.dart';
 
 class ImageRepository {
-  ImageRepository({Logger? logger})
-      : _logger = logger ?? Logger('ImageRepository');
+  ImageRepository({
+    Logger? logger,
+    FileInfoManager? fileInfoManager,
+  })  : _logger = logger ?? Logger('ImageRepository'),
+        _fileInfoManager = fileInfoManager;
 
   final Logger _logger;
+  final FileInfoManager? _fileInfoManager;
 
   static const _supportedExtensions = <String>{'.jpg', '.jpeg', '.png'};
 
@@ -69,6 +74,7 @@ class ImageRepository {
         sourceType: metadata?.sourceType ?? ImageSourceType.unknown,
         savedAt: metadata?.savedAt ?? stat.modified.toUtc(),
         source: metadata?.source,
+        memo: metadata?.memo ?? '',
       );
     } catch (error, stackTrace) {
       _logger.warning(
@@ -81,6 +87,30 @@ class ImageRepository {
   }
 
   Future<_Metadata?> _readMetadata(File imageFile) async {
+    // 優先1: .fileInfo.json から読み込み（新仕様）
+    if (_fileInfoManager != null) {
+      try {
+        final entry = await _fileInfoManager!.getMetadata(imageFile.path);
+        if (entry != null) {
+          _logger.fine('Metadata loaded from .fileInfo.json: ${imageFile.path}');
+          return _Metadata(
+            metadataPath: null, // .fileInfo.jsonからの読み込みなので個別パスはnull
+            sourceType: entry.sourceType,
+            source: entry.source,
+            savedAt: entry.savedAt,
+            memo: entry.memo,
+          );
+        }
+      } catch (error, stackTrace) {
+        _logger.warning(
+          'Failed to read from .fileInfo.json for ${imageFile.path}',
+          error,
+          stackTrace,
+        );
+      }
+    }
+
+    // フォールバック: 個別JSONファイルから読み込み（旧仕様）
     final metadataFile = File(_metadataPathFor(imageFile));
     if (!await metadataFile.exists()) {
       return null;
@@ -100,6 +130,7 @@ class ImageRepository {
         sourceType: sourceType,
         source: json['source'] as String?,
         savedAt: savedAt,
+        memo: json['memo'] as String? ?? '', // 旧JSONにmemoがあれば読み込み
       );
     } catch (error, stackTrace) {
       _logger.warning(
@@ -112,6 +143,7 @@ class ImageRepository {
         sourceType: ImageSourceType.unknown,
         source: null,
         savedAt: null,
+        memo: '',
       );
     }
   }
@@ -133,10 +165,12 @@ class _Metadata {
     required this.sourceType,
     required this.source,
     required this.savedAt,
+    this.memo = '',
   });
 
-  final String metadataPath;
+  final String? metadataPath;
   final ImageSourceType sourceType;
   final String? source;
   final DateTime? savedAt;
+  final String memo;
 }
