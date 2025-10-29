@@ -407,11 +407,21 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   void _showTextPreviewDialog(TextContentItem item) {
+    if (_launchTextPreviewWindowProcess(item)) {
+      return;
+    }
+    _showFallbackTextPreview(item);
+  }
+
+  void _showFallbackTextPreview(TextContentItem item) {
     showDialog<void>(
       context: context,
-      builder: (context) => TextPreviewWindow(
-        item: item,
-        onSave: _handleSaveText,
+      builder: (context) => Dialog(
+        child: TextPreviewWindow(
+          item: item,
+          onSave: _handleSaveText,
+          onClose: () => Navigator.of(context).pop(),
+        ),
       ),
     );
   }
@@ -651,6 +661,45 @@ class _GridViewModuleState extends State<GridViewModule> {
       debugPrint('[GridViewModule] failed to launch preview: $error');
       Logger('GridViewModule').warning(
         'Failed to launch preview window',
+        error,
+        stackTrace,
+      );
+      return false;
+    }
+  }
+
+  bool _launchTextPreviewWindowProcess(TextContentItem item) {
+    final exePath = _resolveExecutablePath();
+    if (exePath == null) {
+      debugPrint('[GridViewModule] preview exe not found');
+      return false;
+    }
+    final payload = jsonEncode({
+      'item': {
+        'id': item.id,
+        'filePath': item.filePath,
+        'sourceType': item.sourceType.index,
+        'savedAt': item.savedAt.toIso8601String(),
+        'source': item.source,
+        'fontSize': item.fontSize,
+        'memo': item.memo,
+        'favorite': item.favorite,
+      },
+      'alwaysOnTop': false,
+    });
+    try {
+      unawaited(
+        Process.start(
+          exePath,
+          ['--preview-text', payload],
+          mode: ProcessStartMode.detached,
+        ),
+      );
+      return true;
+    } catch (error, stackTrace) {
+      debugPrint('[GridViewModule] failed to launch text preview: $error');
+      Logger('GridViewModule').warning(
+        'Failed to launch text preview window',
         error,
         stackTrace,
       );

@@ -45,6 +45,7 @@ import 'system/url_download_service.dart';
 import 'package:path/path.dart' as p;
 import 'ui/main_screen.dart';
 import 'ui/image_preview_window.dart';
+import 'ui/widgets/text_preview_window.dart';
 import 'system/window_bounds_service.dart';
 
 Future<void> main(List<String> args) async {
@@ -53,6 +54,12 @@ Future<void> main(List<String> args) async {
   final previewIndex = args.indexOf('--preview');
   if (previewIndex != -1 && previewIndex + 1 < args.length) {
     await _launchPreviewMode(args[previewIndex + 1]);
+    return;
+  }
+
+  final previewTextIndex = args.indexOf('--preview-text');
+  if (previewTextIndex != -1 && previewTextIndex + 1 < args.length) {
+    await _launchTextPreviewMode(args[previewTextIndex + 1]);
     return;
   }
 
@@ -218,6 +225,73 @@ class _PreviewApp extends StatelessWidget {
         item: item,
         initialAlwaysOnTop: initialAlwaysOnTop,
         onCopyImage: (image) => copyService.copyImage(image),
+        onClose: () => exit(0),
+        onToggleAlwaysOnTop: (_) {},
+      ),
+    );
+  }
+}
+
+Future<void> _launchTextPreviewMode(String payload) async {
+  _configureLogging();
+  Map<String, dynamic> data;
+  try {
+    data = jsonDecode(payload) as Map<String, dynamic>;
+  } catch (error) {
+    Logger('TextPreviewWindow').severe('Invalid preview payload', error);
+    return;
+  }
+
+  final itemMap = (data['item'] as Map<String, dynamic>?);
+  if (itemMap == null) {
+    Logger('TextPreviewWindow').warning('Preview payload missing item');
+    return;
+  }
+
+  final savedAtString = itemMap['savedAt'] as String?;
+  DateTime? savedAt;
+  if (savedAtString != null) {
+    savedAt = DateTime.tryParse(savedAtString)?.toUtc();
+  }
+
+  final item = TextContentItem(
+    id: itemMap['id'] as String,
+    filePath: itemMap['filePath'] as String,
+    sourceType: ImageSourceType.values[(itemMap['sourceType'] as int?) ?? 0],
+    savedAt: savedAt,
+    source: itemMap['source'] as String?,
+    fontSize: (itemMap['fontSize'] as num?)?.toDouble() ?? 14.0,
+    memo: itemMap['memo'] as String? ?? '',
+    favorite: itemMap['favorite'] as int? ?? 0,
+  );
+
+  final initialTop = data['alwaysOnTop'] as bool? ?? false;
+
+  runApp(
+    _TextPreviewApp(
+      item: item,
+      initialAlwaysOnTop: initialTop,
+    ),
+  );
+}
+
+class _TextPreviewApp extends StatelessWidget {
+  const _TextPreviewApp({
+    required this.item,
+    required this.initialAlwaysOnTop,
+  });
+
+  final TextContentItem item;
+  final bool initialAlwaysOnTop;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(useMaterial3: true),
+      home: TextPreviewWindow(
+        item: item,
+        initialAlwaysOnTop: initialAlwaysOnTop,
         onClose: () => exit(0),
         onToggleAlwaysOnTop: (_) {},
       ),
