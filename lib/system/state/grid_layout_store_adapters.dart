@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import '../../data/grid_card_preferences_repository.dart';
+import '../../data/models/content_item.dart';
 import '../../data/models/grid_card_pref.dart';
 import '../../data/models/image_item.dart';
 import 'grid_layout_store.dart';
@@ -49,12 +50,16 @@ class FileImageRatioResolver implements GridIntrinsicRatioResolver {
   final Map<String, Future<double?>> _pending = {};
 
   @override
-  Future<double?> resolve(String id, ImageItem? item) {
+  Future<double?> resolve(String id, ContentItem? item) {
     final cached = _cache[id];
     if (cached != null && cached.width > 0 && cached.height > 0) {
       return Future.value(cached.height / cached.width);
     }
     if (item == null || item.filePath.isEmpty) {
+      return Future.value(null);
+    }
+    // Only process ImageItem (not TextContentItem)
+    if (item is! ImageItem) {
       return Future.value(null);
     }
     return _pending[id] ??= _loadRatio(id, item);
