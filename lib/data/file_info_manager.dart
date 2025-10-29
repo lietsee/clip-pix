@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
 
+import 'models/content_type.dart';
 import 'models/image_source_type.dart';
 
 /// フォルダごとの画像メタデータを `.fileInfo.json` で一括管理するクラス
@@ -38,6 +39,7 @@ class FileInfoManager {
     required DateTime savedAt,
     required String source,
     required ImageSourceType sourceType,
+    ContentType contentType = ContentType.image,
     String memo = '',
     int favorite = 0,
   }) async {
@@ -52,6 +54,7 @@ class FileInfoManager {
       savedAt: savedAt.toUtc(),
       source: source,
       sourceType: sourceType,
+      contentType: contentType,
       memo: memo,
       favorite: favorite,
     );
@@ -283,6 +286,7 @@ class ImageMetadataEntry {
     required this.savedAt,
     required this.source,
     required this.sourceType,
+    this.contentType = ContentType.image,
     this.memo = '',
     this.favorite = 0,
   });
@@ -291,6 +295,7 @@ class ImageMetadataEntry {
   final DateTime savedAt;
   final String source;
   final ImageSourceType sourceType;
+  final ContentType contentType;
   final String memo;
   final int favorite;
 
@@ -300,6 +305,7 @@ class ImageMetadataEntry {
       'saved_at': savedAt.toUtc().toIso8601String(),
       'source': source,
       'source_type': imageSourceTypeToString(sourceType),
+      'content_type': contentTypeToString(contentType),
       'memo': memo,
       'favorite': favorite,
     };
@@ -318,6 +324,9 @@ class ImageMetadataEntry {
       sourceType: imageSourceTypeFromString(
         json['source_type'] as String? ?? 'unknown',
       ),
+      contentType: contentTypeFromString(
+        json['content_type'] as String? ?? 'image',
+      ),
       memo: json['memo'] as String? ?? '',
       favorite: json['favorite'] as int? ?? 0,
     );
@@ -328,6 +337,7 @@ class ImageMetadataEntry {
     DateTime? savedAt,
     String? source,
     ImageSourceType? sourceType,
+    ContentType? contentType,
     String? memo,
     int? favorite,
   }) {
@@ -336,6 +346,7 @@ class ImageMetadataEntry {
       savedAt: savedAt ?? this.savedAt,
       source: source ?? this.source,
       sourceType: sourceType ?? this.sourceType,
+      contentType: contentType ?? this.contentType,
       memo: memo ?? this.memo,
       favorite: favorite ?? this.favorite,
     );

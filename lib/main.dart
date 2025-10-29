@@ -432,6 +432,16 @@ class ClipPixApp extends StatelessWidget {
               }
               monitor.onSaveCompleted(saveResult);
             },
+            onTextCaptured: (text) async {
+              // TODO Phase 2: Implement text saving with TextSaver
+              // For now, just acknowledge the event
+              monitor.onSaveCompleted(
+                SaveResult.completed(
+                  filePath: 'placeholder.txt',
+                  metadataPath: 'placeholder.json',
+                ),
+              );
+            },
           );
           copyService.registerMonitor(monitor);
           return monitor;

@@ -22,9 +22,11 @@ typedef ImageCapturedCallback = Future<void> Function(
 
 typedef UrlCapturedCallback = Future<void> Function(String url);
 
+typedef TextCapturedCallback = Future<void> Function(String text);
+
 enum ClipboardMonitorMode { hook, polling }
 
-enum _ClipboardEventType { image, url }
+enum _ClipboardEventType { image, url, text }
 
 const int _eventSystemClipboard = 0x00000006;
 const int _wineventOutOfContext = 0x0000;
@@ -37,7 +39,8 @@ class _ClipboardEvent {
     this.source,
     required this.sourceType,
   })  : type = _ClipboardEventType.image,
-        url = null;
+        url = null,
+        text = null;
 
   _ClipboardEvent.url({
     required this.timestamp,
@@ -45,7 +48,17 @@ class _ClipboardEvent {
   })  : type = _ClipboardEventType.url,
         imageData = null,
         source = null,
-        sourceType = ImageSourceType.web;
+        sourceType = ImageSourceType.web,
+        text = null;
+
+  _ClipboardEvent.text({
+    required this.timestamp,
+    required this.text,
+  })  : type = _ClipboardEventType.text,
+        imageData = null,
+        source = null,
+        sourceType = ImageSourceType.local,
+        url = null;
 
   final DateTime timestamp;
   final _ClipboardEventType type;
@@ -53,6 +66,7 @@ class _ClipboardEvent {
   final String? source;
   final ImageSourceType sourceType;
   final String? url;
+  final String? text;
 }
 
 abstract class ClipboardMonitorGuard {
@@ -65,6 +79,7 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
     required Directory? Function() getSelectedFolder,
     required ImageCapturedCallback onImageCaptured,
     required UrlCapturedCallback onUrlCaptured,
+    required TextCapturedCallback onTextCaptured,
     Logger? logger,
     Duration duplicateWindow = const Duration(seconds: 2),
     Duration queueResumeDelay = const Duration(milliseconds: 150),
@@ -72,6 +87,7 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
   })  : _getSelectedFolder = getSelectedFolder,
         _onImageCaptured = onImageCaptured,
         _onUrlCaptured = onUrlCaptured,
+        _onTextCaptured = onTextCaptured,
         _logger = logger ?? Logger('ClipboardMonitor'),
         _duplicateWindow = duplicateWindow,
         _queueResumeDelay = queueResumeDelay,
@@ -80,6 +96,7 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
   final Directory? Function() _getSelectedFolder;
   final ImageCapturedCallback _onImageCaptured;
   final UrlCapturedCallback _onUrlCaptured;
+  final TextCapturedCallback _onTextCaptured;
   final Logger _logger;
   final Duration _duplicateWindow;
   final Duration _queueResumeDelay;
@@ -245,6 +262,40 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
     );
   }
 
+  /// クリップボードからの平文テキストを処理
+  Future<void> handleClipboardText(String text) async {
+    if (!_isRunning) {
+      return;
+    }
+    if (_isGuardActive) {
+      _logger.fine('Clipboard text ignored due to guard token $_guardToken');
+      return;
+    }
+
+    // URLかどうかチェック
+    final normalizedUrl = _normalizeUrl(text);
+    if (normalizedUrl != null) {
+      // URLの場合はURL処理に委譲
+      await handleClipboardUrl(text);
+      return;
+    }
+
+    // 平文テキストとして処理
+    final hash = _hashString(text);
+    if (_isDuplicate(hash)) {
+      _logger.fine('Duplicate clipboard text ignored');
+      return;
+    }
+
+    _recentHashes[hash] = DateTime.now();
+    _enqueueEvent(
+      _ClipboardEvent.text(
+        timestamp: DateTime.now(),
+        text: text,
+      ),
+    );
+  }
+
   void dispose() {
     stop();
   }
@@ -330,7 +381,7 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
         return;
       }
       if (snapshot.text != null) {
-        await handleClipboardUrl(snapshot.text!);
+        await handleClipboardText(snapshot.text!);
       }
     } catch (error, stackTrace) {
       _logger.warning(
@@ -739,6 +790,14 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
             _isImageSaverBusy = false;
           }
           break;
+        case _ClipboardEventType.text:
+          final text = event.text!;
+          _isImageSaverBusy = true;
+          await _onTextCaptured(text);
+          if (_isImageSaverBusy) {
+            _isImageSaverBusy = false;
+          }
+          break;
       }
     }
     _isProcessing = false;
@@ -795,6 +854,12 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
   }
 
   String _hashBytes(Uint8List bytes) {
+    final digest = sha1.convert(bytes);
+    return digest.toString();
+  }
+
+  String _hashString(String text) {
+    final bytes = text.codeUnits;
     final digest = sha1.convert(bytes);
     return digest.toString();
   }
