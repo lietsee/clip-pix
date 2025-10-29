@@ -4,6 +4,7 @@ import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
 
 import '../data/metadata_writer.dart';
+import '../data/models/content_type.dart';
 import '../data/models/image_source_type.dart';
 import 'image_saver.dart';
 
@@ -91,11 +92,13 @@ class TextSaver {
       savedAt: _now().toUtc(),
       source: source ?? 'Clipboard',
       sourceType: sourceType,
+      contentType: ContentType.text,
     );
 
     final metadataFile = await _metadataWriter.writeForImage(
       imageFile: textFile,
       record: metadataRecord,
+      skipIndividualJson: true,
     );
 
     _logger.info(

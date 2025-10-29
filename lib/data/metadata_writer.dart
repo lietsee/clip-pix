@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import 'file_info_manager.dart';
+import 'models/content_type.dart';
 import 'models/image_source_type.dart';
 
 class ImageMetadataRecord {
@@ -12,6 +13,7 @@ class ImageMetadataRecord {
     required this.savedAt,
     required this.source,
     required this.sourceType,
+    this.contentType = ContentType.image,
     this.memo = '',
     this.favorite = 0,
     this.extra,
@@ -21,6 +23,7 @@ class ImageMetadataRecord {
   final DateTime savedAt;
   final String source;
   final ImageSourceType sourceType;
+  final ContentType contentType;
   final String memo;
   final int favorite;
   final Map<String, dynamic>? extra;
@@ -31,6 +34,7 @@ class ImageMetadataRecord {
       'saved_at': savedAt.toUtc().toIso8601String(),
       'source': source,
       'source_type': imageSourceTypeToString(sourceType),
+      'content_type': contentTypeToString(contentType),
       'memo': memo,
       'favorite': favorite,
     };
@@ -56,12 +60,17 @@ class MetadataWriter {
   Future<File> writeForImage({
     required File imageFile,
     required ImageMetadataRecord record,
+    bool skipIndividualJson = false,
   }) async {
     final directory = imageFile.parent;
     final metadataName = _metadataNameFor(imageFile);
     final metadataFile = File(p.join(directory.path, metadataName));
-    final jsonString = _encoder.convert(record.toJson());
-    await metadataFile.writeAsString(jsonString, flush: true);
+
+    // skipIndividualJson=trueの場合、個別JSON作成をスキップ
+    if (!skipIndividualJson) {
+      final jsonString = _encoder.convert(record.toJson());
+      await metadataFile.writeAsString(jsonString, flush: true);
+    }
 
     // .fileInfo.json にも追加（新仕様）
     if (_fileInfoManager != null) {
@@ -71,6 +80,7 @@ class MetadataWriter {
         savedAt: record.savedAt,
         source: record.source,
         sourceType: record.sourceType,
+        contentType: record.contentType,
         memo: record.memo,
         favorite: record.favorite,
       );
