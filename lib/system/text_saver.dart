@@ -59,12 +59,8 @@ class TextSaver {
 
     // テキストインジェクション保護
     final sanitizedText = _sanitizeText(textData);
-    if (sanitizedText.isEmpty) {
-      _logger.warning('Save aborted: text is empty after sanitization');
-      return SaveResult.failed(error: 'empty_text');
-    }
 
-    // サイズ制限チェック
+    // サイズ制限チェック（空のテキストは許可）
     final textBytes = _textToBytes(sanitizedText);
     if (textBytes.length > _maxTextBytes) {
       _logger.warning(
