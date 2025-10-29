@@ -18,7 +18,7 @@ class ImageRepository {
   final Logger _logger;
   final FileInfoManager? _fileInfoManager;
 
-  static const _supportedExtensions = <String>{'.jpg', '.jpeg', '.png'};
+  static const _supportedExtensions = <String>{'.jpg', '.jpeg', '.png', '.txt'};
 
   Future<List<ImageItem>> loadForDirectory(Directory directory) async {
     try {

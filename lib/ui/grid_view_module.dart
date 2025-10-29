@@ -10,8 +10,10 @@ import 'package:provider/provider.dart';
 
 import '../data/grid_layout_settings_repository.dart';
 import '../data/grid_order_repository.dart';
+import '../data/models/content_type.dart';
 import '../data/models/grid_layout_settings.dart';
 import '../data/models/image_item.dart';
+import '../data/models/text_content_item.dart';
 import '../system/clipboard_copy_service.dart';
 import 'package:logging/logging.dart';
 import '../system/state/folder_view_mode.dart';
@@ -24,6 +26,7 @@ import 'image_card.dart';
 import 'image_preview_window.dart';
 import 'widgets/grid_layout_surface.dart';
 import 'widgets/pinterest_grid.dart';
+import 'widgets/text_card.dart';
 import 'package:path/path.dart' as p;
 
 class GridViewModule extends StatefulWidget {
@@ -323,27 +326,41 @@ class _GridViewModuleState extends State<GridViewModule> {
         key: animatedKey,
         duration: _animationDuration,
         opacity: entry.opacity,
-        child: ImageCard(
-          item: item,
-          viewState: viewState,
-          onResize: _handleResize,
-          onSpanChange: _handleSpanChange,
-          onZoom: _handleZoom,
-          onRetry: _handleRetry,
-          onOpenPreview: _showPreviewDialog,
-          onCopyImage: _handleCopy,
-          onEditMemo: _handleEditMemo,
-          onFavoriteToggle: _handleFavorite,
-          columnWidth: columnWidth,
-          columnCount: columnCount,
-          columnGap: _gridGap,
-          onReorderPointerDown: _handleReorderPointerDown,
-          onStartReorder: _startReorder,
-          onReorderUpdate: _updateReorder,
-          onReorderEnd: _endReorder,
-          onReorderCancel: _handleReorderCancel,
-          backgroundColor: backgroundColor,
-        ),
+        child: item.contentType == ContentType.text
+            ? TextCard(
+                item: item as TextContentItem,
+                viewState: viewState,
+                onResize: _handleResize,
+                onEditMemo: _handleEditMemo,
+                onFavoriteToggle: _handleFavorite,
+                onCopyText: _handleCopyText,
+                onOpenPreview: _showTextPreviewDialog,
+                columnWidth: columnWidth,
+                columnCount: columnCount,
+                columnGap: _gridGap,
+                backgroundColor: backgroundColor,
+              )
+            : ImageCard(
+                item: item,
+                viewState: viewState,
+                onResize: _handleResize,
+                onSpanChange: _handleSpanChange,
+                onZoom: _handleZoom,
+                onRetry: _handleRetry,
+                onOpenPreview: _showPreviewDialog,
+                onCopyImage: _handleCopy,
+                onEditMemo: _handleEditMemo,
+                onFavoriteToggle: _handleFavorite,
+                columnWidth: columnWidth,
+                columnCount: columnCount,
+                columnGap: _gridGap,
+                onReorderPointerDown: _handleReorderPointerDown,
+                onStartReorder: _startReorder,
+                onReorderUpdate: _updateReorder,
+                onReorderEnd: _endReorder,
+                onReorderCancel: _handleReorderCancel,
+                backgroundColor: backgroundColor,
+              ),
       ),
     );
   }
@@ -362,6 +379,21 @@ class _GridViewModuleState extends State<GridViewModule> {
         context,
       ).showSnackBar(const SnackBar(content: Text('コピーに失敗しました')));
     }
+  }
+
+  void _handleCopyText(TextContentItem item) async {
+    // TODO Phase 3: Implement text copy to clipboard
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('テキストコピー機能は実装中です')));
+  }
+
+  void _showTextPreviewDialog(TextContentItem item) {
+    // TODO Phase 3: Implement TextPreviewWindow
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('テキストプレビュー機能は実装中です')));
   }
 
   void _handleEditMemo(String imageId, String memo) async {
