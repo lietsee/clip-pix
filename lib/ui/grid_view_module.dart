@@ -341,7 +341,7 @@ class _GridViewModuleState extends State<GridViewModule> {
                 columnWidth: columnWidth,
                 columnCount: columnCount,
                 columnGap: _gridGap,
-                backgroundColor: backgroundColor,
+                backgroundColor: const Color(0xFF72CC82),
               )
             : ImageCard(
                 item: item as ImageItem,
