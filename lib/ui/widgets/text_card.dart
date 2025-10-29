@@ -64,11 +64,15 @@ class _TextCardState extends State<TextCard> {
   int? _resizeStartSpan;
   String _textContent = '';
   bool _isLoading = true;
+  late ValueNotifier<Size> _sizeNotifier;
 
   @override
   void initState() {
     super.initState();
     _currentSpan = widget.viewState.columnSpan;
+    _sizeNotifier = ValueNotifier(
+      Size(widget.viewState.width, widget.viewState.height),
+    );
     _loadTextContent();
   }
 
@@ -78,6 +82,13 @@ class _TextCardState extends State<TextCard> {
     if (oldWidget.item.filePath != widget.item.filePath) {
       _loadTextContent();
     }
+
+    // サイズが外部から変更された場合、ValueNotifierも更新
+    final newSize = Size(widget.viewState.width, widget.viewState.height);
+    if (_sizeNotifier.value != newSize) {
+      _sizeNotifier.value = newSize;
+    }
+
     if (oldWidget.columnWidth != widget.columnWidth ||
         oldWidget.columnGap != widget.columnGap ||
         oldWidget.columnCount != widget.columnCount) {
@@ -86,6 +97,12 @@ class _TextCardState extends State<TextCard> {
     if (oldWidget.viewState.columnSpan != widget.viewState.columnSpan) {
       _currentSpan = widget.viewState.columnSpan;
     }
+  }
+
+  @override
+  void dispose() {
+    _sizeNotifier.dispose();
+    super.dispose();
   }
 
   Future<void> _loadTextContent() async {
@@ -123,50 +140,55 @@ class _TextCardState extends State<TextCard> {
       child: GestureDetector(
         onTap: _isEditing ? null : _handleSingleTap,
         onDoubleTap: _isEditing ? null : _handleDoubleTap,
-        child: Container(
-          width: widget.viewState.width,
-          height: widget.viewState.height,
-          decoration: BoxDecoration(
-            color: widget.backgroundColor,
-            border: Border.all(color: Colors.grey.shade300, width: 1),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Stack(
-            children: [
-              // テキストコンテンツ
-              if (!_isEditing)
-                Positioned.fill(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: _isLoading
-                        ? const Center(child: CircularProgressIndicator())
-                        : SingleChildScrollView(
-                            child: Text(
-                              _textContent,
-                              style: TextStyle(
-                                fontSize: widget.item.fontSize,
-                                color: Colors.black87,
+        child: ValueListenableBuilder<Size>(
+          valueListenable: _sizeNotifier,
+          builder: (context, size, child) {
+            return Container(
+              width: size.width,
+              height: size.height,
+              decoration: BoxDecoration(
+                color: widget.backgroundColor,
+                border: Border.all(color: Colors.grey.shade300, width: 1),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Stack(
+                children: [
+                  // テキストコンテンツ
+                  if (!_isEditing)
+                    Positioned.fill(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: _isLoading
+                            ? const Center(child: CircularProgressIndicator())
+                            : SingleChildScrollView(
+                                child: Text(
+                                  _textContent,
+                                  style: TextStyle(
+                                    fontSize: widget.item.fontSize,
+                                    color: Colors.black87,
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                  ),
-                ),
-              // インラインエディタ
-              if (_isEditing)
-                Positioned.fill(
-                  child: TextInlineEditor(
-                    initialText: _textContent,
-                    onSave: _handleSaveText,
-                    onCancel: _handleCancelEdit,
-                  ),
-                ),
-              // ホバーコントロール
-              if (_showControls && !_isResizing && !_isEditing)
-                _buildHoverControls(),
-              // リサイズハンドル
-              if (_showControls || _isResizing) _buildResizeHandle(),
-            ],
-          ),
+                      ),
+                    ),
+                  // インラインエディタ
+                  if (_isEditing)
+                    Positioned.fill(
+                      child: TextInlineEditor(
+                        initialText: _textContent,
+                        onSave: _handleSaveText,
+                        onCancel: _handleCancelEdit,
+                      ),
+                    ),
+                  // ホバーコントロール
+                  if (_showControls && !_isResizing && !_isEditing)
+                    _buildHoverControls(),
+                  // リサイズハンドル
+                  if (_showControls || _isResizing) _buildResizeHandle(),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );
@@ -382,7 +404,12 @@ class _TextCardState extends State<TextCard> {
     final newHeight =
         (_resizeStartSize!.height + delta.dy).clamp(100.0, 1080.0);
 
-    widget.onResize(widget.item.id, Size(snappedWidth, newHeight));
+    // ValueNotifierのみ更新（GridLayoutStoreへの永続化はドラッグ終了時）
+    final newSize = Size(snappedWidth, newHeight);
+    if (_sizeNotifier.value != newSize) {
+      _sizeNotifier.value = newSize;
+    }
+
     if (snappedSpan != _currentSpan) {
       setState(() {
         _currentSpan = snappedSpan;
@@ -396,6 +423,10 @@ class _TextCardState extends State<TextCard> {
       _resizeStartSize = null;
       _resizeStartGlobalPosition = null;
     });
+
+    // ドラッグ終了時にGridLayoutStoreに永続化
+    widget.onResize(widget.item.id, _sizeNotifier.value);
+
     if (_resizeStartSpan != null && _currentSpan != _resizeStartSpan) {
       widget.onSpanChange?.call(widget.item.id, _currentSpan);
     }
