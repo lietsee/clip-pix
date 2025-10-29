@@ -16,11 +16,13 @@ import 'data/grid_layout_settings_repository.dart';
 import 'data/grid_order_repository.dart';
 import 'data/image_repository.dart';
 import 'data/metadata_writer.dart';
+import 'data/models/content_type.dart';
 import 'data/models/grid_card_pref.dart';
 import 'data/models/grid_layout_settings.dart';
 import 'data/models/image_entry.dart';
 import 'data/models/image_item.dart';
 import 'data/models/image_source_type.dart';
+import 'data/models/text_content_item.dart';
 import 'system/app_lifecycle_service.dart';
 import 'system/clipboard_copy_service.dart';
 import 'system/clipboard_monitor.dart';
@@ -117,6 +119,14 @@ void _registerHiveAdapters() {
   }
   if (!Hive.isAdapterRegistered(5)) {
     Hive.registerAdapter(GridBackgroundToneAdapter());
+  }
+  // 新規追加: ContentType enum (typeId: 6)
+  if (!Hive.isAdapterRegistered(6)) {
+    Hive.registerAdapter(ContentTypeAdapter());
+  }
+  // 新規追加: TextContentItem (typeId: 7)
+  if (!Hive.isAdapterRegistered(7)) {
+    Hive.registerAdapter(TextContentItemAdapter());
   }
 }
 

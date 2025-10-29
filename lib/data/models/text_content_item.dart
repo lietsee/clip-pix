@@ -4,23 +4,28 @@ import 'content_item.dart';
 import 'content_type.dart';
 import 'image_source_type.dart';
 
-class ImageItem extends ContentItem {
-  ImageItem({
+/// テキストコンテンツアイテム
+class TextContentItem extends ContentItem {
+  TextContentItem({
     required super.id,
     required super.filePath,
-    this.metadataPath,
-    super.sourceType = ImageSourceType.unknown,
+    super.sourceType,
     super.savedAt,
     super.source,
-    super.memo = '',
-    super.favorite = 0,
-  }) : super(contentType: ContentType.image);
+    super.memo,
+    super.favorite,
+    this.fontSize = 16.0,
+    this.textPreview = '',
+  }) : super(contentType: ContentType.text);
 
-  /// 個別JSONメタデータファイルのパス（旧仕様との互換性のため保持）
-  final String? metadataPath;
+  /// フォントサイズ（ズーム用）
+  final double fontSize;
+
+  /// テキストプレビュー（先頭200文字）
+  final String textPreview;
 
   @override
-  ImageItem copyWith({
+  TextContentItem copyWith({
     String? id,
     String? filePath,
     ContentType? contentType,
@@ -29,59 +34,64 @@ class ImageItem extends ContentItem {
     String? source,
     String? memo,
     int? favorite,
-    String? metadataPath,
+    double? fontSize,
+    String? textPreview,
   }) {
-    return ImageItem(
+    return TextContentItem(
       id: id ?? this.id,
       filePath: filePath ?? this.filePath,
-      metadataPath: metadataPath ?? this.metadataPath,
       sourceType: sourceType ?? this.sourceType,
       savedAt: savedAt ?? this.savedAt,
       source: source ?? this.source,
       memo: memo ?? this.memo,
       favorite: favorite ?? this.favorite,
+      fontSize: fontSize ?? this.fontSize,
+      textPreview: textPreview ?? this.textPreview,
     );
   }
 }
 
-class ImageItemAdapter extends TypeAdapter<ImageItem> {
+/// TextContentItem用のHive TypeAdapter
+class TextContentItemAdapter extends TypeAdapter<TextContentItem> {
   @override
-  final int typeId = 1;
+  final int typeId = 7;
 
   @override
-  ImageItem read(BinaryReader reader) {
+  TextContentItem read(BinaryReader reader) {
     final id = reader.readString();
     final filePath = reader.readString();
-    final metadataPath = reader.read();
     final sourceType = ImageSourceType.values[reader.readByte()];
     final savedAtMillis = reader.readInt();
-    final source = reader.read();
-    // 後方互換性: 古いデータにmemoがない場合は空文字列をデフォルトに
-    final memo = reader.availableBytes > 0 ? reader.readString() : '';
-    // 後方互換性: 古いデータにfavoriteがない場合は0をデフォルトに
-    final favorite = reader.availableBytes > 0 ? reader.readInt() : 0;
-    return ImageItem(
+    final source = reader.read() as String?;
+    final memo = reader.readString();
+    final favorite = reader.readInt();
+    final fontSize = reader.readDouble();
+    final textPreview = reader.readString();
+
+    return TextContentItem(
       id: id,
       filePath: filePath,
-      metadataPath: metadataPath as String?,
       sourceType: sourceType,
       savedAt: DateTime.fromMillisecondsSinceEpoch(savedAtMillis, isUtc: true),
-      source: source as String?,
+      source: source,
       memo: memo,
       favorite: favorite,
+      fontSize: fontSize,
+      textPreview: textPreview,
     );
   }
 
   @override
-  void write(BinaryWriter writer, ImageItem obj) {
+  void write(BinaryWriter writer, TextContentItem obj) {
     writer
       ..writeString(obj.id)
       ..writeString(obj.filePath)
-      ..write(obj.metadataPath)
       ..writeByte(obj.sourceType.index)
       ..writeInt(obj.savedAt.millisecondsSinceEpoch)
       ..write(obj.source)
       ..writeString(obj.memo)
-      ..writeInt(obj.favorite);
+      ..writeInt(obj.favorite)
+      ..writeDouble(obj.fontSize)
+      ..writeString(obj.textPreview);
   }
 }
