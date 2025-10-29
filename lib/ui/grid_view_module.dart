@@ -1066,10 +1066,30 @@ class _GridViewModuleState extends State<GridViewModule> {
         height: _draggedSize.height,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(12),
-          child: Image.file(
-            File(entry.item.filePath),
-            fit: BoxFit.cover,
-          ),
+          child: entry.item.contentType == ContentType.text
+              ? Container(
+                  color: const Color(0xFF72CC82),
+                  padding: const EdgeInsets.all(12),
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.description, size: 48, color: Colors.white),
+                      SizedBox(height: 8),
+                      Text(
+                        'テキスト',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : Image.file(
+                  File(entry.item.filePath),
+                  fit: BoxFit.cover,
+                ),
         ),
       ),
     );
