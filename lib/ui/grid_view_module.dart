@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 
 import '../data/grid_layout_settings_repository.dart';
 import '../data/grid_order_repository.dart';
+import '../data/models/content_item.dart';
 import '../data/models/content_type.dart';
 import '../data/models/grid_layout_settings.dart';
 import '../data/models/image_item.dart';
@@ -491,11 +492,11 @@ class _GridViewModuleState extends State<GridViewModule> {
     return _directoryControllers.putIfAbsent(key, () => ScrollController());
   }
 
-  _GridEntry _createEntry(ImageItem item) {
+  _GridEntry _createEntry(ContentItem item) {
     return _GridEntry(item: item, opacity: 0);
   }
 
-  void _reconcileEntries(List<ImageItem> newItems) {
+  void _reconcileEntries(List<ContentItem> newItems) {
     final orderedItems = _applyDirectoryOrder(newItems);
     _logEntries('reconcile_before', _entries);
     final duplicateIncoming = _findDuplicateIds(
@@ -755,7 +756,7 @@ class _GridViewModuleState extends State<GridViewModule> {
     return hsl.withLightness(darkerLightness).toColor();
   }
 
-  List<ImageItem> _applyDirectoryOrder(List<ImageItem> items) {
+  List<ContentItem> _applyDirectoryOrder(List<ContentItem> items) {
     final path = widget.state.activeDirectory?.path;
     final repo = _orderRepository;
     if (path == null || repo == null) {
@@ -1179,7 +1180,7 @@ class _GridViewModuleState extends State<GridViewModule> {
 class _GridEntry {
   _GridEntry({required this.item, required this.opacity, this.version = 0});
 
-  ImageItem item;
+  ContentItem item;
   double opacity;
   bool isRemoving = false;
   Timer? removalTimer;

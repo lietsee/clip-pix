@@ -3,7 +3,7 @@ import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 
-import '../../data/models/image_item.dart';
+import '../../data/models/content_item.dart';
 import '../grid_layout_layout_engine.dart' as layout;
 
 /// 永続層に対してカードレイアウトを読み書きするためのゲートウェイ。
@@ -37,7 +37,7 @@ class GridLayoutPreferenceRecord {
 }
 
 abstract class GridIntrinsicRatioResolver {
-  Future<double?> resolve(String id, ImageItem? item);
+  Future<double?> resolve(String id, ContentItem? item);
 }
 
 abstract class GridLayoutCommandTarget {
@@ -128,7 +128,7 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
   final List<String> _orderedIds = [];
   String? _directoryPath;
   GridLayoutGeometry? _geometry;
-  final Map<String, ImageItem> _items = {};
+  final Map<String, ContentItem> _items = {};
   layout.LayoutSnapshot? _latestSnapshot;
 
   @override
@@ -143,7 +143,7 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
   layout.LayoutSnapshot? get latestSnapshot => _latestSnapshot;
 
   void syncLibrary(
-    List<ImageItem> items, {
+    List<ContentItem> items, {
     String? directoryPath,
     bool notify = true,
   }) {

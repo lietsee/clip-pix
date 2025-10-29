@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import '../../data/models/image_item.dart';
+import '../../data/models/content_item.dart';
 
 class ImageLibraryState {
   const ImageLibraryState({
@@ -12,19 +12,19 @@ class ImageLibraryState {
 
   factory ImageLibraryState.initial() => const ImageLibraryState(
         activeDirectory: null,
-        images: <ImageItem>[],
+        images: <ContentItem>[],
         isLoading: false,
         error: null,
       );
 
   final Directory? activeDirectory;
-  final List<ImageItem> images;
+  final List<ContentItem> images;
   final bool isLoading;
   final String? error;
 
   ImageLibraryState copyWith({
     Directory? activeDirectory,
-    List<ImageItem>? images,
+    List<ContentItem>? images,
     bool? isLoading,
     String? error,
     bool clearError = false,

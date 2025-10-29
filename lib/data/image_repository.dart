@@ -5,8 +5,11 @@ import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
 
 import 'file_info_manager.dart';
+import 'models/content_item.dart';
+import 'models/content_type.dart';
 import 'models/image_item.dart';
 import 'models/image_source_type.dart';
+import 'models/text_content_item.dart';
 
 class ImageRepository {
   ImageRepository({
@@ -20,17 +23,17 @@ class ImageRepository {
 
   static const _supportedExtensions = <String>{'.jpg', '.jpeg', '.png', '.txt'};
 
-  Future<List<ImageItem>> loadForDirectory(Directory directory) async {
+  Future<List<ContentItem>> loadForDirectory(Directory directory) async {
     try {
       if (!await directory.exists()) {
-        return const <ImageItem>[];
+        return const <ContentItem>[];
       }
       final files = await directory
           .list()
           .where((entity) => entity is File && _isSupportedFile(entity.path))
           .cast<File>()
           .toList();
-      final items = <ImageItem>[];
+      final items = <ContentItem>[];
       for (final file in files) {
         final item = await _buildImageItem(file);
         if (item != null) {
@@ -47,11 +50,11 @@ class ImageRepository {
       return items;
     } catch (error, stackTrace) {
       _logger.severe('Failed to load directory images', error, stackTrace);
-      return const <ImageItem>[];
+      return const <ContentItem>[];
     }
   }
 
-  Future<ImageItem?> addOrUpdate(File file) async {
+  Future<ContentItem?> addOrUpdate(File file) async {
     if (!_isSupportedFile(file.path)) {
       return null;
     }
@@ -61,22 +64,37 @@ class ImageRepository {
     return _buildImageItem(file);
   }
 
-  Future<ImageItem?> _buildImageItem(File file) async {
+  Future<ContentItem?> _buildImageItem(File file) async {
     try {
       final metadata = await _readMetadata(file);
       final stat = await file.stat();
+      final contentType = metadata?.contentType ?? ContentType.image;
+
       _logger.fine(
-          'build_image_item path=${file.path} savedAt=${metadata?.savedAt ?? stat.modified.toUtc()} metadata=${metadata?.metadataPath}');
-      return ImageItem(
-        id: file.path,
-        filePath: file.path,
-        metadataPath: metadata?.metadataPath,
-        sourceType: metadata?.sourceType ?? ImageSourceType.unknown,
-        savedAt: metadata?.savedAt ?? stat.modified.toUtc(),
-        source: metadata?.source,
-        memo: metadata?.memo ?? '',
-        favorite: metadata?.favorite ?? 0,
-      );
+          'build_image_item path=${file.path} savedAt=${metadata?.savedAt ?? stat.modified.toUtc()} metadata=${metadata?.metadataPath} contentType=$contentType');
+
+      if (contentType == ContentType.text) {
+        return TextContentItem(
+          id: file.path,
+          filePath: file.path,
+          sourceType: metadata?.sourceType ?? ImageSourceType.unknown,
+          savedAt: metadata?.savedAt ?? stat.modified.toUtc(),
+          source: metadata?.source,
+          memo: metadata?.memo ?? '',
+          favorite: metadata?.favorite ?? 0,
+        );
+      } else {
+        return ImageItem(
+          id: file.path,
+          filePath: file.path,
+          metadataPath: metadata?.metadataPath,
+          sourceType: metadata?.sourceType ?? ImageSourceType.unknown,
+          savedAt: metadata?.savedAt ?? stat.modified.toUtc(),
+          source: metadata?.source,
+          memo: metadata?.memo ?? '',
+          favorite: metadata?.favorite ?? 0,
+        );
+      }
     } catch (error, stackTrace) {
       _logger.warning(
         'Failed to build image item for ${file.path}',
@@ -99,6 +117,7 @@ class ImageRepository {
             sourceType: entry.sourceType,
             source: entry.source,
             savedAt: entry.savedAt,
+            contentType: entry.contentType,
             memo: entry.memo,
             favorite: entry.favorite,
           );
@@ -169,6 +188,7 @@ class _Metadata {
     required this.sourceType,
     required this.source,
     required this.savedAt,
+    this.contentType = ContentType.image,
     this.memo = '',
     this.favorite = 0,
   });
@@ -177,6 +197,7 @@ class _Metadata {
   final ImageSourceType sourceType;
   final String? source;
   final DateTime? savedAt;
+  final ContentType contentType;
   final String memo;
   final int favorite;
 }

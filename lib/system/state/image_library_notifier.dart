@@ -5,7 +5,7 @@ import 'package:state_notifier/state_notifier.dart';
 
 import '../../data/file_info_manager.dart';
 import '../../data/image_repository.dart';
-import '../../data/models/image_item.dart';
+import '../../data/models/content_item.dart';
 import 'image_library_state.dart';
 
 class ImageLibraryNotifier extends StateNotifier<ImageLibraryState> {
@@ -68,7 +68,7 @@ class ImageLibraryNotifier extends StateNotifier<ImageLibraryState> {
     if (item == null) {
       return;
     }
-    final updated = <ImageItem>[...state.images];
+    final updated = <ContentItem>[...state.images];
     final index =
         updated.indexWhere((existing) => existing.filePath == item.filePath);
     if (index >= 0) {
@@ -114,7 +114,7 @@ class ImageLibraryNotifier extends StateNotifier<ImageLibraryState> {
       );
 
       // Update in-memory state
-      final updated = <ImageItem>[...state.images];
+      final updated = <ContentItem>[...state.images];
       updated[index] = item.copyWith(memo: memo);
       state = state.copyWith(images: updated, clearError: true);
 
@@ -151,7 +151,7 @@ class ImageLibraryNotifier extends StateNotifier<ImageLibraryState> {
       );
 
       // Update in-memory state
-      final updated = <ImageItem>[...state.images];
+      final updated = <ContentItem>[...state.images];
       updated[index] = item.copyWith(favorite: favorite);
       state = state.copyWith(images: updated, clearError: true);
 
