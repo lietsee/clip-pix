@@ -108,6 +108,9 @@ class ImageLibraryNotifier extends StateNotifier<ImageLibraryState> {
       await _fileInfoManager!.updateMemo(
         imageFilePath: item.filePath,
         memo: memo,
+        savedAt: item.savedAt,
+        source: item.source ?? 'Unknown',
+        sourceType: item.sourceType,
       );
 
       // Update in-memory state

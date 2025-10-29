@@ -60,10 +60,13 @@ class FileInfoManager {
     _scheduleFlush(folderPath);
   }
 
-  /// メモを更新
+  /// メモを更新（エントリが存在しない場合は新規作成）
   Future<void> updateMemo({
     required String imageFilePath,
     required String memo,
+    required DateTime savedAt,
+    required String source,
+    required ImageSourceType sourceType,
   }) async {
     final folderPath = p.dirname(imageFilePath);
     final fileName = p.basename(imageFilePath);
@@ -73,15 +76,26 @@ class FileInfoManager {
       await _loadFromFile(folderPath);
     }
 
-    final folderCache = _cache[folderPath];
-    if (folderCache == null || !folderCache.containsKey(fileName)) {
-      _logger.warning('Metadata not found for memo update: $fileName');
-      return;
-    }
+    // キャッシュ初期化（フォルダエントリがない場合）
+    _cache[folderPath] ??= {};
 
-    // メモを更新
-    final current = folderCache[fileName]!;
-    folderCache[fileName] = current.copyWith(memo: memo);
+    final folderCache = _cache[folderPath]!;
+
+    // エントリが存在しない場合は新規作成
+    if (!folderCache.containsKey(fileName)) {
+      _logger.info('Creating new metadata entry for memo: $fileName');
+      folderCache[fileName] = ImageMetadataEntry(
+        file: fileName,
+        savedAt: savedAt.toUtc(),
+        source: source,
+        sourceType: sourceType,
+        memo: memo,
+      );
+    } else {
+      // 既存エントリを更新
+      final current = folderCache[fileName]!;
+      folderCache[fileName] = current.copyWith(memo: memo);
+    }
 
     _logger.info('Memo updated: $fileName -> "$memo"');
 
