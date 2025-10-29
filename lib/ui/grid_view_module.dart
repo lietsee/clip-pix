@@ -344,7 +344,7 @@ class _GridViewModuleState extends State<GridViewModule> {
                 backgroundColor: backgroundColor,
               )
             : ImageCard(
-                item: item,
+                item: item as ImageItem,
                 viewState: viewState,
                 onResize: _handleResize,
                 onSpanChange: _handleSpanChange,
@@ -786,7 +786,7 @@ class _GridViewModuleState extends State<GridViewModule> {
       scheduleMicrotask(() => repo.save(path, orderedIds));
     }
     final map = {for (final item in items) item.id: item};
-    final orderedItems = <ImageItem>[];
+    final orderedItems = <ContentItem>[];
     for (final id in orderedIds) {
       final item = map[id];
       if (item != null) {

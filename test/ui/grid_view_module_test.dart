@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:clip_pix/data/models/content_item.dart';
 import 'package:clip_pix/data/models/grid_card_pref.dart';
 import 'package:clip_pix/data/models/grid_layout_settings.dart';
 import 'package:clip_pix/data/models/image_item.dart';
@@ -141,7 +142,7 @@ class _TestGridLayoutPersistence implements GridLayoutPersistence {
 
 class _TestRatioResolver implements GridIntrinsicRatioResolver {
   @override
-  Future<double?> resolve(String id, ImageItem? item) async => 1.0;
+  Future<double?> resolve(String id, ContentItem? item) async => 1.0;
 }
 
 class TestGridLayoutSettingsRepository extends ChangeNotifier

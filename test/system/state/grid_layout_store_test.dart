@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:clip_pix/data/models/content_item.dart';
 import 'package:clip_pix/data/models/image_item.dart';
 
 /// テスト対象予定の GridLayoutStore を事前に import。
@@ -45,14 +46,14 @@ class _FakeAspectRatioResolver implements GridIntrinsicRatioResolver {
   final Map<String, double> ratios;
 
   @override
-  Future<double?> resolve(String id, ImageItem? item) async => ratios[id];
+  Future<double?> resolve(String id, ContentItem? item) async => ratios[id];
 }
 
 void main() {
   group('GridLayoutStore', () {
     late _FakeGridLayoutPersistence persistence;
     late GridLayoutStore store;
-    late List<ImageItem> library;
+    late List<ContentItem> library;
 
     setUp(() {
       persistence = _FakeGridLayoutPersistence(seed: {
