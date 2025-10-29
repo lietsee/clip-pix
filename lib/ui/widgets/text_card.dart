@@ -23,6 +23,11 @@ class TextCard extends StatefulWidget {
     required this.columnCount,
     required this.columnGap,
     required this.backgroundColor,
+    this.onReorderPointerDown,
+    this.onStartReorder,
+    this.onReorderUpdate,
+    this.onReorderEnd,
+    this.onReorderCancel,
   });
 
   final TextContentItem item;
@@ -37,6 +42,11 @@ class TextCard extends StatefulWidget {
   final int columnCount;
   final double columnGap;
   final Color backgroundColor;
+  final void Function(String id, int pointer)? onReorderPointerDown;
+  final void Function(String id, Offset globalPosition)? onStartReorder;
+  final void Function(String id, Offset globalPosition)? onReorderUpdate;
+  final void Function(String id)? onReorderEnd;
+  final void Function(String id)? onReorderCancel;
 
   @override
   State<TextCard> createState() => _TextCardState();
@@ -205,6 +215,52 @@ class _TextCardState extends State<TextCard> {
               widget.item.favorite > 0 ? Icons.favorite : Icons.favorite_border,
               size: 20,
               color: widget.item.favorite > 0 ? Colors.white : Colors.grey,
+            ),
+          ),
+        ),
+        // 並べ替えアイコン（下部中央）
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 8,
+          child: Center(
+            child: Listener(
+              onPointerDown: (event) {
+                widget.onReorderPointerDown?.call(widget.item.id, event.pointer);
+              },
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onPanStart: (details) {
+                  widget.onStartReorder?.call(
+                    widget.item.id,
+                    details.globalPosition,
+                  );
+                },
+                onPanUpdate: (details) {
+                  widget.onReorderUpdate?.call(
+                    widget.item.id,
+                    details.globalPosition,
+                  );
+                },
+                onPanEnd: (_) {
+                  widget.onReorderEnd?.call(widget.item.id);
+                },
+                onPanCancel: () {
+                  widget.onReorderCancel?.call(widget.item.id);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0x33000000),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.drag_indicator,
+                    size: 18,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
             ),
           ),
         ),

@@ -342,6 +342,11 @@ class _GridViewModuleState extends State<GridViewModule> {
                 columnCount: columnCount,
                 columnGap: _gridGap,
                 backgroundColor: const Color(0xFF72CC82),
+                onReorderPointerDown: _handleReorderPointerDown,
+                onStartReorder: _startReorder,
+                onReorderUpdate: _updateReorder,
+                onReorderEnd: _endReorder,
+                onReorderCancel: _handleReorderCancel,
               )
             : ImageCard(
                 item: item as ImageItem,
