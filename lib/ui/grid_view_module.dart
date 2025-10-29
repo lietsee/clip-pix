@@ -27,6 +27,7 @@ import 'image_preview_window.dart';
 import 'widgets/grid_layout_surface.dart';
 import 'widgets/pinterest_grid.dart';
 import 'widgets/text_card.dart';
+import 'widgets/text_preview_window.dart';
 import 'package:path/path.dart' as p;
 
 class GridViewModule extends StatefulWidget {
@@ -399,10 +400,13 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   void _showTextPreviewDialog(TextContentItem item) {
-    // TODO Phase 3: Implement TextPreviewWindow
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('テキストプレビュー機能は実装中です')));
+    showDialog<void>(
+      context: context,
+      builder: (context) => TextPreviewWindow(
+        item: item,
+        onSave: _handleSaveText,
+      ),
+    );
   }
 
   void _handleSaveText(String textId, String text) async {
