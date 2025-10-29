@@ -1199,8 +1199,7 @@ class _GridViewModuleState extends State<GridViewModule> {
       lastIndex = i;
 
       if (rect.contains(globalPosition)) {
-        final insertAfter = globalPosition.dy >= rect.center.dy;
-        final insertIndex = insertAfter ? i + 1 : i;
+        final insertIndex = i;
         debugPrint(
           '[GridViewModule] reorder_hit rect=$rect insertIndex=$insertIndex',
         );
@@ -1213,7 +1212,7 @@ class _GridViewModuleState extends State<GridViewModule> {
       if (score < bestScore) {
         bestScore = score;
         bestRect = rect;
-        bestInsertIndex = globalPosition.dy >= rect.center.dy ? i + 1 : i;
+        bestInsertIndex = i;
       }
     }
 
