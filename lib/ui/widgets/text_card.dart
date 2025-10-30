@@ -62,6 +62,7 @@ class _TextCardState extends State<TextCard> {
   Offset? _resizeStartGlobalPosition;
   int _currentSpan = 1;
   int? _resizeStartSpan;
+  Size? _previewSize;
   String _textContent = '';
   bool _isLoading = true;
   late ValueNotifier<Size> _sizeNotifier;
@@ -187,6 +188,8 @@ class _TextCardState extends State<TextCard> {
                     _buildHoverControls(),
                   // リサイズハンドル
                   if (_showControls || _isResizing) _buildResizeHandle(),
+                  // リサイズプレビューオーバーレイ
+                  if (_isResizing) _buildResizePreviewOverlay(),
                 ],
               ),
             );
@@ -330,6 +333,45 @@ class _TextCardState extends State<TextCard> {
     );
   }
 
+  Widget _buildResizePreviewOverlay() {
+    final previewSize = _previewSize ?? _sizeNotifier.value;
+    final previewSpan = _currentSpan;
+
+    return Positioned.fill(
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.blue.withOpacity(0.1),
+          border: Border.all(
+            color: Colors.blue.withOpacity(0.6),
+            width: 2,
+            strokeAlign: BorderSide.strokeAlignInside,
+          ),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Align(
+          alignment: Alignment.center,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.9),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              '${previewSize.width.toInt()} × ${previewSize.height.toInt()} px\n列: $previewSpan',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                height: 1.3,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _handleSingleTap() {
     setState(() {
       _isEditing = true;
@@ -406,28 +448,31 @@ class _TextCardState extends State<TextCard> {
     final newHeight =
         (_resizeStartSize!.height + delta.dy).clamp(100.0, 1080.0);
 
-    // ValueNotifierのみ更新（GridLayoutStoreへの永続化はドラッグ終了時）
+    // プレビュー表示用にスパンと計算後のサイズを保持
+    // _sizeNotifierは更新しない（オーバーレイのみを更新）
     final newSize = Size(snappedWidth, newHeight);
-    if (_sizeNotifier.value != newSize) {
-      _sizeNotifier.value = newSize;
-    }
-
-    if (snappedSpan != _currentSpan) {
+    if (snappedSpan != _currentSpan || _previewSize != newSize) {
       setState(() {
         _currentSpan = snappedSpan;
+        _previewSize = newSize;
       });
     }
   }
 
   void _handleResizeEnd(DragEndDetails details) {
+    // プレビューサイズを最終サイズとして適用
+    final finalSize = _previewSize ?? _sizeNotifier.value;
+    _sizeNotifier.value = finalSize;
+
     setState(() {
       _isResizing = false;
       _resizeStartSize = null;
       _resizeStartGlobalPosition = null;
+      _previewSize = null;
     });
 
     // ドラッグ終了時にGridLayoutStoreに永続化
-    widget.onResize(widget.item.id, _sizeNotifier.value);
+    widget.onResize(widget.item.id, finalSize);
 
     if (_resizeStartSpan != null && _currentSpan != _resizeStartSpan) {
       widget.onSpanChange?.call(widget.item.id, _currentSpan);

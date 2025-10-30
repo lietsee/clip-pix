@@ -104,6 +104,7 @@ class _ImageCardState extends State<ImageCard> {
   Size? _resizeStartSize;
   Offset? _resizeStartGlobalPosition;
   int _resizeStartSpan = 1;
+  Size? _previewSize;
   Offset? _panStartLocal;
   Offset? _panStartOffset;
   Offset _imageOffset = Offset.zero;
@@ -515,6 +516,8 @@ class _ImageCardState extends State<ImageCard> {
             ),
           ),
         ),
+        // リサイズプレビューオーバーレイ
+        if (_isResizing) _buildResizePreviewOverlay(),
       ],
     );
   }
@@ -526,6 +529,45 @@ class _ImageCardState extends State<ImageCard> {
       child: IgnorePointer(
         ignoring: !_showControls,
         child: child,
+      ),
+    );
+  }
+
+  Widget _buildResizePreviewOverlay() {
+    final previewSize = _previewSize ?? _sizeNotifier.value;
+    final previewSpan = _currentSpan;
+
+    return Positioned.fill(
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.blue.withOpacity(0.1),
+          border: Border.all(
+            color: Colors.blue.withOpacity(0.6),
+            width: 2,
+            strokeAlign: BorderSide.strokeAlignInside,
+          ),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Align(
+          alignment: Alignment.center,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.9),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              '${previewSize.width.toInt()} × ${previewSize.height.toInt()} px\n列: $previewSpan',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                height: 1.3,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -560,25 +602,31 @@ class _ImageCardState extends State<ImageCard> {
           (_resizeStartSize!.height + delta.dy).clamp(_minHeight, _maxHeight);
     }
 
+    // プレビュー表示用にスパンと計算後のサイズを保持
+    // _sizeNotifierは更新しない（オーバーレイのみを更新）
     final newSize = Size(snappedWidth, newHeight);
-    if (_sizeNotifier.value != newSize) {
-      _sizeNotifier.value = newSize;
-    }
-    if (snappedSpan != _currentSpan) {
+    if (snappedSpan != _currentSpan || _previewSize != newSize) {
       setState(() {
         _currentSpan = snappedSpan;
+        _previewSize = newSize;
       });
     }
   }
 
   void _onResizeEnd(DragEndDetails details) {
+    // プレビューサイズを最終サイズとして適用
+    final finalSize = _previewSize ?? _sizeNotifier.value;
+    _sizeNotifier.value = finalSize;
+
     setState(() {
       _isResizing = false;
       _resizeStartSize = null;
       _resizeStartGlobalPosition = null;
+      _previewSize = null;
     });
-    _attachImageStream(_sizeNotifier.value, _currentScale);
-    widget.onResize(widget.item.id, _sizeNotifier.value);
+
+    _attachImageStream(finalSize, _currentScale);
+    widget.onResize(widget.item.id, finalSize);
     if (_currentSpan != _resizeStartSpan) {
       widget.onSpanChange(widget.item.id, _currentSpan);
     }
