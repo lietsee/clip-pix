@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../data/models/text_content_item.dart';
 import '../../system/state/grid_layout_store.dart';
 import 'memo_edit_dialog.dart';
+import 'resize_preview_overlay.dart';
 import 'text_inline_editor.dart';
 
 /// テキストコンテンツを表示するカード
@@ -63,6 +64,7 @@ class _TextCardState extends State<TextCard> {
   int _currentSpan = 1;
   int? _resizeStartSpan;
   Size? _previewSize;
+  ResizePreviewOverlayService? _overlayService;
   String _textContent = '';
   bool _isLoading = true;
   late ValueNotifier<Size> _sizeNotifier;
@@ -104,6 +106,8 @@ class _TextCardState extends State<TextCard> {
 
   @override
   void dispose() {
+    _overlayService?.dispose();
+    _overlayService = null;
     _sizeNotifier.dispose();
     super.dispose();
   }
@@ -188,8 +192,6 @@ class _TextCardState extends State<TextCard> {
                     _buildHoverControls(),
                   // リサイズハンドル
                   if (_showControls || _isResizing) _buildResizeHandle(),
-                  // リサイズプレビューオーバーレイ
-                  if (_isResizing) _buildResizePreviewOverlay(),
                 ],
               ),
             );
@@ -333,45 +335,6 @@ class _TextCardState extends State<TextCard> {
     );
   }
 
-  Widget _buildResizePreviewOverlay() {
-    final previewSize = _previewSize ?? _sizeNotifier.value;
-    final previewSpan = _currentSpan;
-
-    return Positioned.fill(
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.blue.withOpacity(0.1),
-          border: Border.all(
-            color: Colors.blue.withOpacity(0.6),
-            width: 2,
-            strokeAlign: BorderSide.strokeAlignInside,
-          ),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Align(
-          alignment: Alignment.center,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.9),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              '${previewSize.width.toInt()} × ${previewSize.height.toInt()} px\n列: $previewSpan',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                height: 1.3,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   void _handleSingleTap() {
     setState(() {
       _isEditing = true;
@@ -428,12 +391,32 @@ class _TextCardState extends State<TextCard> {
   }
 
   void _handleResizeStart(DragStartDetails details) {
+    // Get card's global position
+    final RenderBox? box = context.findRenderObject() as RenderBox?;
+    if (box == null) return;
+
+    final globalOffset = box.localToGlobal(Offset.zero);
+    final currentSize = Size(widget.viewState.width, widget.viewState.height);
+
     setState(() {
       _isResizing = true;
-      _resizeStartSize = Size(widget.viewState.width, widget.viewState.height);
+      _resizeStartSize = currentSize;
       _resizeStartGlobalPosition = details.globalPosition;
       _resizeStartSpan = _currentSpan;
     });
+
+    // Create and show overlay
+    _overlayService = ResizePreviewOverlayService();
+    _overlayService!.show(
+      context: context,
+      globalRect: Rect.fromLTWH(
+        globalOffset.dx,
+        globalOffset.dy,
+        currentSize.width,
+        currentSize.height,
+      ),
+      columnSpan: _currentSpan,
+    );
   }
 
   void _handleResizeUpdate(DragUpdateDetails details) {
@@ -448,8 +431,23 @@ class _TextCardState extends State<TextCard> {
     final newHeight =
         (_resizeStartSize!.height + delta.dy).clamp(100.0, 1080.0);
 
-    // プレビュー表示用にスパンと計算後のサイズを保持
-    // _sizeNotifierは更新しない（オーバーレイのみを更新）
+    // Get card's current global position (might have scrolled)
+    final RenderBox? box = context.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final globalOffset = box.localToGlobal(Offset.zero);
+
+    // Update overlay
+    _overlayService?.update(
+      globalRect: Rect.fromLTWH(
+        globalOffset.dx,
+        globalOffset.dy,
+        snappedWidth,
+        newHeight,
+      ),
+      columnSpan: snappedSpan,
+    );
+
+    // Update local state for span tracking
     final newSize = Size(snappedWidth, newHeight);
     if (snappedSpan != _currentSpan || _previewSize != newSize) {
       setState(() {
@@ -460,6 +458,11 @@ class _TextCardState extends State<TextCard> {
   }
 
   void _handleResizeEnd(DragEndDetails details) {
+    // Hide overlay
+    _overlayService?.hide();
+    _overlayService?.dispose();
+    _overlayService = null;
+
     // プレビューサイズを最終サイズとして適用
     final finalSize = _previewSize ?? _sizeNotifier.value;
     _sizeNotifier.value = finalSize;

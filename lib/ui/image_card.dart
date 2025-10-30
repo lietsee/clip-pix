@@ -13,6 +13,7 @@ import 'package:path/path.dart' as p;
 import '../data/models/image_item.dart';
 import '../system/state/grid_layout_store.dart';
 import 'widgets/memo_edit_dialog.dart';
+import 'widgets/resize_preview_overlay.dart';
 
 class ImageCard extends StatefulWidget {
   const ImageCard({
@@ -105,6 +106,7 @@ class _ImageCardState extends State<ImageCard> {
   Offset? _resizeStartGlobalPosition;
   int _resizeStartSpan = 1;
   Size? _previewSize;
+  ResizePreviewOverlayService? _overlayService;
   Offset? _panStartLocal;
   Offset? _panStartOffset;
   Offset _imageOffset = Offset.zero;
@@ -163,6 +165,8 @@ class _ImageCardState extends State<ImageCard> {
 
   @override
   void dispose() {
+    _overlayService?.dispose();
+    _overlayService = null;
     _focusNode.dispose();
     _sizeNotifier.removeListener(_handleSizeExternalChange);
     _scaleNotifier.removeListener(_handleScaleExternalChange);
@@ -516,8 +520,6 @@ class _ImageCardState extends State<ImageCard> {
             ),
           ),
         ),
-        // リサイズプレビューオーバーレイ
-        if (_isResizing) _buildResizePreviewOverlay(),
       ],
     );
   }
@@ -533,52 +535,33 @@ class _ImageCardState extends State<ImageCard> {
     );
   }
 
-  Widget _buildResizePreviewOverlay() {
-    final previewSize = _previewSize ?? _sizeNotifier.value;
-    final previewSpan = _currentSpan;
-
-    return Positioned.fill(
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.blue.withOpacity(0.1),
-          border: Border.all(
-            color: Colors.blue.withOpacity(0.6),
-            width: 2,
-            strokeAlign: BorderSide.strokeAlignInside,
-          ),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Align(
-          alignment: Alignment.center,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.9),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              '${previewSize.width.toInt()} × ${previewSize.height.toInt()} px\n列: $previewSpan',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                height: 1.3,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   void _onResizeStart(DragStartDetails details) {
+    // Get card's global position
+    final RenderBox? box = context.findRenderObject() as RenderBox?;
+    if (box == null) return;
+
+    final globalOffset = box.localToGlobal(Offset.zero);
+    final currentSize = _sizeNotifier.value;
+
     setState(() {
       _isResizing = true;
-      _resizeStartSize = _sizeNotifier.value;
+      _resizeStartSize = currentSize;
       _resizeStartGlobalPosition = details.globalPosition;
       _resizeStartSpan = _currentSpan;
     });
+
+    // Create and show overlay
+    _overlayService = ResizePreviewOverlayService();
+    _overlayService!.show(
+      context: context,
+      globalRect: Rect.fromLTWH(
+        globalOffset.dx,
+        globalOffset.dy,
+        currentSize.width,
+        currentSize.height,
+      ),
+      columnSpan: _currentSpan,
+    );
   }
 
   void _onResizeUpdate(DragUpdateDetails details) {
@@ -602,8 +585,23 @@ class _ImageCardState extends State<ImageCard> {
           (_resizeStartSize!.height + delta.dy).clamp(_minHeight, _maxHeight);
     }
 
-    // プレビュー表示用にスパンと計算後のサイズを保持
-    // _sizeNotifierは更新しない（オーバーレイのみを更新）
+    // Get card's current global position (might have scrolled)
+    final RenderBox? box = context.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final globalOffset = box.localToGlobal(Offset.zero);
+
+    // Update overlay
+    _overlayService?.update(
+      globalRect: Rect.fromLTWH(
+        globalOffset.dx,
+        globalOffset.dy,
+        snappedWidth,
+        newHeight,
+      ),
+      columnSpan: snappedSpan,
+    );
+
+    // Update local state for span tracking
     final newSize = Size(snappedWidth, newHeight);
     if (snappedSpan != _currentSpan || _previewSize != newSize) {
       setState(() {
@@ -614,6 +612,11 @@ class _ImageCardState extends State<ImageCard> {
   }
 
   void _onResizeEnd(DragEndDetails details) {
+    // Hide overlay
+    _overlayService?.hide();
+    _overlayService?.dispose();
+    _overlayService = null;
+
     // プレビューサイズを最終サイズとして適用
     final finalSize = _previewSize ?? _sizeNotifier.value;
     _sizeNotifier.value = finalSize;
