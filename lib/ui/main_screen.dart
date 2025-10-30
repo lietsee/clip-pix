@@ -72,18 +72,23 @@ class _MainScreenState extends State<MainScreen> {
         actions: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.content_paste, size: 20),
-                const SizedBox(width: 4),
-                Switch(
-                  value: _clipboardMonitorEnabled,
-                  onChanged: (value) {
-                    _toggleClipboardMonitor(context, value);
-                  },
-                ),
-              ],
+            child: Tooltip(
+              message: _clipboardMonitorEnabled
+                  ? 'クリップボード監視を停止'
+                  : 'クリップボード監視を開始',
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.content_paste, size: 20),
+                  const SizedBox(width: 4),
+                  Switch(
+                    value: _clipboardMonitorEnabled,
+                    onChanged: (value) {
+                      _toggleClipboardMonitor(context, value);
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
           IconButton(
