@@ -135,9 +135,12 @@ class _ImageCardState extends State<ImageCard> {
   @override
   void didUpdateWidget(covariant ImageCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final newSize = Size(widget.viewState.width, widget.viewState.height);
-    if (_sizeNotifier.value != newSize) {
-      _sizeNotifier.value = newSize;
+    // リサイズ中は外部からのサイズ同期をスキップ
+    if (!_isResizing) {
+      final newSize = Size(widget.viewState.width, widget.viewState.height);
+      if (_sizeNotifier.value != newSize) {
+        _sizeNotifier.value = newSize;
+      }
     }
     if (_scaleNotifier.value != widget.viewState.scale) {
       _scaleNotifier.value = widget.viewState.scale;

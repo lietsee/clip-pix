@@ -83,10 +83,12 @@ class _TextCardState extends State<TextCard> {
       _loadTextContent();
     }
 
-    // サイズが外部から変更された場合、ValueNotifierも更新
-    final newSize = Size(widget.viewState.width, widget.viewState.height);
-    if (_sizeNotifier.value != newSize) {
-      _sizeNotifier.value = newSize;
+    // リサイズ中は外部からのサイズ同期をスキップ
+    if (!_isResizing) {
+      final newSize = Size(widget.viewState.width, widget.viewState.height);
+      if (_sizeNotifier.value != newSize) {
+        _sizeNotifier.value = newSize;
+      }
     }
 
     if (oldWidget.columnWidth != widget.columnWidth ||
