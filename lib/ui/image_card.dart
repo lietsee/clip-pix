@@ -111,6 +111,7 @@ class _ImageCardState extends State<ImageCard> {
   Key _imageKey = UniqueKey();
   ImageStream? _imageStream;
   ImageStreamListener? _streamListener;
+  ImageInfo? _imageInfo;
   String? _resolvedSignature;
   double _currentScale = 1.0;
   bool _suppressScaleListener = false;
@@ -547,8 +548,18 @@ class _ImageCardState extends State<ImageCard> {
         (_resizeStartSize!.width + delta.dx).clamp(_minWidth, _maxWidth);
     final snappedSpan = _snapSpan(targetWidth);
     final snappedWidth = _widthForSpan(snappedSpan);
-    final newHeight =
-        (_resizeStartSize!.height + delta.dy).clamp(_minHeight, _maxHeight);
+
+    // 画像のアスペクト比に基づいて高さを計算（画像ロード済みの場合）
+    double newHeight;
+    if (_imageInfo != null) {
+      final aspectRatio = _imageInfo!.image.width / _imageInfo!.image.height;
+      newHeight = (snappedWidth / aspectRatio).clamp(_minHeight, _maxHeight);
+    } else {
+      // フォールバック: 画像未ロード時は垂直ドラッグに従う
+      newHeight =
+          (_resizeStartSize!.height + delta.dy).clamp(_minHeight, _maxHeight);
+    }
+
     final newSize = Size(snappedWidth, newHeight);
     if (_sizeNotifier.value != newSize) {
       _sizeNotifier.value = newSize;
@@ -842,8 +853,9 @@ class _ImageCardState extends State<ImageCard> {
     _streamListener = ImageStreamListener(
       (image, synchronousCall) {
         _retryCount = 0;
+        _imageInfo = image;
         debugPrint(
-            '[ImageCard] image_ready id=${widget.item.id} size=${size.width}x${size.height} scale=$scale');
+            '[ImageCard] image_ready id=${widget.item.id} size=${size.width}x${size.height} scale=$scale naturalSize=${image.image.width}x${image.image.height}');
         _updateVisualState(_CardVisualState.ready);
       },
       onChunk: (event) {
