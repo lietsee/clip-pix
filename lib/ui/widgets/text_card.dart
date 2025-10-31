@@ -121,17 +121,20 @@ class _TextCardState extends State<TextCard> {
       final file = File(widget.item.filePath);
       if (await file.exists()) {
         final content = await file.readAsString();
+        if (!mounted) return;
         setState(() {
           _textContent = content;
           _isLoading = false;
         });
       } else {
+        if (!mounted) return;
         setState(() {
           _textContent = 'ファイルが見つかりません';
           _isLoading = false;
         });
       }
     } catch (error) {
+      if (!mounted) return;
       setState(() {
         _textContent = 'エラー: $error';
         _isLoading = false;
@@ -268,7 +271,8 @@ class _TextCardState extends State<TextCard> {
           child: Center(
             child: Listener(
               onPointerDown: (event) {
-                widget.onReorderPointerDown?.call(widget.item.id, event.pointer);
+                widget.onReorderPointerDown
+                    ?.call(widget.item.id, event.pointer);
               },
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
@@ -291,7 +295,8 @@ class _TextCardState extends State<TextCard> {
                   widget.onReorderCancel?.call(widget.item.id);
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: const Color(0x33000000),
                     borderRadius: BorderRadius.circular(12),
@@ -425,7 +430,8 @@ class _TextCardState extends State<TextCard> {
     }
 
     final delta = details.globalPosition - _resizeStartGlobalPosition!;
-    final targetWidth = (_resizeStartSize!.width + delta.dx).clamp(100.0, 1920.0);
+    final targetWidth =
+        (_resizeStartSize!.width + delta.dx).clamp(100.0, 1920.0);
     final snappedSpan = _snapSpan(targetWidth);
     final snappedWidth = _widthForSpan(snappedSpan);
     final newHeight =
