@@ -184,6 +184,10 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     _invalidateSnapshot();
   }
 
+  bool hasViewState(String id) {
+    return _viewStates.containsKey(id);
+  }
+
   GridCardViewState viewStateFor(String id) {
     final state = _viewStates[id];
     if (state == null) {

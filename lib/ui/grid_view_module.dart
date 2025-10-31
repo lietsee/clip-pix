@@ -245,6 +245,10 @@ class _GridViewModuleState extends State<GridViewModule> {
                           if (entry.isRemoving) {
                             return null;
                           }
+                          // Skip if viewState not yet synced (during initial load/folder change)
+                          if (!layoutStore.hasViewState(entry.item.id)) {
+                            return const SizedBox.shrink();
+                          }
                           final viewState = layoutStore.viewStateFor(
                             entry.item.id,
                           );
