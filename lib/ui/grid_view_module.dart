@@ -77,6 +77,7 @@ class _GridViewModuleState extends State<GridViewModule> {
 
   List<_GridEntry> _entries = <_GridEntry>[];
   bool _loggedInitialBuild = false;
+  bool _firstFrameComplete = false;
   final Set<Object> _currentBuildKeys = <Object>{};
 
   @override
@@ -97,6 +98,7 @@ class _GridViewModuleState extends State<GridViewModule> {
         _isInitialized = true;
       });
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        _firstFrameComplete = true;
         for (final entry in _entries) {
           _animateEntryVisible(entry);
         }
@@ -162,6 +164,11 @@ class _GridViewModuleState extends State<GridViewModule> {
     final isMutating = mutationController.isMutating;
     final shouldHideGrid = mutationController.shouldHideGrid;
     assert(() {
+      // Skip alignment check during initial frame to avoid race condition
+      // between _entries population and GridLayoutStore.viewStates sync
+      if (!_firstFrameComplete) {
+        return true;
+      }
       final activeEntryIds = _entries
           .where((entry) => !entry.isRemoving)
           .map((entry) => entry.item.id)
