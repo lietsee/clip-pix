@@ -77,10 +77,12 @@ class _MainScreenState extends State<MainScreen> {
     // Show minimap if always-visible mode is enabled
     if (selectedState.isMinimapAlwaysVisible &&
         selectedState.viewMode == FolderViewMode.root &&
-        libraryState.images.isNotEmpty &&
-        _minimapService == null) {
+        libraryState.images.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _showMinimap(context, selectedState);
+        // Re-verify visibility on every build and re-show if invalidated
+        if (_minimapService == null || !_minimapService!.isVisible) {
+          _showMinimap(context, selectedState);
+        }
       });
     }
 
