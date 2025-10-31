@@ -486,6 +486,6 @@ class _MinimapPainter extends CustomPainter {
         oldDelegate.snapshot != snapshot ||
         oldDelegate.viewportHeight != viewportHeight ||
         oldDelegate.viewportWidth != viewportWidth ||
-        oldDelegate.libraryState.images.length != libraryState.images.length;
+        !identical(oldDelegate.libraryState.images, libraryState.images);
   }
 }
