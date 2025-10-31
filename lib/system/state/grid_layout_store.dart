@@ -149,6 +149,11 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     String? directoryPath,
     bool notify = true,
   }) {
+    debugPrint(
+        '[GridLayoutStore] syncLibrary: items=${items.length}, notify=$notify, '
+        'latestSnapshot=${_latestSnapshot != null ? "${_latestSnapshot!.entries.length} entries" : "null"}, '
+        'previousSnapshot=${_previousSnapshot != null ? "${_previousSnapshot!.entries.length} entries" : "null"}');
+
     _directoryPath = directoryPath;
     _items
       ..clear()
@@ -173,6 +178,9 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     final bool orderChanged = !listEquals(_orderedIds, nextOrder);
     final bool contentChanged = !_statesEqual(_viewStates, nextStates);
 
+    debugPrint(
+        '[GridLayoutStore] syncLibrary: orderChanged=$orderChanged, contentChanged=$contentChanged');
+
     _viewStates
       ..clear()
       ..addAll(nextStates);
@@ -184,6 +192,10 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
       notifyListeners();
     }
     _invalidateSnapshot();
+
+    debugPrint(
+        '[GridLayoutStore] syncLibrary completed: latestSnapshot invalidated, '
+        'previousSnapshot=${_previousSnapshot != null ? "${_previousSnapshot!.entries.length} entries" : "null"}');
   }
 
   bool hasViewState(String id) {
@@ -239,8 +251,12 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     // Preserve previous snapshot before updating to new one
     if (_latestSnapshot != null) {
       _previousSnapshot = _latestSnapshot;
+      debugPrint(
+          '[GridLayoutStore] updateGeometry: preserved previousSnapshot (${_previousSnapshot!.entries.length} entries)');
     }
     _latestSnapshot = result.snapshot;
+    debugPrint(
+        '[GridLayoutStore] updateGeometry: updated latestSnapshot (${_latestSnapshot?.entries.length ?? 0} entries), changed=$changed');
     if (changed && notify) {
       notifyListeners();
     }
@@ -363,8 +379,12 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     double? scale,
     int? columnSpan,
   }) async {
+    debugPrint(
+        '[GridLayoutStore] updateCard: id=$id, customSize=$customSize, scale=$scale, columnSpan=$columnSpan');
     final current = _viewStates[id];
     if (current == null) {
+      debugPrint('[GridLayoutStore] updateCard: viewState not found for $id');
+
       throw StateError('ViewState for $id is not loaded');
     }
     double nextWidth = current.width;
@@ -409,13 +429,17 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     );
 
     if (_viewStateEquals(current, nextState)) {
+      debugPrint('[GridLayoutStore] updateCard: no changes, returning');
       return;
     }
 
     _viewStates[id] = nextState;
     await _persistence.saveBatch([_recordFromState(nextState)]);
+    debugPrint(
+        '[GridLayoutStore] updateCard: updated viewState and persisted, calling notifyListeners and _invalidateSnapshot');
     notifyListeners();
     _invalidateSnapshot();
+    debugPrint('[GridLayoutStore] updateCard completed');
   }
 
   bool _statesEqual(
@@ -475,6 +499,11 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
   }
 
   void _invalidateSnapshot() {
+    debugPrint(
+        '[GridLayoutStore] _invalidateSnapshot: latestSnapshot=${_latestSnapshot != null ? "${_latestSnapshot!.entries.length} entries" : "null"}, '
+        'previousSnapshot=${_previousSnapshot != null ? "${_previousSnapshot!.entries.length} entries" : "null"}');
     _latestSnapshot = null;
+    debugPrint(
+        '[GridLayoutStore] _invalidateSnapshot completed: latestSnapshot now null, getter will return previousSnapshot');
   }
 }

@@ -25,13 +25,21 @@ class MinimapOverlayService {
     required GridLayoutStore layoutStore,
   }) {
     if (isVisible) {
+      debugPrint(
+          '[Minimap] show() called but already visible, ignoring (mounted=${_overlayEntry?.mounted})');
       return; // Already showing and mounted
     }
 
     // Clean up any stale overlay entry that is not mounted
     if (_overlayEntry != null && !_overlayEntry!.mounted) {
+      debugPrint('[Minimap] show() cleaning up stale overlay entry');
       _overlayEntry = null;
     }
+
+    final snapshot = layoutStore.latestSnapshot;
+    debugPrint(
+        '[Minimap] show() called: snapshot=${snapshot != null ? "${snapshot.entries.length} entries" : "null"}, '
+        'scrollController.hasClients=${scrollController.hasClients}');
 
     _stateNotifier.value = MinimapState(
       scrollController: scrollController,
@@ -44,10 +52,12 @@ class MinimapOverlayService {
     );
 
     Navigator.of(context).overlay!.insert(_overlayEntry!);
+    debugPrint('[Minimap] show() completed, overlay inserted');
   }
 
   /// Hide and remove the minimap overlay
   void hide() {
+    debugPrint('[Minimap] hide() called (was visible: $isVisible)');
     _overlayEntry?.remove();
     _overlayEntry = null;
     _stateNotifier.value = MinimapState.empty();
@@ -116,6 +126,10 @@ class _MinimapWidgetState extends State<_MinimapWidget> {
   }
 
   void _onLayoutChange() {
+    final state = widget.stateNotifier.value;
+    final snapshot = state.layoutStore?.latestSnapshot;
+    debugPrint(
+        '[Minimap] _onLayoutChange: snapshot=${snapshot != null ? "present (${snapshot.entries.length} entries)" : "null"}, mounted=$mounted');
     if (mounted) {
       setState(() {});
     }
@@ -141,6 +155,8 @@ class _MinimapWidgetState extends State<_MinimapWidget> {
         if (!state.visible ||
             state.scrollController == null ||
             state.layoutStore == null) {
+          debugPrint(
+              '[Minimap] build: hidden (visible=${state.visible}, hasController=${state.scrollController != null}, hasStore=${state.layoutStore != null})');
           return const SizedBox.shrink();
         }
 
@@ -149,13 +165,19 @@ class _MinimapWidgetState extends State<_MinimapWidget> {
         final libraryState = context.watch<ImageLibraryState>();
 
         if (!scrollController.hasClients) {
+          debugPrint('[Minimap] build: hidden (scrollController has no clients)');
           return const SizedBox.shrink();
         }
 
         final snapshot = layoutStore.latestSnapshot;
         if (snapshot == null || snapshot.entries.isEmpty) {
+          debugPrint(
+              '[Minimap] build: hidden (snapshot null=${snapshot == null}, entries=${snapshot?.entries.length ?? 0})');
           return const SizedBox.shrink();
         }
+
+        debugPrint(
+            '[Minimap] build: VISIBLE (entries=${snapshot.entries.length}, images=${libraryState.images.length})');
 
         final screenSize = MediaQuery.of(context).size;
         final contentDimensions = _calculateContentDimensions(snapshot);
@@ -482,10 +504,26 @@ class _MinimapPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_MinimapPainter oldDelegate) {
-    return oldDelegate.scrollOffset != scrollOffset ||
-        oldDelegate.snapshot != snapshot ||
-        oldDelegate.viewportHeight != viewportHeight ||
-        oldDelegate.viewportWidth != viewportWidth ||
+    final scrollChanged = oldDelegate.scrollOffset != scrollOffset;
+    final snapshotChanged = oldDelegate.snapshot != snapshot;
+    final viewportHeightChanged = oldDelegate.viewportHeight != viewportHeight;
+    final viewportWidthChanged = oldDelegate.viewportWidth != viewportWidth;
+    final imagesChanged =
         !identical(oldDelegate.libraryState.images, libraryState.images);
+
+    final shouldRepaint = scrollChanged ||
+        snapshotChanged ||
+        viewportHeightChanged ||
+        viewportWidthChanged ||
+        imagesChanged;
+
+    if (shouldRepaint) {
+      debugPrint(
+          '[Minimap] shouldRepaint=true: scroll=$scrollChanged, snapshot=$snapshotChanged, '
+          'viewportH=$viewportHeightChanged, viewportW=$viewportWidthChanged, images=$imagesChanged '
+          '(oldEntries=${oldDelegate.snapshot.entries.length}, newEntries=${snapshot.entries.length})');
+    }
+
+    return shouldRepaint;
   }
 }
