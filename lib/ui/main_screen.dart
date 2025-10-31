@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:logging/logging.dart';
 import 'package:provider/provider.dart';
 
 import '../data/models/image_entry.dart';
@@ -32,6 +33,7 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
+  static final _logger = Logger('MainScreen');
   late ScrollController _rootScrollController;
   late final ScrollController _subfolderScrollController;
   String? _lastLoadedPath;
@@ -67,32 +69,49 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    _logger.info('[MainScreen.build] START');
     final selectedState = context.watch<SelectedFolderState>();
     final watcherStatus = context.watch<WatcherStatusState>();
     final historyState = context.watch<ImageHistoryState>();
 
     // Use Selector to avoid rebuilding MainScreen on favorite changes
     // Only watch activeDirectory and images.isEmpty, not the entire state
-    final libraryInfo = context
-        .select<ImageLibraryState, ({Directory? activeDirectory, bool hasImages})>(
-      (state) => (
-        activeDirectory: state.activeDirectory,
-        hasImages: state.images.isNotEmpty
-      ),
+    final libraryInfo = context.select<ImageLibraryState,
+        ({Directory? activeDirectory, bool hasImages})>(
+      (state) {
+        _logger.info(
+            '[MainScreen.build] Selector: hasImages=${state.images.isNotEmpty}, activeDir=${state.activeDirectory?.path}');
+        return (
+          activeDirectory: state.activeDirectory,
+          hasImages: state.images.isNotEmpty
+        );
+      },
     );
 
     _ensureDirectorySync(context, selectedState);
+
+    _logger.info(
+        '[MainScreen.build] Minimap check: alwaysVisible=${selectedState.isMinimapAlwaysVisible}, viewMode=${selectedState.viewMode}, hasImages=${libraryInfo.hasImages}');
 
     // Show minimap if always-visible mode is enabled
     if (selectedState.isMinimapAlwaysVisible &&
         selectedState.viewMode == FolderViewMode.root &&
         libraryInfo.hasImages) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        final serviceExists = _minimapService != null;
+        final serviceVisible = _minimapService?.isVisible ?? false;
+        _logger.info(
+            '[MainScreen.build] PostFrameCallback: serviceExists=$serviceExists, isVisible=$serviceVisible');
         // Re-verify visibility on every build and re-show if invalidated
         if (_minimapService == null || !_minimapService!.isVisible) {
+          _logger.info('[MainScreen.build] Calling _showMinimap');
           _showMinimap(context, selectedState);
+        } else {
+          _logger.info('[MainScreen.build] Minimap already visible, skipping');
         }
       });
+    } else {
+      _logger.info('[MainScreen.build] Minimap condition not met, skipping');
     }
 
     return Focus(
@@ -557,24 +576,31 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _showMinimap(BuildContext context, SelectedFolderState folderState) {
+    _logger.info(
+        '[_showMinimap] Called: serviceExists=${_minimapService != null}, isVisible=${_minimapService?.isVisible}');
+
     if (_minimapService?.isVisible == true) {
+      _logger.info('[_showMinimap] Already visible, returning early');
       return; // Already showing and mounted
     }
 
     // Clean up stale service if it exists but is not visible
     if (_minimapService != null && !_minimapService!.isVisible) {
+      _logger.info('[_showMinimap] Disposing stale service');
       _minimapService!.dispose();
       _minimapService = null;
     }
 
     final layoutStore = context.read<GridLayoutStore>();
 
+    _logger.info('[_showMinimap] Creating new MinimapOverlayService');
     _minimapService = MinimapOverlayService();
     _minimapService!.show(
       context: context,
       scrollController: _rootScrollController,
       layoutStore: layoutStore,
     );
+    _logger.info('[_showMinimap] Service created and shown');
   }
 
   void _hideMinimap() {

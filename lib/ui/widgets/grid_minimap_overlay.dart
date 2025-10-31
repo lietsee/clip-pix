@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:logging/logging.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/models/content_item.dart';
@@ -11,12 +12,18 @@ import '../../system/state/image_library_state.dart';
 
 /// Service to display minimap overlay on the right edge of the screen
 class MinimapOverlayService {
+  static final _logger = Logger('MinimapOverlayService');
   OverlayEntry? _overlayEntry;
   final ValueNotifier<MinimapState> _stateNotifier =
       ValueNotifier(MinimapState.empty());
 
   /// Check if the minimap overlay is currently visible and mounted
-  bool get isVisible => _overlayEntry?.mounted ?? false;
+  bool get isVisible {
+    final mounted = _overlayEntry?.mounted ?? false;
+    _logger.info(
+        '[isVisible] overlayEntry=${_overlayEntry != null}, mounted=$mounted');
+    return mounted;
+  }
 
   /// Show minimap overlay
   void show({
@@ -24,15 +31,19 @@ class MinimapOverlayService {
     required ScrollController scrollController,
     required GridLayoutStore layoutStore,
   }) {
+    _logger.info('[show] Called');
     if (isVisible) {
+      _logger.info('[show] Already visible, returning early');
       return; // Already showing and mounted
     }
 
     // Clean up any stale overlay entry that is not mounted
     if (_overlayEntry != null && !_overlayEntry!.mounted) {
+      _logger.info('[show] Cleaning up stale overlay entry');
       _overlayEntry = null;
     }
 
+    _logger.info('[show] Creating new overlay entry');
     _stateNotifier.value = MinimapState(
       scrollController: scrollController,
       layoutStore: layoutStore,
@@ -44,16 +55,20 @@ class MinimapOverlayService {
     );
 
     Navigator.of(context).overlay!.insert(_overlayEntry!);
+    _logger.info(
+        '[show] Overlay entry inserted, mounted=${_overlayEntry!.mounted}');
   }
 
   /// Hide and remove the minimap overlay
   void hide() {
+    _logger.info('[hide] Called, overlayEntry exists=${_overlayEntry != null}');
     _overlayEntry?.remove();
     _overlayEntry = null;
     _stateNotifier.value = MinimapState.empty();
   }
 
   void dispose() {
+    _logger.info('[dispose] Called');
     hide();
     _stateNotifier.dispose();
   }
@@ -89,6 +104,7 @@ class _MinimapWidget extends StatefulWidget {
 }
 
 class _MinimapWidgetState extends State<_MinimapWidget> {
+  static final _logger = Logger('_MinimapWidget');
   static const double _minimapHeightPercent = 0.25; // 25% of screen height
   static const double _minimapPaddingBottom = 16.0;
   static const double _minimapPaddingRight = 16.0;
@@ -96,6 +112,7 @@ class _MinimapWidgetState extends State<_MinimapWidget> {
   @override
   void initState() {
     super.initState();
+    _logger.info('[initState] Called');
     final state = widget.stateNotifier.value;
     state.scrollController?.addListener(_onScroll);
     state.layoutStore?.addListener(_onLayoutChange);
@@ -103,6 +120,7 @@ class _MinimapWidgetState extends State<_MinimapWidget> {
 
   @override
   void dispose() {
+    _logger.info('[dispose] Called');
     final state = widget.stateNotifier.value;
     state.scrollController?.removeListener(_onScroll);
     state.layoutStore?.removeListener(_onLayoutChange);
@@ -135,27 +153,41 @@ class _MinimapWidgetState extends State<_MinimapWidget> {
 
   @override
   Widget build(BuildContext context) {
+    _logger.info('[build] Called');
     return ValueListenableBuilder<MinimapState>(
       valueListenable: widget.stateNotifier,
       builder: (context, state, child) {
+        _logger.info(
+            '[build] ValueListenableBuilder: visible=${state.visible}, hasScrollController=${state.scrollController != null}, hasLayoutStore=${state.layoutStore != null}');
+
         if (!state.visible ||
             state.scrollController == null ||
             state.layoutStore == null) {
+          _logger
+              .info('[build] Returning SizedBox.shrink() - state check failed');
           return const SizedBox.shrink();
         }
 
         final scrollController = state.scrollController!;
         final layoutStore = state.layoutStore!;
         final libraryState = context.watch<ImageLibraryState>();
+        _logger.info(
+            '[build] libraryState images.length=${libraryState.images.length}');
 
         if (!scrollController.hasClients) {
+          _logger
+              .info('[build] Returning SizedBox.shrink() - no scroll clients');
           return const SizedBox.shrink();
         }
 
         final snapshot = layoutStore.latestSnapshot;
         if (snapshot == null || snapshot.entries.isEmpty) {
+          _logger.info(
+              '[build] Returning SizedBox.shrink() - snapshot null or empty');
           return const SizedBox.shrink();
         }
+
+        _logger.info('[build] Rendering minimap CustomPaint');
 
         final screenSize = MediaQuery.of(context).size;
         final contentDimensions = _calculateContentDimensions(snapshot);
@@ -482,10 +514,25 @@ class _MinimapPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_MinimapPainter oldDelegate) {
-    return oldDelegate.scrollOffset != scrollOffset ||
-        oldDelegate.snapshot != snapshot ||
-        oldDelegate.viewportHeight != viewportHeight ||
-        oldDelegate.viewportWidth != viewportWidth ||
+    final scrollChanged = oldDelegate.scrollOffset != scrollOffset;
+    final snapshotChanged = oldDelegate.snapshot != snapshot;
+    final viewportHeightChanged = oldDelegate.viewportHeight != viewportHeight;
+    final viewportWidthChanged = oldDelegate.viewportWidth != viewportWidth;
+    final imagesChanged =
         !identical(oldDelegate.libraryState.images, libraryState.images);
+
+    final shouldRepaint = scrollChanged ||
+        snapshotChanged ||
+        viewportHeightChanged ||
+        viewportWidthChanged ||
+        imagesChanged;
+
+    Logger('_MinimapPainter').info(
+        '[shouldRepaint] scrollChanged=$scrollChanged, snapshotChanged=$snapshotChanged, '
+        'viewportHeightChanged=$viewportHeightChanged, viewportWidthChanged=$viewportWidthChanged, '
+        'imagesChanged=$imagesChanged (oldLen=${oldDelegate.libraryState.images.length}, '
+        'newLen=${libraryState.images.length}) => shouldRepaint=$shouldRepaint');
+
+    return shouldRepaint;
   }
 }
