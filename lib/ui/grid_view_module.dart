@@ -115,7 +115,12 @@ class _GridViewModuleState extends State<GridViewModule> {
     }
     // Use ID-based comparison instead of instance equality
     // to avoid unnecessary rebuilds when only item properties change
-    if (_imagesChanged(oldWidget.state.images, widget.state.images)) {
+    final imagesChanged =
+        _imagesChanged(oldWidget.state.images, widget.state.images);
+    debugPrint(
+        '[GridViewModule] didUpdateWidget: imagesChanged=$imagesChanged, '
+        'oldCount=${oldWidget.state.images.length}, newCount=${widget.state.images.length}');
+    if (imagesChanged) {
       final orderedImages = _applyDirectoryOrder(widget.state.images);
       // CRITICAL: Sync viewStates BEFORE reconciling entries
       // This ensures viewStates are populated before build() is triggered by setState
@@ -128,11 +133,18 @@ class _GridViewModuleState extends State<GridViewModule> {
     }
   }
 
-  /// Check if image list changed based on IDs and order, not instance equality
+  /// Check if image list changed based on IDs, order, and properties
   bool _imagesChanged(List<ContentItem> oldList, List<ContentItem> newList) {
     if (oldList.length != newList.length) return true;
     for (int i = 0; i < oldList.length; i++) {
-      if (oldList[i].id != newList[i].id) return true;
+      final oldItem = oldList[i];
+      final newItem = newList[i];
+      if (oldItem.id != newItem.id) return true;
+      // Check property changes that should trigger reconciliation
+      if (oldItem.favorite != newItem.favorite ||
+          oldItem.memo != newItem.memo) {
+        return true;
+      }
     }
     return false;
   }
@@ -557,6 +569,8 @@ class _GridViewModuleState extends State<GridViewModule> {
 
   void _reconcileEntries(List<ContentItem> newItems) {
     final orderedItems = _applyDirectoryOrder(newItems);
+    debugPrint(
+        '[GridViewModule] _reconcileEntries: newItems=${newItems.length}, orderedItems=${orderedItems.length}, currentEntries=${_entries.length}');
     _logEntries('reconcile_before', _entries);
     final duplicateIncoming = _findDuplicateIds(
       orderedItems.map((item) => item.id),
@@ -585,11 +599,14 @@ class _GridViewModuleState extends State<GridViewModule> {
       }
     }
 
+    int updatedCount = 0;
+    int newCount = 0;
     final List<_GridEntry> reordered = <_GridEntry>[];
     for (final item in orderedItems) {
       final existing = existingMap[item.id];
       if (existing != null) {
         existing.item = item;
+        updatedCount++;
         if (existing.isRemoving) {
           existing.removalTimer?.cancel();
           existing.isRemoving = false;
@@ -601,6 +618,7 @@ class _GridViewModuleState extends State<GridViewModule> {
         reordered.add(existing);
       } else {
         final entry = _createEntry(item);
+        newCount++;
         reordered.add(entry);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
@@ -617,6 +635,8 @@ class _GridViewModuleState extends State<GridViewModule> {
     }
 
     _logEntries('reconcile_after_pending', reordered);
+    debugPrint(
+        '[GridViewModule] _reconcileEntries completed: updated=$updatedCount, new=$newCount, total=${reordered.length}');
     setState(() {
       _entries = reordered;
     });
