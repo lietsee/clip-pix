@@ -86,6 +86,12 @@ class SelectedFolderNotifier extends StateNotifier<SelectedFolderState> {
     await persist();
   }
 
+  Future<void> toggleMinimapAlwaysVisible() async {
+    state =
+        state.copyWith(isMinimapAlwaysVisible: !state.isMinimapAlwaysVisible);
+    await persist();
+  }
+
   void _validateCurrentFolder() {
     final current = state.current;
     if (current == null) {

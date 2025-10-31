@@ -1,15 +1,15 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../data/models/image_entry.dart';
-import '../data/models/image_item.dart';
 import '../data/models/image_source_type.dart';
 import '../system/clipboard_monitor.dart';
 import '../system/file_watcher.dart';
 import '../system/folder_picker_service.dart';
+import '../system/state/grid_layout_store.dart';
 import '../system/state/image_history_state.dart';
 import '../system/state/image_library_notifier.dart';
 import '../system/state/image_library_state.dart';
@@ -21,6 +21,7 @@ import '../system/state/watcher_status_state.dart';
 import '../system/text_saver.dart';
 import 'package:path/path.dart' as p;
 import 'grid_view_module.dart';
+import 'widgets/grid_minimap_overlay.dart';
 import 'widgets/grid_settings_dialog.dart';
 
 class MainScreen extends StatefulWidget {
@@ -43,15 +44,22 @@ class _MainScreenState extends State<MainScreen> {
   bool _controllerLogScheduled = false;
   bool _clipboardMonitorEnabled = true;
 
+  // Minimap overlay service
+  MinimapOverlayService? _minimapService;
+  late final FocusNode _keyboardFocusNode;
+
   @override
   void initState() {
     super.initState();
     _rootScrollController = ScrollController();
     _subfolderScrollController = ScrollController();
+    _keyboardFocusNode = FocusNode();
   }
 
   @override
   void dispose() {
+    _minimapService?.dispose();
+    _keyboardFocusNode.dispose();
     _rootScrollController.dispose();
     _subfolderScrollController.dispose();
     super.dispose();
@@ -66,65 +74,88 @@ class _MainScreenState extends State<MainScreen> {
 
     _ensureDirectorySync(context, selectedState);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: _Breadcrumb(selectedState: selectedState),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: Tooltip(
-              message:
-                  _clipboardMonitorEnabled ? 'クリップボード監視を停止' : 'クリップボード監視を開始',
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.content_paste, size: 20),
-                  const SizedBox(width: 4),
-                  Switch(
-                    value: _clipboardMonitorEnabled,
-                    onChanged: (value) {
-                      _toggleClipboardMonitor(context, value);
-                    },
-                  ),
-                ],
+    // Show minimap if always-visible mode is enabled
+    if (selectedState.isMinimapAlwaysVisible &&
+        selectedState.viewMode == FolderViewMode.root &&
+        libraryState.images.isNotEmpty &&
+        _minimapService == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showMinimap(context, selectedState);
+      });
+    }
+
+    return Focus(
+      focusNode: _keyboardFocusNode,
+      autofocus: true,
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.keyM &&
+            HardwareKeyboard.instance.isControlPressed) {
+          _toggleMinimapAlwaysVisible(context);
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: _Breadcrumb(selectedState: selectedState),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              child: Tooltip(
+                message:
+                    _clipboardMonitorEnabled ? 'クリップボード監視を停止' : 'クリップボード監視を開始',
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.content_paste, size: 20),
+                    const SizedBox(width: 4),
+                    Switch(
+                      value: _clipboardMonitorEnabled,
+                      onChanged: (value) {
+                        _toggleClipboardMonitor(context, value);
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.note_add),
-            tooltip: '新規テキスト作成',
-            onPressed: libraryState.activeDirectory == null
-                ? null
-                : () => _createNewText(context),
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: '再読み込み',
-            onPressed: libraryState.activeDirectory == null
-                ? null
-                : () => context.read<ImageLibraryNotifier>().refresh(),
-          ),
-          IconButton(
-            icon: const Icon(Icons.folder_open),
-            tooltip: 'フォルダを選択',
-            onPressed: () => _requestFolderSelection(context),
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings),
-            tooltip: 'グリッド設定',
-            onPressed: () {
-              showDialog<void>(
-                context: context,
-                builder: (_) => const GridSettingsDialog(),
-              );
-            },
-          ),
-        ],
+            IconButton(
+              icon: const Icon(Icons.note_add),
+              tooltip: '新規テキスト作成',
+              onPressed: libraryState.activeDirectory == null
+                  ? null
+                  : () => _createNewText(context),
+            ),
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: '再読み込み',
+              onPressed: libraryState.activeDirectory == null
+                  ? null
+                  : () => context.read<ImageLibraryNotifier>().refresh(),
+            ),
+            IconButton(
+              icon: const Icon(Icons.folder_open),
+              tooltip: 'フォルダを選択',
+              onPressed: () => _requestFolderSelection(context),
+            ),
+            IconButton(
+              icon: const Icon(Icons.settings),
+              tooltip: 'グリッド設定',
+              onPressed: () {
+                showDialog<void>(
+                  context: context,
+                  builder: (_) => const GridSettingsDialog(),
+                );
+              },
+            ),
+          ],
+        ),
+        body: _buildBody(context, selectedState, historyState, libraryState),
+        bottomNavigationBar: watcherStatus.lastError != null
+            ? _ErrorBanner(message: watcherStatus.lastError!)
+            : null,
       ),
-      body: _buildBody(context, selectedState, historyState, libraryState),
-      bottomNavigationBar: watcherStatus.lastError != null
-          ? _ErrorBanner(message: watcherStatus.lastError!)
-          : null,
     );
   }
 
@@ -143,7 +174,8 @@ class _MainScreenState extends State<MainScreen> {
     final tabs = _buildTabs(context, folderState);
     _prepareRootScrollRestoreIfNeeded(folderState);
     _maybeRestoreRootScroll(folderState);
-    return Column(
+
+    final columnWidget = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _TabBar(tabs: tabs, controller: _subfolderScrollController),
@@ -191,6 +223,33 @@ class _MainScreenState extends State<MainScreen> {
         ),
       ],
     );
+
+    // Add minimap hover detection area if viewing root folder
+    if (folderState.viewMode == FolderViewMode.root &&
+        libraryState.images.isNotEmpty) {
+      return Stack(
+        children: [
+          columnWidget,
+          // Hover detection area on the right edge (20px wide)
+          Positioned(
+            right: 0,
+            top: 0,
+            bottom: 0,
+            width: 20,
+            child: MouseRegion(
+              onEnter: (_) => _showMinimap(context, folderState),
+              onExit: (_) {
+                if (!folderState.isMinimapAlwaysVisible) {
+                  _hideMinimap();
+                }
+              },
+            ),
+          ),
+        ],
+      );
+    }
+
+    return columnWidget;
   }
 
   List<_FolderTab> _buildTabs(
@@ -507,6 +566,38 @@ class _MainScreenState extends State<MainScreen> {
       await context.read<FileWatcherService>().start(directory);
       await context.read<ClipboardMonitor>().onFolderChanged(directory);
     });
+  }
+
+  void _showMinimap(BuildContext context, SelectedFolderState folderState) {
+    if (_minimapService != null) {
+      return; // Already showing
+    }
+
+    final layoutStore = context.read<GridLayoutStore>();
+
+    _minimapService = MinimapOverlayService();
+    _minimapService!.show(
+      context: context,
+      scrollController: _rootScrollController,
+      layoutStore: layoutStore,
+    );
+  }
+
+  void _hideMinimap() {
+    _minimapService?.hide();
+    _minimapService = null;
+  }
+
+  void _toggleMinimapAlwaysVisible(BuildContext context) {
+    final notifier = context.read<SelectedFolderNotifier>();
+    notifier.toggleMinimapAlwaysVisible();
+
+    final selectedState = context.read<SelectedFolderState>();
+    if (selectedState.isMinimapAlwaysVisible) {
+      _showMinimap(context, selectedState);
+    } else {
+      _hideMinimap();
+    }
   }
 }
 
