@@ -11,11 +11,11 @@ import 'models/image_source_type.dart';
 /// フォルダごとの画像メタデータを `.fileInfo.json` で一括管理するクラス
 ///
 /// - メモリキャッシュ: フォルダパスをキーに、ファイル名→メタデータのマップを保持
-/// - デバウンス保存: 変更後5秒経過で自動保存
+/// - デバウンス保存: 変更後500ms経過で自動保存
 /// - スレッドセーフ: 同時アクセスを考慮した実装
 class FileInfoManager {
   FileInfoManager({
-    Duration debounceDuration = const Duration(seconds: 5),
+    Duration debounceDuration = const Duration(milliseconds: 500),
     Logger? logger,
   })  : _debounceDuration = debounceDuration,
         _logger = logger ?? Logger('FileInfoManager');
@@ -258,6 +258,8 @@ class FileInfoManager {
   }
 
   Future<void> _saveToFile(String folderPath) async {
+    _logger.info(
+        '[FileInfoManager] Saving after ${_debounceDuration.inMilliseconds}ms debounce');
     final folderCache = _cache[folderPath];
     if (folderCache == null || folderCache.isEmpty) {
       _logger.fine('No metadata to save for $folderPath');

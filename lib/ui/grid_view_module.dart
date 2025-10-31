@@ -113,7 +113,10 @@ class _GridViewModuleState extends State<GridViewModule> {
     if (!_isInitialized) {
       return;
     }
-    if (!listEquals(oldWidget.state.images, widget.state.images)) {
+    // Use ID-based comparison instead of instance equality
+    // to avoid unnecessary rebuilds when only item properties change
+    if (_imagesChanged(oldWidget.state.images, widget.state.images)) {
+      debugPrint('[GridViewModule] Images changed (IDs differ), reconciling');
       final orderedImages = _applyDirectoryOrder(widget.state.images);
       // CRITICAL: Sync viewStates BEFORE reconciling entries
       // This ensures viewStates are populated before build() is triggered by setState
@@ -123,7 +126,19 @@ class _GridViewModuleState extends State<GridViewModule> {
         notify: false,
       );
       _reconcileEntries(widget.state.images);
+    } else {
+      debugPrint(
+          '[GridViewModule] Images same (IDs match), skipping reconciliation');
     }
+  }
+
+  /// Check if image list changed based on IDs and order, not instance equality
+  bool _imagesChanged(List<ContentItem> oldList, List<ContentItem> newList) {
+    if (oldList.length != newList.length) return true;
+    for (int i = 0; i < oldList.length; i++) {
+      if (oldList[i].id != newList[i].id) return true;
+    }
+    return false;
   }
 
   @override

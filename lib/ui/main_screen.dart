@@ -46,6 +46,9 @@ class _MainScreenState extends State<MainScreen> {
 
   // Minimap overlay service
   MinimapOverlayService? _minimapService;
+
+  // Debug counter for build calls
+  int _buildCount = 0;
   late final FocusNode _keyboardFocusNode;
 
   @override
@@ -67,6 +70,8 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    debugPrint(
+        '[MainScreen] build() #${++_buildCount}, minimapVisible=${_minimapService?.isVisible}');
     final selectedState = context.watch<SelectedFolderState>();
     final watcherStatus = context.watch<WatcherStatusState>();
     final historyState = context.watch<ImageHistoryState>();
