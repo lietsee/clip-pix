@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Service to display memo tooltip overlay above/below image cards
+/// Service to display memo tooltip overlay to the right/left of image cards
 class MemoTooltipOverlayService {
   OverlayEntry? _overlayEntry;
   final ValueNotifier<_TooltipState> _stateNotifier =
@@ -67,10 +67,11 @@ class _MemoTooltipWidget extends StatelessWidget {
 
   final ValueNotifier<_TooltipState> stateNotifier;
 
-  static const double _maxWidth = 300.0;
+  static const double _defaultWidth = 200.0;
+  static const double _maxWidth = 400.0;
   static const double _padding = 12.0;
   static const double _verticalPadding = 10.0;
-  static const double _offset = 8.0;
+  static const double _horizontalOffset = 8.0;
   static const double _borderRadius = 8.0;
 
   @override
@@ -96,28 +97,47 @@ class _MemoTooltipWidget extends StatelessWidget {
           child: Material(
             color: Colors.transparent,
             child: Container(
-              constraints: const BoxConstraints(maxWidth: _maxWidth),
+              constraints: const BoxConstraints(
+                minWidth: _defaultWidth,
+                maxWidth: _maxWidth,
+              ),
+              width: _defaultWidth,
               padding: const EdgeInsets.symmetric(
                 horizontal: _padding,
                 vertical: _verticalPadding,
               ),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.85),
+                color: const Color(0xFFA8F0C8),
                 borderRadius: BorderRadius.circular(_borderRadius),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
+                    color: Colors.grey.withValues(alpha: 0.2),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
                 ],
               ),
-              child: Text(
-                state.memo,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  height: 1.4,
+              child: RichText(
+                text: TextSpan(
+                  children: [
+                    const TextSpan(
+                      text: '[MEMO]\n',
+                      style: TextStyle(
+                        color: Colors.black87,
+                        fontSize: 13,
+                        height: 1.4,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    TextSpan(
+                      text: state.memo,
+                      style: const TextStyle(
+                        color: Colors.black87,
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -127,35 +147,35 @@ class _MemoTooltipWidget extends StatelessWidget {
     );
   }
 
-  /// Calculate tooltip position to avoid covering card controls
+  /// Calculate tooltip position to the right or left of card
   _TooltipPosition _calculatePosition({
     required Rect cardRect,
     required Size screenSize,
   }) {
-    // Estimate tooltip height (rough approximation)
-    final estimatedHeight = 60.0;
+    // Estimate tooltip height (rough approximation based on memo length)
+    final estimatedHeight = 80.0;
 
-    final spaceAbove = cardRect.top;
-
-    // Prefer showing above the card
-    final showAbove = spaceAbove > estimatedHeight + _offset;
-
-    final top = showAbove
-        ? cardRect.top - estimatedHeight - _offset
-        : cardRect.bottom + _offset;
-
-    // Center horizontally relative to card, but keep within screen bounds
-    final cardCenterX = cardRect.left + cardRect.width / 2;
-    final tooltipHalfWidth = _maxWidth / 2;
-
-    double left = cardCenterX - tooltipHalfWidth;
-
-    // Clamp to screen bounds with padding
     const screenPadding = 16.0;
-    if (left < screenPadding) {
-      left = screenPadding;
-    } else if (left + _maxWidth > screenSize.width - screenPadding) {
-      left = screenSize.width - _maxWidth - screenPadding;
+
+    // Check if there's enough space on the right
+    final spaceOnRight =
+        screenSize.width - cardRect.right - _horizontalOffset - screenPadding;
+    final showOnRight = spaceOnRight >= _defaultWidth;
+
+    // Position horizontally
+    final left = showOnRight
+        ? cardRect.right + _horizontalOffset
+        : cardRect.left - _defaultWidth - _horizontalOffset;
+
+    // Center vertically relative to card
+    final cardCenterY = cardRect.top + cardRect.height / 2;
+    double top = cardCenterY - estimatedHeight / 2;
+
+    // Clamp to screen bounds vertically
+    if (top < screenPadding) {
+      top = screenPadding;
+    } else if (top + estimatedHeight > screenSize.height - screenPadding) {
+      top = screenSize.height - estimatedHeight - screenPadding;
     }
 
     return _TooltipPosition(left: left, top: top);
