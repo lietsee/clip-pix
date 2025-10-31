@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 
 import '../data/grid_layout_settings_repository.dart';
@@ -115,10 +116,13 @@ class _GridViewModuleState extends State<GridViewModule> {
     if (!listEquals(oldWidget.state.images, widget.state.images)) {
       _reconcileEntries(widget.state.images);
     }
-    _layoutStore.syncLibrary(
-      orderedImages,
-      directoryPath: widget.state.activeDirectory?.path,
-    );
+    // Defer syncLibrary to avoid setState during build
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _layoutStore.syncLibrary(
+        orderedImages,
+        directoryPath: widget.state.activeDirectory?.path,
+      );
+    });
   }
 
   @override
@@ -197,8 +201,8 @@ class _GridViewModuleState extends State<GridViewModule> {
             mutationController.endMutation(hideGrid: hideGrid),
         semanticsOverlayEnabled: widget.enableGridSemantics,
         geometryQueueEnabled: true,
-        childBuilder:
-            (context, geometry, states, snapshot, {bool isStaging = false}) {
+        childBuilder: (context, geometry, states, snapshot,
+            {bool isStaging = false}) {
           _orderRepository = context.watch<GridOrderRepository>();
           final controller = _resolveController(selectedState);
           final backgroundColor = _backgroundForTone(settings.background);
@@ -230,11 +234,16 @@ class _GridViewModuleState extends State<GridViewModule> {
                             return null;
                           }
                           final entry = _entries[index];
+                          // Skip entries being removed to avoid ViewState access errors
+                          if (entry.isRemoving) {
+                            return null;
+                          }
                           final viewState = layoutStore.viewStateFor(
                             entry.item.id,
                           );
-                          final span =
-                              viewState.columnSpan.clamp(1, columnCount).toInt();
+                          final span = viewState.columnSpan
+                              .clamp(1, columnCount)
+                              .toInt();
                           final cardWidget = _buildCard(
                             entry: entry,
                             viewState: viewState,

@@ -31,7 +31,7 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  late final ScrollController _rootScrollController;
+  late ScrollController _rootScrollController;
   late final ScrollController _subfolderScrollController;
   String? _lastLoadedPath;
   bool _isRestoringRootScroll = false;
@@ -73,9 +73,8 @@ class _MainScreenState extends State<MainScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8.0),
             child: Tooltip(
-              message: _clipboardMonitorEnabled
-                  ? 'クリップボード監視を停止'
-                  : 'クリップボード監視を開始',
+              message:
+                  _clipboardMonitorEnabled ? 'クリップボード監視を停止' : 'クリップボード監視を開始',
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -491,6 +490,14 @@ class _MainScreenState extends State<MainScreen> {
     if (_lastLoadedPath == path) {
       return;
     }
+
+    // Dispose and recreate scroll controller when folder changes
+    // to prevent multiple ScrollPosition attachment errors
+    if (_rootScrollController.hasClients) {
+      _rootScrollController.dispose();
+      _rootScrollController = ScrollController();
+    }
+
     _lastLoadedPath = path;
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
