@@ -114,17 +114,17 @@ class _GridViewModuleState extends State<GridViewModule> {
     if (!_isInitialized) {
       return;
     }
-    final orderedImages = _applyDirectoryOrder(widget.state.images);
     if (!listEquals(oldWidget.state.images, widget.state.images)) {
-      _reconcileEntries(widget.state.images);
-    }
-    // Defer syncLibrary to avoid setState during build
-    SchedulerBinding.instance.addPostFrameCallback((_) {
+      final orderedImages = _applyDirectoryOrder(widget.state.images);
+      // CRITICAL: Sync viewStates BEFORE reconciling entries
+      // This ensures viewStates are populated before build() is triggered by setState
       _layoutStore.syncLibrary(
         orderedImages,
         directoryPath: widget.state.activeDirectory?.path,
+        notify: false,
       );
-    });
+      _reconcileEntries(widget.state.images);
+    }
   }
 
   @override
