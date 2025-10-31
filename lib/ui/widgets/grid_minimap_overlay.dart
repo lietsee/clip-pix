@@ -15,14 +15,22 @@ class MinimapOverlayService {
   final ValueNotifier<MinimapState> _stateNotifier =
       ValueNotifier(MinimapState.empty());
 
+  /// Check if the minimap overlay is currently visible and mounted
+  bool get isVisible => _overlayEntry?.mounted ?? false;
+
   /// Show minimap overlay
   void show({
     required BuildContext context,
     required ScrollController scrollController,
     required GridLayoutStore layoutStore,
   }) {
-    if (_overlayEntry != null) {
-      return; // Already showing
+    if (isVisible) {
+      return; // Already showing and mounted
+    }
+
+    // Clean up any stale overlay entry that is not mounted
+    if (_overlayEntry != null && !_overlayEntry!.mounted) {
+      _overlayEntry = null;
     }
 
     _stateNotifier.value = MinimapState(

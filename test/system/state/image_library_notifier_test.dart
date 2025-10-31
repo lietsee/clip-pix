@@ -42,8 +42,7 @@ void main() {
 
       expect(notifier.exposedState.images.length, 3); // Now includes .txt files
       expect(notifier.exposedState.isLoading, false);
-      expect(
-          notifier.exposedState.images.first.filePath.endsWith('note.txt'),
+      expect(notifier.exposedState.images.first.filePath.endsWith('note.txt'),
           isTrue); // Most recent file is note.txt
     });
 

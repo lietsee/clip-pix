@@ -111,7 +111,8 @@ class ImageRepository {
       try {
         final entry = await _fileInfoManager!.getMetadata(imageFile.path);
         if (entry != null) {
-          _logger.fine('Metadata loaded from .fileInfo.json: ${imageFile.path}');
+          _logger
+              .fine('Metadata loaded from .fileInfo.json: ${imageFile.path}');
           return _Metadata(
             metadataPath: null, // .fileInfo.jsonからの読み込みなので個別パスはnull
             sourceType: entry.sourceType,

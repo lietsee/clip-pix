@@ -348,8 +348,7 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
     final double extraExtent =
         math.max(0, viewportExtent - (bottomChildPaintExtent * 2));
     final double extendedScrollExtent = maxScrollExtent + extraExtent;
-    final double extendedPaintExtentUpperBound =
-        maxPaintedExtent + extraExtent;
+    final double extendedPaintExtentUpperBound = maxPaintedExtent + extraExtent;
 
     final computedGeometry = SliverGeometry(
       scrollExtent: extendedScrollExtent,

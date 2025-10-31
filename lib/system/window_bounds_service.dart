@@ -49,7 +49,8 @@ class WindowBoundsService with WidgetsBindingObserver {
     try {
       _persistCurrentBounds(sync: true);
     } catch (error, stackTrace) {
-      _logger.warning('Failed to persist bounds during dispose', error, stackTrace);
+      _logger.warning(
+          'Failed to persist bounds during dispose', error, stackTrace);
     }
   }
 
@@ -98,7 +99,8 @@ class WindowBoundsService with WidgetsBindingObserver {
       final desired = Rect.fromLTWH(left, top, width, height);
       _logger.info('Attempting to restore window bounds: $desired');
       for (var attempt = 0; attempt < 5; attempt++) {
-        debugPrint('[WindowBoundsService] apply attempt ${attempt + 1} -> $desired');
+        debugPrint(
+            '[WindowBoundsService] apply attempt ${attempt + 1} -> $desired');
         if (_applyBounds(desired)) {
           _logger.info('Bounds restored on attempt ${attempt + 1}');
           debugPrint('[WindowBoundsService] applied bounds');
@@ -154,7 +156,8 @@ class WindowBoundsService with WidgetsBindingObserver {
     final rectPointer = calloc<RECT>();
     try {
       if (GetWindowRect(hwnd, rectPointer) == 0) {
-        _logger.finer('GetWindowRect failed for handle 0x${hwnd.toRadixString(16)}');
+        _logger.finer(
+            'GetWindowRect failed for handle 0x${hwnd.toRadixString(16)}');
         return null;
       }
       final rect = rectPointer.ref;
@@ -182,7 +185,8 @@ class WindowBoundsService with WidgetsBindingObserver {
       debugPrint('[WindowBoundsService] apply bounds failed; hwnd=0');
       return false;
     }
-    _logger.finer('Applying bounds to handle 0x${hwnd.toRadixString(16)}: $rect');
+    _logger
+        .finer('Applying bounds to handle 0x${hwnd.toRadixString(16)}: $rect');
     final width = rect.width.round();
     final height = rect.height.round();
     final left = rect.left.round();
@@ -207,7 +211,8 @@ class WindowBoundsService with WidgetsBindingObserver {
     final hwnd = FindWindow(className, nullptr.cast<Utf16>());
     calloc.free(className);
     if (hwnd != 0) {
-      debugPrint('[WindowBoundsService] found hwnd via class: 0x${hwnd.toRadixString(16)}');
+      debugPrint(
+          '[WindowBoundsService] found hwnd via class: 0x${hwnd.toRadixString(16)}');
       return hwnd;
     }
     final fallback = GetForegroundWindow();
@@ -215,7 +220,8 @@ class WindowBoundsService with WidgetsBindingObserver {
       _logger.finer('FindWindow and GetForegroundWindow both failed');
       debugPrint('[WindowBoundsService] hwnd fallback failed');
     }
-    debugPrint('[WindowBoundsService] fallback hwnd 0x${fallback.toRadixString(16)}');
+    debugPrint(
+        '[WindowBoundsService] fallback hwnd 0x${fallback.toRadixString(16)}');
     return fallback;
   }
 

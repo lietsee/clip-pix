@@ -153,7 +153,8 @@ class FileInfoManager {
   }
 
   /// 指定フォルダの全メタデータを読み込み
-  Future<Map<String, ImageMetadataEntry>> loadMetadata(String folderPath) async {
+  Future<Map<String, ImageMetadataEntry>> loadMetadata(
+      String folderPath) async {
     // キャッシュがあればそれを返す
     if (_cache.containsKey(folderPath)) {
       return Map.unmodifiable(_cache[folderPath]!);
@@ -247,9 +248,11 @@ class FileInfoManager {
       }
 
       _cache[folderPath] = metadata;
-      _logger.info('Loaded ${metadata.length} metadata entries from $folderPath');
+      _logger
+          .info('Loaded ${metadata.length} metadata entries from $folderPath');
     } catch (error, stackTrace) {
-      _logger.severe('Failed to load .fileInfo.json from $folderPath', error, stackTrace);
+      _logger.severe(
+          'Failed to load .fileInfo.json from $folderPath', error, stackTrace);
       _cache[folderPath] = {};
     }
   }
@@ -272,9 +275,11 @@ class FileInfoManager {
       final jsonString = const JsonEncoder.withIndent('  ').convert(json);
       await file.writeAsString(jsonString, flush: true);
 
-      _logger.info('Saved ${folderCache.length} metadata entries to ${file.path}');
+      _logger
+          .info('Saved ${folderCache.length} metadata entries to ${file.path}');
     } catch (error, stackTrace) {
-      _logger.severe('Failed to save .fileInfo.json to ${file.path}', error, stackTrace);
+      _logger.severe(
+          'Failed to save .fileInfo.json to ${file.path}', error, stackTrace);
     }
   }
 }

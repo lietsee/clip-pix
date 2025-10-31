@@ -544,8 +544,14 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _showMinimap(BuildContext context, SelectedFolderState folderState) {
-    if (_minimapService != null) {
-      return; // Already showing
+    if (_minimapService?.isVisible == true) {
+      return; // Already showing and mounted
+    }
+
+    // Clean up stale service if it exists but is not visible
+    if (_minimapService != null && !_minimapService!.isVisible) {
+      _minimapService!.dispose();
+      _minimapService = null;
     }
 
     final layoutStore = context.read<GridLayoutStore>();

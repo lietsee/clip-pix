@@ -12,12 +12,11 @@ import '../../system/state/grid_layout_store.dart';
 import 'grid_semantics_tree.dart';
 
 typedef GridLayoutChildBuilder = Widget Function(
-  BuildContext context,
-  GridLayoutGeometry geometry,
-  List<GridCardViewState> states,
-  layout.LayoutSnapshot? snapshot,
-  {bool isStaging}
-);
+    BuildContext context,
+    GridLayoutGeometry geometry,
+    List<GridCardViewState> states,
+    layout.LayoutSnapshot? snapshot,
+    {bool isStaging});
 
 typedef GridColumnCountResolver = int Function(double availableWidth);
 
@@ -632,7 +631,8 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
         });
       }).catchError((error, stackTrace) {
         // endOfFrame の Future が失敗した場合の保険
-        _debugLog('scheduleNextWait endOfFrame error: $error; forcing finish()');
+        _debugLog(
+            'scheduleNextWait endOfFrame error: $error; forcing finish()');
         debugPrintStack(
             stackTrace: stackTrace, label: 'scheduleNextWait_endOfFrame');
         finish();

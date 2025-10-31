@@ -10,8 +10,7 @@ import 'package:clip_pix/system/state/grid_resize_store_binding.dart';
 
 void main() {
   group('GridResizeController × GridLayoutStore binding', () {
-    testWidgets('applyBulkSpan はストアへ委譲し undo スタックを構成する',
-        (tester) async {
+    testWidgets('applyBulkSpan はストアへ委譲し undo スタックを構成する', (tester) async {
       final controller = GridResizeController();
       final store = _FakeGridLayoutStore();
       final mutationController = GridLayoutMutationController()
@@ -50,8 +49,7 @@ void main() {
       expect(mutationController.debugBeginCount, 1);
     });
 
-    testWidgets('undo はストアのスナップショットを復元し redo 用スナップショットを積む',
-        (tester) async {
+    testWidgets('undo はストアのスナップショットを復元し redo 用スナップショットを積む', (tester) async {
       final controller = GridResizeController();
       final store = _FakeGridLayoutStore();
       final mutationController = GridLayoutMutationController();
@@ -111,8 +109,7 @@ void main() {
       expect(mutationController.isMutating, isFalse);
     });
 
-    testWidgets('redo は undo で得たスナップショットを再適用する',
-        (tester) async {
+    testWidgets('redo は undo で得たスナップショットを再適用する', (tester) async {
       final controller = GridResizeController();
       final store = _FakeGridLayoutStore();
       final mutationController = GridLayoutMutationController();
