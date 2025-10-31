@@ -224,31 +224,6 @@ class _MainScreenState extends State<MainScreen> {
       ],
     );
 
-    // Add minimap hover detection area if viewing root folder
-    if (folderState.viewMode == FolderViewMode.root &&
-        libraryState.images.isNotEmpty) {
-      return Stack(
-        children: [
-          columnWidget,
-          // Hover detection area on the right edge (20px wide)
-          Positioned(
-            right: 0,
-            top: 0,
-            bottom: 0,
-            width: 20,
-            child: MouseRegion(
-              onEnter: (_) => _showMinimap(context, folderState),
-              onExit: (_) {
-                if (!folderState.isMinimapAlwaysVisible) {
-                  _hideMinimap();
-                }
-              },
-            ),
-          ),
-        ],
-      );
-    }
-
     return columnWidget;
   }
 

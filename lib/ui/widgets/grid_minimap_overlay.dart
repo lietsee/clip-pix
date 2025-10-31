@@ -78,10 +78,9 @@ class _MinimapWidget extends StatefulWidget {
 }
 
 class _MinimapWidgetState extends State<_MinimapWidget> {
-  static const double _minimapWidth = 150.0;
-  static const double _minimapPaddingTop = 16.0;
+  static const double _minimapHeightPercent = 0.25; // 25% of screen height
   static const double _minimapPaddingBottom = 16.0;
-  static const double _minimapPaddingRight = 8.0;
+  static const double _minimapPaddingRight = 16.0;
 
   @override
   void initState() {
@@ -136,12 +135,13 @@ class _MinimapWidgetState extends State<_MinimapWidget> {
         }
 
         final screenSize = MediaQuery.of(context).size;
-        final minimapHeight =
-            screenSize.height - _minimapPaddingTop - _minimapPaddingBottom;
+        final aspectRatio = screenSize.width / screenSize.height;
+        final minimapHeight = screenSize.height * _minimapHeightPercent;
+        final minimapWidth = minimapHeight * aspectRatio;
 
         return Positioned(
           right: _minimapPaddingRight,
-          top: _minimapPaddingTop,
+          bottom: _minimapPaddingBottom,
           child: GestureDetector(
             onTapDown: (details) => _handleTap(
               details.localPosition,
@@ -156,7 +156,7 @@ class _MinimapWidgetState extends State<_MinimapWidget> {
               snapshot,
             ),
             child: Container(
-              width: _minimapWidth,
+              width: minimapWidth,
               height: minimapHeight,
               decoration: BoxDecoration(
                 color: Colors.black.withValues(alpha: 0.8),
@@ -175,7 +175,7 @@ class _MinimapWidgetState extends State<_MinimapWidget> {
                   libraryState: libraryState,
                   scrollOffset: scrollController.offset,
                   viewportHeight: scrollController.position.viewportDimension,
-                  minimapWidth: _minimapWidth,
+                  minimapWidth: minimapWidth,
                   minimapHeight: minimapHeight,
                 ),
               ),
@@ -320,14 +320,15 @@ class _MinimapPainter extends CustomPainter {
       }
     }
 
-    // Draw viewport indicator
+    // Draw viewport indicator on right edge
+    const indicatorWidth = 4.0;
     final viewportTop = scrollOffset * scale;
     final viewportBottom = (scrollOffset + viewportHeight) * scale;
 
     final viewportRect = Rect.fromLTWH(
-      0,
+      minimapWidth - indicatorWidth,
       viewportTop,
-      minimapWidth,
+      indicatorWidth,
       viewportBottom - viewportTop,
     );
 
