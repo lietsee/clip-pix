@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -157,42 +158,50 @@ class _MinimapWidgetState extends State<_MinimapWidget> {
         return Positioned(
           right: _minimapPaddingRight,
           bottom: _minimapPaddingBottom,
-          child: GestureDetector(
-            onTapDown: (details) => _handleTap(
-              details.localPosition,
+          child: Listener(
+            onPointerSignal: (event) => _handlePointerSignal(
+              event,
               minimapHeight,
               scrollController,
               snapshot,
             ),
-            onVerticalDragUpdate: (details) => _handleDrag(
-              details.localPosition,
-              minimapHeight,
-              scrollController,
-              snapshot,
-            ),
-            child: Container(
-              width: minimapWidth,
-              height: minimapHeight,
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.8),
-                borderRadius: BorderRadius.circular(4),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.3),
-                    blurRadius: 8,
-                    offset: const Offset(-2, 0),
-                  ),
-                ],
+            child: GestureDetector(
+              onTapDown: (details) => _handleTap(
+                details.localPosition,
+                minimapHeight,
+                scrollController,
+                snapshot,
               ),
-              child: CustomPaint(
-                painter: _MinimapPainter(
-                  snapshot: snapshot,
-                  libraryState: libraryState,
-                  scrollOffset: scrollController.offset,
-                  viewportHeight: scrollController.position.viewportDimension,
-                  viewportWidth: screenSize.width,
-                  minimapWidth: minimapWidth,
-                  minimapHeight: minimapHeight,
+              onVerticalDragUpdate: (details) => _handleDrag(
+                details.localPosition,
+                minimapHeight,
+                scrollController,
+                snapshot,
+              ),
+              child: Container(
+                width: minimapWidth,
+                height: minimapHeight,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.8),
+                  borderRadius: BorderRadius.circular(4),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.3),
+                      blurRadius: 8,
+                      offset: const Offset(-2, 0),
+                    ),
+                  ],
+                ),
+                child: CustomPaint(
+                  painter: _MinimapPainter(
+                    snapshot: snapshot,
+                    libraryState: libraryState,
+                    scrollOffset: scrollController.offset,
+                    viewportHeight: scrollController.position.viewportDimension,
+                    viewportWidth: screenSize.width,
+                    minimapWidth: minimapWidth,
+                    minimapHeight: minimapHeight,
+                  ),
                 ),
               ),
             ),
@@ -238,6 +247,36 @@ class _MinimapWidgetState extends State<_MinimapWidget> {
         scrollController.position.maxScrollExtent,
       ),
     );
+  }
+
+  void _handlePointerSignal(
+    PointerSignalEvent event,
+    double minimapHeight,
+    ScrollController scrollController,
+    LayoutSnapshot snapshot,
+  ) {
+    if (event is PointerScrollEvent) {
+      GestureBinding.instance.pointerSignalResolver.register(
+        event,
+        (resolvedEvent) {
+          final scrollEvent = resolvedEvent as PointerScrollEvent;
+
+          // Scroll sensitivity (1.0 = direct mapping)
+          const scrollSensitivity = 1.0;
+          final delta = scrollEvent.scrollDelta.dy * scrollSensitivity;
+
+          // Calculate new scroll position
+          final currentOffset = scrollController.offset;
+          final newOffset = (currentOffset + delta).clamp(
+            scrollController.position.minScrollExtent,
+            scrollController.position.maxScrollExtent,
+          );
+
+          // Immediately scroll (no animation)
+          scrollController.jumpTo(newOffset);
+        },
+      );
+    }
   }
 
   double _calculateTotalContentHeight(LayoutSnapshot snapshot) {
