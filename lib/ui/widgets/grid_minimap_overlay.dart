@@ -112,6 +112,18 @@ class _MinimapWidgetState extends State<_MinimapWidget> {
     }
   }
 
+  Size _calculateContentDimensions(LayoutSnapshot snapshot) {
+    if (snapshot.entries.isEmpty) return const Size(1, 1);
+
+    double maxWidth = 0;
+    double maxHeight = 0;
+    for (final entry in snapshot.entries) {
+      if (entry.rect.right > maxWidth) maxWidth = entry.rect.right;
+      if (entry.rect.bottom > maxHeight) maxHeight = entry.rect.bottom;
+    }
+    return Size(maxWidth, maxHeight);
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<MinimapState>(
@@ -137,7 +149,8 @@ class _MinimapWidgetState extends State<_MinimapWidget> {
         }
 
         final screenSize = MediaQuery.of(context).size;
-        final aspectRatio = screenSize.width / screenSize.height;
+        final contentDimensions = _calculateContentDimensions(snapshot);
+        final aspectRatio = contentDimensions.width / contentDimensions.height;
         final minimapHeight = screenSize.height * _minimapHeightPercent;
         final minimapWidth = minimapHeight * aspectRatio;
 
@@ -177,6 +190,7 @@ class _MinimapWidgetState extends State<_MinimapWidget> {
                   libraryState: libraryState,
                   scrollOffset: scrollController.offset,
                   viewportHeight: scrollController.position.viewportDimension,
+                  viewportWidth: screenSize.width,
                   minimapWidth: minimapWidth,
                   minimapHeight: minimapHeight,
                 ),
@@ -245,6 +259,7 @@ class _MinimapPainter extends CustomPainter {
   final ImageLibraryState libraryState;
   final double scrollOffset;
   final double viewportHeight;
+  final double viewportWidth;
   final double minimapWidth;
   final double minimapHeight;
 
@@ -253,6 +268,7 @@ class _MinimapPainter extends CustomPainter {
     required this.libraryState,
     required this.scrollOffset,
     required this.viewportHeight,
+    required this.viewportWidth,
     required this.minimapWidth,
     required this.minimapHeight,
   });
@@ -335,31 +351,32 @@ class _MinimapPainter extends CustomPainter {
       }
     }
 
-    // Draw viewport indicator on right edge
-    const indicatorWidth = 4.0;
+    // Draw viewport indicator as yellow border box
+    final viewportLeft = xOffset;
     final viewportTop = scrollOffset * scale;
-    final viewportBottom = (scrollOffset + viewportHeight) * scale;
+    final scaledViewportWidth = viewportWidth * scale;
+    final scaledViewportHeight = viewportHeight * scale;
 
     final viewportRect = Rect.fromLTWH(
-      minimapWidth - indicatorWidth,
+      viewportLeft,
       viewportTop,
-      indicatorWidth,
-      viewportBottom - viewportTop,
-    );
+      scaledViewportWidth,
+      scaledViewportHeight,
+    ).intersect(Rect.fromLTWH(0, 0, minimapWidth, minimapHeight));
 
-    // Fill
+    // Semi-transparent yellow fill
     canvas.drawRect(
       viewportRect,
       Paint()
-        ..color = Colors.blue.withValues(alpha: 0.2)
+        ..color = Colors.yellow.withValues(alpha: 0.15)
         ..style = PaintingStyle.fill,
     );
 
-    // Border
+    // Yellow border
     canvas.drawRect(
       viewportRect,
       Paint()
-        ..color = Colors.blue[300]!
+        ..color = Colors.yellow
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2,
     );
@@ -421,6 +438,7 @@ class _MinimapPainter extends CustomPainter {
     return oldDelegate.scrollOffset != scrollOffset ||
         oldDelegate.snapshot != snapshot ||
         oldDelegate.viewportHeight != viewportHeight ||
+        oldDelegate.viewportWidth != viewportWidth ||
         oldDelegate.libraryState.images.length != libraryState.images.length;
   }
 }
