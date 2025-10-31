@@ -166,7 +166,7 @@ class _GridViewModuleState extends State<GridViewModule> {
     assert(() {
       // Skip alignment check during initial frame to avoid race condition
       // between _entries population and GridLayoutStore.viewStates sync
-      if (!_firstFrameComplete) {
+      if (!_firstFrameComplete || layoutStore.viewStates.isEmpty) {
         return true;
       }
       final activeEntryIds = _entries
