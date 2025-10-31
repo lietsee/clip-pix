@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -257,19 +259,32 @@ class _MinimapPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Calculate total content height
+    // Calculate total content dimensions
     double totalContentHeight = 0;
+    double totalContentWidth = 0;
     for (final entry in snapshot.entries) {
       final bottom = entry.rect.bottom;
+      final right = entry.rect.right;
       if (bottom > totalContentHeight) {
         totalContentHeight = bottom;
       }
+      if (right > totalContentWidth) {
+        totalContentWidth = right;
+      }
     }
 
-    if (totalContentHeight == 0) return;
+    if (totalContentHeight == 0 || totalContentWidth == 0) return;
 
-    // Calculate scale to fit all content in minimap
-    final scale = minimapHeight / totalContentHeight;
+    // Calculate both horizontal and vertical scales
+    final scaleY = minimapHeight / totalContentHeight;
+    final scaleX = minimapWidth / totalContentWidth;
+
+    // Use smaller scale to fit content without distortion
+    final scale = math.min(scaleX, scaleY);
+
+    // Calculate horizontal centering offset
+    final scaledContentWidth = totalContentWidth * scale;
+    final xOffset = (minimapWidth - scaledContentWidth) / 2;
 
     // Create a map for quick item lookup
     final itemMap = <String, ContentItem>{};
@@ -283,9 +298,9 @@ class _MinimapPainter extends CustomPainter {
       if (item == null) continue;
 
       final scaledRect = Rect.fromLTWH(
-        entry.rect.left * scale + 8, // Left padding
+        entry.rect.left * scale + xOffset,
         entry.rect.top * scale,
-        entry.rect.width * scale - 16, // Adjust for padding
+        entry.rect.width * scale,
         entry.rect.height * scale,
       );
 
