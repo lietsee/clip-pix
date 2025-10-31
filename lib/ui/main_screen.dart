@@ -70,14 +70,23 @@ class _MainScreenState extends State<MainScreen> {
     final selectedState = context.watch<SelectedFolderState>();
     final watcherStatus = context.watch<WatcherStatusState>();
     final historyState = context.watch<ImageHistoryState>();
-    final libraryState = context.watch<ImageLibraryState>();
+
+    // Use Selector to avoid rebuilding MainScreen on favorite changes
+    // Only watch activeDirectory and images.isEmpty, not the entire state
+    final libraryInfo = context
+        .select<ImageLibraryState, ({Directory? activeDirectory, bool hasImages})>(
+      (state) => (
+        activeDirectory: state.activeDirectory,
+        hasImages: state.images.isNotEmpty
+      ),
+    );
 
     _ensureDirectorySync(context, selectedState);
 
     // Show minimap if always-visible mode is enabled
     if (selectedState.isMinimapAlwaysVisible &&
         selectedState.viewMode == FolderViewMode.root &&
-        libraryState.images.isNotEmpty) {
+        libraryInfo.hasImages) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         // Re-verify visibility on every build and re-show if invalidated
         if (_minimapService == null || !_minimapService!.isVisible) {
@@ -125,14 +134,14 @@ class _MainScreenState extends State<MainScreen> {
             IconButton(
               icon: const Icon(Icons.note_add),
               tooltip: '新規テキスト作成',
-              onPressed: libraryState.activeDirectory == null
+              onPressed: libraryInfo.activeDirectory == null
                   ? null
                   : () => _createNewText(context),
             ),
             IconButton(
               icon: const Icon(Icons.refresh),
               tooltip: '再読み込み',
-              onPressed: libraryState.activeDirectory == null
+              onPressed: libraryInfo.activeDirectory == null
                   ? null
                   : () => context.read<ImageLibraryNotifier>().refresh(),
             ),
@@ -153,7 +162,7 @@ class _MainScreenState extends State<MainScreen> {
             ),
           ],
         ),
-        body: _buildBody(context, selectedState, historyState, libraryState),
+        body: _buildBody(context, selectedState, historyState),
         bottomNavigationBar: watcherStatus.lastError != null
             ? _ErrorBanner(message: watcherStatus.lastError!)
             : null,
@@ -165,8 +174,10 @@ class _MainScreenState extends State<MainScreen> {
     BuildContext context,
     SelectedFolderState folderState,
     ImageHistoryState historyState,
-    ImageLibraryState libraryState,
   ) {
+    // Watch ImageLibraryState here instead of in build() to prevent
+    // MainScreen rebuild on favorite changes (only _buildBody rebuilds)
+    final libraryState = context.watch<ImageLibraryState>();
     final directory = folderState.current;
     if (directory == null || !folderState.isValid) {
       return _EmptyState(
