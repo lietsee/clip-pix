@@ -130,6 +130,7 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
   GridLayoutGeometry? _geometry;
   final Map<String, ContentItem> _items = {};
   layout.LayoutSnapshot? _latestSnapshot;
+  layout.LayoutSnapshot? _previousSnapshot;
 
   @override
   List<GridCardViewState> get viewStates => UnmodifiableListView(
@@ -140,7 +141,8 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
       );
 
   @override
-  layout.LayoutSnapshot? get latestSnapshot => _latestSnapshot;
+  layout.LayoutSnapshot? get latestSnapshot =>
+      _latestSnapshot ?? _previousSnapshot;
 
   void syncLibrary(
     List<ContentItem> items, {
@@ -233,6 +235,10 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
         changed = true;
       }
       _viewStates[state.id] = state;
+    }
+    // Preserve previous snapshot before updating to new one
+    if (_latestSnapshot != null) {
+      _previousSnapshot = _latestSnapshot;
     }
     _latestSnapshot = result.snapshot;
     if (changed && notify) {
