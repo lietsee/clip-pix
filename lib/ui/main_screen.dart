@@ -47,8 +47,6 @@ class _MainScreenState extends State<MainScreen> {
   // Minimap overlay service
   MinimapOverlayService? _minimapService;
 
-  // Debug counter for build calls
-  int _buildCount = 0;
   late final FocusNode _keyboardFocusNode;
 
   @override
@@ -70,8 +68,6 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint(
-        '[MainScreen] build() #${++_buildCount}, minimapVisible=${_minimapService?.isVisible}');
     final selectedState = context.watch<SelectedFolderState>();
     final watcherStatus = context.watch<WatcherStatusState>();
     final historyState = context.watch<ImageHistoryState>();
@@ -92,20 +88,12 @@ class _MainScreenState extends State<MainScreen> {
     if (selectedState.isMinimapAlwaysVisible &&
         selectedState.viewMode == FolderViewMode.root &&
         libraryInfo.hasImages) {
-      debugPrint(
-          '[MainScreen] minimap should be visible: service=${_minimapService != null}, isVisible=${_minimapService?.isVisible}');
       WidgetsBinding.instance.addPostFrameCallback((_) {
         // Re-verify visibility on every build and re-show if invalidated
         if (_minimapService == null || !_minimapService!.isVisible) {
-          debugPrint(
-              '[MainScreen] PostFrameCallback: re-showing minimap (service=${_minimapService != null}, isVisible=${_minimapService?.isVisible})');
           _showMinimap(context, selectedState);
         }
       });
-    } else {
-      debugPrint(
-          '[MainScreen] minimap should NOT be visible: alwaysVisible=${selectedState.isMinimapAlwaysVisible}, '
-          'viewMode=${selectedState.viewMode}, hasImages=${libraryInfo.hasImages}');
     }
 
     return Focus(
@@ -570,25 +558,17 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _showMinimap(BuildContext context, SelectedFolderState folderState) {
-    debugPrint(
-        '[MainScreen] _showMinimap called: service=${_minimapService != null}, isVisible=${_minimapService?.isVisible}');
-
     if (_minimapService?.isVisible == true) {
-      debugPrint('[MainScreen] _showMinimap: already visible, returning');
       return; // Already showing and mounted
     }
 
     // Clean up stale service if it exists but is not visible
     if (_minimapService != null && !_minimapService!.isVisible) {
-      debugPrint('[MainScreen] _showMinimap: disposing stale service');
       _minimapService!.dispose();
       _minimapService = null;
     }
 
     final layoutStore = context.read<GridLayoutStore>();
-    final snapshot = layoutStore.latestSnapshot;
-    debugPrint(
-        '[MainScreen] _showMinimap: creating new service, snapshot=${snapshot != null ? "${snapshot.entries.length} entries" : "null"}');
 
     _minimapService = MinimapOverlayService();
     _minimapService!.show(
@@ -596,7 +576,6 @@ class _MainScreenState extends State<MainScreen> {
       scrollController: _rootScrollController,
       layoutStore: layoutStore,
     );
-    debugPrint('[MainScreen] _showMinimap: service.show() completed');
   }
 
   void _hideMinimap() {

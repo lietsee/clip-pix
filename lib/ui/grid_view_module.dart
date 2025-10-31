@@ -115,14 +115,7 @@ class _GridViewModuleState extends State<GridViewModule> {
     }
     // Use ID-based comparison instead of instance equality
     // to avoid unnecessary rebuilds when only item properties change
-    final imagesChanged =
-        _imagesChanged(oldWidget.state.images, widget.state.images);
-    debugPrint(
-        '[GridViewModule] didUpdateWidget: imagesChanged=$imagesChanged, '
-        'oldCount=${oldWidget.state.images.length}, newCount=${widget.state.images.length}, '
-        'identical=${identical(oldWidget.state.images, widget.state.images)}');
-    if (imagesChanged) {
-      debugPrint('[GridViewModule] Images changed (IDs differ), reconciling');
+    if (_imagesChanged(oldWidget.state.images, widget.state.images)) {
       final orderedImages = _applyDirectoryOrder(widget.state.images);
       // CRITICAL: Sync viewStates BEFORE reconciling entries
       // This ensures viewStates are populated before build() is triggered by setState
@@ -132,9 +125,6 @@ class _GridViewModuleState extends State<GridViewModule> {
         notify: false,
       );
       _reconcileEntries(widget.state.images);
-    } else {
-      debugPrint(
-          '[GridViewModule] Images same (IDs match), skipping reconciliation');
     }
   }
 
@@ -508,15 +498,11 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   void _handleFavorite(String imageId, int favorite) async {
-    debugPrint(
-        '[GridViewModule] _handleFavorite called: imageId=$imageId, favorite=$favorite');
     final notifier = context.read<ImageLibraryNotifier>();
     try {
       await notifier.updateFavorite(imageId, favorite);
-      debugPrint('[GridViewModule] _handleFavorite completed for $imageId');
       // お気に入りはサイレント更新（SnackBar表示なし）
     } catch (error) {
-      debugPrint('[GridViewModule] _handleFavorite error: $error');
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -570,11 +556,7 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   void _reconcileEntries(List<ContentItem> newItems) {
-    debugPrint(
-        '[GridViewModule] _reconcileEntries: newItems=${newItems.length}, current entries=${_entries.length}');
     final orderedItems = _applyDirectoryOrder(newItems);
-    debugPrint(
-        '[GridViewModule] _reconcileEntries: after _applyDirectoryOrder, orderedItems=${orderedItems.length}');
     _logEntries('reconcile_before', _entries);
     final duplicateIncoming = _findDuplicateIds(
       orderedItems.map((item) => item.id),
@@ -876,13 +858,10 @@ class _GridViewModuleState extends State<GridViewModule> {
     final path = widget.state.activeDirectory?.path;
     final repo = _orderRepository;
     if (path == null || repo == null) {
-      debugPrint(
-          '[GridViewModule] _applyDirectoryOrder: no path or repo, returning items as-is');
       return items;
     }
     final stored = repo.getOrder(path);
     if (items.isEmpty) {
-      debugPrint('[GridViewModule] _applyDirectoryOrder: incoming empty; skip reorder');
       return items;
     }
     final ids = items.map((item) => item.id).toList();
@@ -898,14 +877,7 @@ class _GridViewModuleState extends State<GridViewModule> {
         orderedIds.add(id);
       }
     }
-
-    final orderChanged = !listEquals(stored, orderedIds);
-    final itemsOrderChanged = !listEquals(ids, orderedIds);
-    debugPrint(
-        '[GridViewModule] _applyDirectoryOrder: stored=${stored.length}, incoming=${ids.length}, '
-        'reordered=${orderedIds.length}, orderChanged=$orderChanged, itemsOrderChanged=$itemsOrderChanged');
-
-    if (orderChanged) {
+    if (!listEquals(stored, orderedIds)) {
       scheduleMicrotask(() => repo.save(path, orderedIds));
     }
     final map = {for (final item in items) item.id: item};
