@@ -156,6 +156,10 @@ class _ImageCardState extends State<ImageCard> {
     if (oldWidget.item.filePath != widget.item.filePath) {
       _reloadImage();
     }
+    // Trigger rebuild when favorite changes to update FavoriteIndicator
+    if (oldWidget.item.favorite != widget.item.favorite) {
+      setState(() {});
+    }
     if (oldWidget.columnWidth != widget.columnWidth ||
         oldWidget.columnGap != widget.columnGap ||
         oldWidget.columnCount != widget.columnCount) {

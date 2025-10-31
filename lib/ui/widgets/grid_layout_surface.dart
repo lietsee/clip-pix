@@ -271,7 +271,8 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
         if (!mounted) {
           return;
         }
-        _store.updateGeometry(geometryCopy, notify: false);
+        // notify=true to ensure minimap receives layout updates
+        _store.updateGeometry(geometryCopy);
         setState(() {
           _frontGeometry = geometryCopy;
           _frontStates = _cloneStates(_store.viewStates);
