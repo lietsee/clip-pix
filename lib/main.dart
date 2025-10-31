@@ -100,11 +100,22 @@ void _configureLogging() {
     ).warning('Failed to initialize log file', error, stackTrace);
   }
   Logger.root.onRecord.listen((record) {
-    final line =
-        '[${record.level.name}] ${record.time.toIso8601String()} ${record.loggerName}: ${record.message}';
+    final buffer = StringBuffer();
+    buffer.write(
+      '[${record.level.name}] ${record.time.toIso8601String()} ${record.loggerName}: ${record.message}',
+    );
+
+    if (record.error != null) {
+      buffer.write('\n  Error: ${record.error}');
+    }
+    if (record.stackTrace != null) {
+      buffer.write('\n  StackTrace:\n${record.stackTrace}');
+    }
+
+    final line = buffer.toString();
     debugPrint(line);
     try {
-      sink?..writeln(line);
+      sink?.writeln(line);
     } catch (_) {}
   });
 }
