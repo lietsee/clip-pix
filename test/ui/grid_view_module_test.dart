@@ -280,6 +280,7 @@ void main() {
       rootScrollOffset: 0,
       isValid: true,
       viewDirectory: tempDir,
+      isMinimapAlwaysVisible: false,
     );
 
     await tester.pumpWidget(

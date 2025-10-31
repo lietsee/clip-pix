@@ -6,7 +6,6 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 
 import '../data/grid_layout_settings_repository.dart';
@@ -25,7 +24,6 @@ import '../system/state/image_library_notifier.dart';
 import '../system/state/image_library_state.dart';
 import '../system/state/selected_folder_state.dart';
 import 'image_card.dart';
-import 'image_preview_window.dart';
 import 'widgets/grid_layout_surface.dart';
 import 'widgets/pinterest_grid.dart';
 import 'widgets/text_card.dart';
@@ -57,6 +55,7 @@ class _GridViewModuleState extends State<GridViewModule> {
 
   final Map<String, Timer> _scaleDebounceTimers = {};
   final Map<String, ScrollController> _directoryControllers = {};
+  final Map<String, ScrollController> _stagingControllers = {};
   final Map<String, GlobalKey> _cardKeys = {};
   GridLayoutSettingsRepository? _layoutSettingsRepository;
   GridOrderRepository? _orderRepository;
@@ -135,6 +134,10 @@ class _GridViewModuleState extends State<GridViewModule> {
     for (final controller in _directoryControllers.values) {
       controller.dispose();
     }
+    for (final controller in _stagingControllers.values) {
+      controller.dispose();
+    }
+    _stagingControllers.clear();
     for (final timer in _scaleDebounceTimers.values) {
       timer.cancel();
     }
@@ -211,7 +214,9 @@ class _GridViewModuleState extends State<GridViewModule> {
         childBuilder: (context, geometry, states, snapshot,
             {bool isStaging = false}) {
           _orderRepository = context.watch<GridOrderRepository>();
-          final controller = _resolveController(selectedState);
+          final controller = isStaging
+              ? _resolveStagingController(selectedState)
+              : _resolveController(selectedState);
           final backgroundColor = _backgroundForTone(settings.background);
           final cardBackgroundColor =
               _cardBackgroundForTone(settings.background);
@@ -526,6 +531,13 @@ class _GridViewModuleState extends State<GridViewModule> {
     final directory = widget.state.activeDirectory;
     final key = directory?.path ?? '_root';
     return _directoryControllers.putIfAbsent(key, () => ScrollController());
+  }
+
+  ScrollController _resolveStagingController(
+      SelectedFolderState selectedState) {
+    final directory = widget.state.activeDirectory;
+    final key = '${directory?.path ?? '_root'}_staging';
+    return _stagingControllers.putIfAbsent(key, () => ScrollController());
   }
 
   _GridEntry _createEntry(ContentItem item) {
