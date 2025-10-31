@@ -13,6 +13,7 @@ import 'package:path/path.dart' as p;
 import '../data/models/image_item.dart';
 import '../system/state/grid_layout_store.dart';
 import 'widgets/memo_edit_dialog.dart';
+import 'widgets/memo_tooltip_overlay.dart';
 import 'widgets/resize_preview_overlay.dart';
 
 class ImageCard extends StatefulWidget {
@@ -107,6 +108,8 @@ class _ImageCardState extends State<ImageCard> {
   int _resizeStartSpan = 1;
   Size? _previewSize;
   ResizePreviewOverlayService? _overlayService;
+  MemoTooltipOverlayService? _memoTooltipService;
+  Timer? _memoHoverTimer;
   Offset? _panStartLocal;
   Offset? _panStartOffset;
   Offset _imageOffset = Offset.zero;
@@ -165,6 +168,9 @@ class _ImageCardState extends State<ImageCard> {
 
   @override
   void dispose() {
+    _cancelMemoTooltip();
+    _memoTooltipService?.dispose();
+    _memoTooltipService = null;
     _overlayService?.dispose();
     _overlayService = null;
     _focusNode.dispose();
@@ -245,8 +251,14 @@ class _ImageCardState extends State<ImageCard> {
           onPointerMove: _handlePointerMove,
           onPointerSignal: _handlePointerSignal,
           child: MouseRegion(
-            onEnter: (_) => _setControlsVisible(true),
-            onExit: (_) => _setControlsVisible(false),
+            onEnter: (_) {
+              _setControlsVisible(true);
+              _scheduleMemoTooltip();
+            },
+            onExit: (_) {
+              _setControlsVisible(false);
+              _cancelMemoTooltip();
+            },
             cursor: _isResizing
                 ? SystemMouseCursors.resizeUpLeftDownRight
                 : _isPanning
@@ -450,10 +462,13 @@ class _ImageCardState extends State<ImageCard> {
                   padding: EdgeInsets.zero,
                   shape: const CircleBorder(),
                   minimumSize: const Size(32, 32),
-                  backgroundColor: _backgroundColorForFavorite(widget.item.favorite),
+                  backgroundColor:
+                      _backgroundColorForFavorite(widget.item.favorite),
                 ),
                 child: Icon(
-                  widget.item.favorite > 0 ? Icons.favorite : Icons.favorite_border,
+                  widget.item.favorite > 0
+                      ? Icons.favorite
+                      : Icons.favorite_border,
                   size: 18,
                   color: widget.item.favorite > 0 ? Colors.white : null,
                 ),
@@ -1019,6 +1034,51 @@ class _ImageCardState extends State<ImageCard> {
     setState(() {
       _showControls = visible;
     });
+  }
+
+  void _scheduleMemoTooltip() {
+    // Only show tooltip if memo exists
+    if (widget.item.memo.isEmpty) {
+      return;
+    }
+
+    // Cancel any pending timer
+    _cancelMemoTooltip();
+
+    // Schedule tooltip to show after hover delay
+    _memoHoverTimer = Timer(const Duration(milliseconds: 500), () {
+      _showMemoTooltip();
+    });
+  }
+
+  void _cancelMemoTooltip() {
+    _memoHoverTimer?.cancel();
+    _memoHoverTimer = null;
+    _memoTooltipService?.hide();
+  }
+
+  void _showMemoTooltip() {
+    if (!mounted || widget.item.memo.isEmpty) {
+      return;
+    }
+
+    // Get card's global position
+    final renderBox = context.findRenderObject() as RenderBox?;
+    if (renderBox == null || !renderBox.hasSize) {
+      return;
+    }
+
+    final cardRect = renderBox.localToGlobal(Offset.zero) & renderBox.size;
+
+    // Create service if needed
+    _memoTooltipService ??= MemoTooltipOverlayService();
+
+    // Show tooltip
+    _memoTooltipService!.show(
+      context: context,
+      cardRect: cardRect,
+      memo: widget.item.memo,
+    );
   }
 }
 
