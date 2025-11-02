@@ -1,6 +1,7 @@
 # データフロー
 
 **作成日**: 2025-10-28
+**最終更新**: 2025-11-02
 **ステータス**: 実装完了
 
 ## 全体データフロー
@@ -149,7 +150,7 @@ sequenceDiagram
     MS->>MS: GridView表示
 ```
 
-## フロー4: カードリサイズ
+## フロー4: カードリサイズ (2025-11-02更新)
 
 ```mermaid
 sequenceDiagram
@@ -159,20 +160,71 @@ sequenceDiagram
     participant GCPR as GridCardPreferencesRepo
     participant Engine as GridLayoutLayoutEngine
     participant Surface as GridLayoutSurface
+    participant Minimap as Minimap
     participant Hive
 
     User->>IC: ドラッグでリサイズ
     IC->>IC: onPanUpdate(delta)
     IC->>GLS: updateCard(id, customSize)
+
+    Note over GLS: メモリ状態更新
     GLS->>GLS: _viewStates[id] = newState
+
+    Note over GLS,Hive: Hive永続化 (2025-11-02 fix)
     GLS->>GCPR: saveBatch([record])
     GCPR->>Hive: box.put(id, preference)
+
+    Note over GLS,Engine: スナップショット再生成 (2025-11-02 fix)
+    GLS->>Engine: compute(geometry, orderedStates)
+    Engine-->>GLS: LayoutComputationResult
+    GLS->>GLS: _latestSnapshot = result.snapshot
+
+    Note over GLS: リスナー通知
     GLS->>GLS: notifyListeners()
     GLS->>Surface: リスナー通知
-    Surface->>Engine: compute(geometry, states)
-    Engine-->>Surface: LayoutSnapshot
+    GLS->>Minimap: リスナー通知
+
+    Note over Surface: バッファスワップ
     Surface->>Surface: setState(front ← staging)
     Surface->>Surface: PinterestSliverGrid再描画
+
+    Note over Minimap: ミニマップ更新
+    Minimap->>Minimap: setState() → rebuild with new snapshot
+```
+
+### 重要な改善 (2025-11-02)
+
+**以前の実装では**:
+1. `updateCard()`が`_invalidateSnapshot()`を呼び出し
+2. `_latestSnapshot = null`にセット
+3. ミニマップが`latestSnapshot`を参照すると古い`_previousSnapshot`が返される
+4. **結果**: ミニマップが更新されない
+
+**現在の実装では**:
+1. `updateCard()`が`_layoutEngine.compute()`を呼び出し
+2. 新しいスナップショットを生成して`_latestSnapshot`にセット
+3. ミニマップが最新のスナップショットを取得
+4. **結果**: ミニマップが即座に更新される
+
+```dart
+// lib/system/state/grid_layout_store.dart:503-524
+void updateCard({required String id, ...}) {
+  _viewStates[id] = nextState;
+  await _persistence.saveBatch([_recordFromState(nextState)]);
+
+  // スナップショット再生成（updateGeometry()と同じパターン）
+  final geometry = _geometry;
+  if (geometry != null) {
+    final result = _layoutEngine.compute(
+      geometry: geometry,
+      states: orderedStates,
+    );
+    _previousSnapshot = _latestSnapshot;
+    _latestSnapshot = result.snapshot;  // ← 新しいスナップショット
+  }
+
+  notifyListeners();
+}
 ```
 
 ## フロー5: グリッド設定変更

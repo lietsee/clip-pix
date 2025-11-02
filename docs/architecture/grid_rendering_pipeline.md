@@ -1,6 +1,7 @@
 # グリッドレンダリングパイプライン
 
 **作成日**: 2025-10-28
+**最終更新**: 2025-11-02
 **ステータス**: 実装完了
 
 ## 概要
@@ -102,6 +103,81 @@ if (result.changed && notify) {
 - 各カードの幅・高さ計算（アスペクト比保持）
 - Pinterestスタイル配置（最短カラム探索）
 - `LayoutSnapshot` 生成（ID、Rect、columnSpan）
+
+### Stage 4-B: 個別カード更新フロー (2025-11-02追加)
+
+個別カードのリサイズ・スケール変更・列変更時の処理フロー：
+
+```mermaid
+sequenceDiagram
+    participant User as ユーザー
+    participant IC as ImageCard
+    participant GVM as GridViewModule
+    participant Store as GridLayoutStore
+    participant Persist as Hive
+    participant Engine as LayoutEngine
+    participant Minimap as Minimap
+
+    User->>IC: カードリサイズハンドルをドラッグ
+    IC->>GVM: _handleResize(id, newSize)
+    GVM->>Store: updateCard(id, customSize)
+
+    Note over Store: メモリ状態更新
+    Store->>Store: _viewStates[id] = nextState
+
+    Note over Store: Hive永続化 (2025-11-02 fix)
+    Store->>Persist: saveBatch([preference])
+
+    Note over Store: スナップショット再生成 (2025-11-02 fix)
+    Store->>Engine: compute(geometry, orderedStates)
+    Engine-->>Store: LayoutComputationResult
+    Store->>Store: _latestSnapshot = result.snapshot
+
+    Note over Store: リスナー通知
+    Store->>Minimap: notifyListeners()
+    Store->>GVM: notifyListeners()
+
+    Note over Minimap: 新しいスナップショットで再描画
+    Minimap->>Minimap: setState() → rebuild
+```
+
+**重要な修正 (commit 8225c71)**:
+
+`updateCard()`は以前`_invalidateSnapshot()`を呼び出していましたが、これによりミニマップが更新されないバグが発生していました。修正後はスナップショットを再生成するパターンに統一：
+
+```dart
+// 旧実装 (buggy)
+void updateCard({required String id, ...}) {
+  _viewStates[id] = nextState;
+  await _persistence.saveBatch([...]);
+  notifyListeners();
+  _invalidateSnapshot();  // ← _latestSnapshot = null
+}
+
+// 新実装 (fixed) - lib/system/state/grid_layout_store.dart:503-524
+void updateCard({required String id, ...}) {
+  _viewStates[id] = nextState;
+  await _persistence.saveBatch([_recordFromState(nextState)]);
+
+  // スナップショット再生成（updateGeometry()と同じパターン）
+  final geometry = _geometry;
+  if (geometry != null) {
+    final result = _layoutEngine.compute(
+      geometry: geometry,
+      states: orderedStates,
+    );
+    _previousSnapshot = _latestSnapshot;
+    _latestSnapshot = result.snapshot;  // ← 新しいスナップショット
+  }
+
+  notifyListeners();
+}
+```
+
+**効果**:
+- ミニマップが`latestSnapshot`を参照すると、**常に最新のスナップショット**が返される
+- スナップショットIDが変わるため、`_MinimapPainter.shouldRepaint()`が正しく再描画を検出
+- カードリサイズ、列変更、ウィンドウリサイズすべてで同じパターンを使用
 
 ### Stage 5: Stagingバッファ準備
 

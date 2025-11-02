@@ -1,4 +1,5 @@
 # GridView 詳細設計
+最終更新: 2025-11-02
 
 ## 1. 概要
 指定フォルダ内の画像を Pinterest 風に配置し、カードの列スパン・高さを尊重したタイルレイアウトを提供する。
@@ -55,3 +56,93 @@
 - 削除イベントは対象カードをフェードアウトさせ、`AnimatedOpacity` 経由でリストから除去。
 - 並べ替え時はドラッグ中カードをオーバーレイ表示させ、ドロップ後に Hive の order ボックスへ保存。
 - ルート → サブフォルダ遷移時は保存済み順序を読み込み、戻る際に再利用。
+
+---
+
+## 12. Entry Reconciliation Decision (2025-11-02追加)
+
+### 12.1 概要
+`GridViewModule.didUpdateWidget()`は、`ImageLibraryState`の画像リストが変更されたときに`_entries`を更新します。更新方法は2つあります：
+
+1. **`_reconcileEntries()`**: 追加/削除/並び替えを処理（フル更新）
+2. **`_updateEntriesProperties()`**: 既存エントリーのプロパティのみ更新（軽量更新）
+
+### 12.2 決定ロジック
+
+**実装** (`lib/ui/grid_view_module.dart:172-180`):
+
+```dart
+final activeEntriesCount = _entries.where((e) => !e.isRemoving).length;
+final itemCountChanged = widget.state.images.length != activeEntriesCount;
+final willReconcile = _entries.isEmpty || orderChanged || itemCountChanged;
+
+if (willReconcile) {
+  _reconcileEntries(orderedImages);  // 追加/削除を処理
+} else {
+  _updateEntriesProperties(orderedImages);  // プロパティ更新のみ
+}
+```
+
+**判定条件**:
+- `_entries.isEmpty`: 初回ロード
+- `orderChanged`: 既存アイテムの相対順序が変わった
+- `itemCountChanged`: アイテム数が変わった（追加または削除） ← **2025-11-02追加**
+
+### 12.3 修正履歴 (commit 62608ac)
+
+**問題点**:
+テキストファイルをクリップボードからコピーした際、アサーション失敗が発生：
+
+```
+assertion failed: _entries and GridLayoutStore.viewStates must have same IDs
+missing_entries=[note_17.txt, note_18.txt, note_19.txt]
+```
+
+**根本原因**:
+1. テキストファイルが末尾に追加される（既存順序は維持）
+2. `orderChanged=false`と判定
+3. `_updateEntriesProperties()`が呼ばれる
+4. `_updateEntriesProperties()`は既存`_entries`のみループ → **新規エントリーが追加されない**
+5. `GridLayoutStore.viewStates`は`syncLibrary()`で70アイテムに更新
+6. アサーション: `_entries`=67、`viewStates`=70 → **不一致**
+
+**修正内容**:
+`itemCountChanged`チェックを追加：
+
+```dart
+// 旧実装 (buggy)
+final willReconcile = _entries.isEmpty || orderChanged;
+
+// 新実装 (fixed)
+final activeEntriesCount = _entries.where((e) => !e.isRemoving).length;
+final itemCountChanged = widget.state.images.length != activeEntriesCount;
+final willReconcile = _entries.isEmpty || orderChanged || itemCountChanged;
+```
+
+**効果**:
+- テキストファイル追加時も`_reconcileEntries()`が実行される
+- 新しい3つのエントリーが`_entries`に追加される
+- `_entries`と`viewStates`のID集合が一致
+- アサーションが成功
+
+### 12.4 `_reconcileEntries()` vs `_updateEntriesProperties()`
+
+| メソッド | 実行条件 | 処理内容 |
+|---------|---------|---------|
+| `_reconcileEntries()` | `_entries.isEmpty \|\| orderChanged \|\| itemCountChanged` | - 既存エントリーと新しいアイテムリストを比較<br>- 新規アイテムを`_entries`に追加<br>- 削除されたアイテムを`isRemoving=true`に設定<br>- `setState()`でリビルド |
+| `_updateEntriesProperties()` | `!willReconcile` | - 既存`_entries`のみループ<br>- `favorite`/`memo`/`filePath`変更を検出<br>- 変更されたエントリーの`version`をインクリメント<br>- `setState()`は**呼ばない**（ObjectKeyによる差分更新） |
+
+### 12.5 パフォーマンス考慮
+
+**`_reconcileEntries()`のコスト**:
+- 全エントリーの再作成: O(n)
+- `setState()`による全ウィジェットリビルド
+
+**`_updateEntriesProperties()`のコスト**:
+- 既存エントリーのプロパティ比較: O(n)
+- `setState()`なし（ObjectKeyによる差分更新のみ）
+
+**最適化**:
+- お気に入りクリックなどプロパティのみ変更時は`_updateEntriesProperties()`を使用
+- アイテム追加/削除時のみ`_reconcileEntries()`を使用
+- これにより不要なリビルドを最小化

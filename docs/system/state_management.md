@@ -1,4 +1,5 @@
 # State Management 詳細設計
+最終更新: 2025-11-02
 
 ## 1. 目的
 Provider + StateNotifier を用いて、フォルダ選択・監視制御・UI 更新を一元管理する。
@@ -96,3 +97,118 @@ Provider + StateNotifier を用いて、フォルダ選択・監視制御・UI �
 - ImageLibraryNotifier については一時ディレクトリを用いて `loadForDirectory` / `addOrUpdate` / `remove` の動作を確認。
 - 監視フラグの切り替えは FileWatcher / ClipboardMonitor のスタブを使って `onFolderChanged` の呼び出し順序を確認。
 - ImageHistory のサイズ制限 (最大20件) と FIFO 振る舞いをテスト。
+
+---
+
+## 10. GridLayoutStore (2025-11-02追加)
+
+### 10.1 概要
+`GridLayoutStore`は`ChangeNotifier`を継承し、グリッドレイアウトのカード寸法・スケール・列設定を一元管理するストアです。
+
+**ファイル**: `lib/system/state/grid_layout_store.dart`
+
+**責務**:
+- カードごとの幅・高さ・スケール・列スパン・カスタム高さを管理
+- レイアウトエンジン（`GridLayoutLayoutEngine`）を用いてスナップショット生成
+- Hive永続化レイヤー（`GridCardPreferencesRepository`）への書き込み
+- Front/Back buffer パターンでレイアウト安定性を確保
+
+### 10.2 主要APIと永続化タイミング
+
+| メソッド | 用途 | 永続化 | スナップショット生成 |
+|----------|------|--------|----------------------|
+| `syncLibrary(List<ContentItem>)` | ImageLibraryからの同期 | × | ✓ (contentChanged時) |
+| `updateGeometry(GridLayoutGeometry)` | ウィンドウリサイズ・列変更 | ✓ | ✓ |
+| `updateCard({id, customSize, scale, columnSpan})` | 個別カードリサイズ | ✓ | ✓ |
+| `applyBulkSpan(int span)` | 一括揃え | ✓ | × (invalidate) |
+| `restoreSnapshot(GridLayoutSnapshot)` | Undo/Redo | ✓ | × (invalidate) |
+
+### 10.3 Persistence Synchronization Pattern (2025-11-02)
+
+**原則**: メモリとHiveを**常に同期**（Write-through cacheパターン）
+
+#### 実装パターン
+すべてのカード状態更新メソッドで以下のパターンを適用：
+
+```dart
+// 1. メモリ状態を更新
+_viewStates[id] = nextState;
+
+// 2. 永続化データを収集
+final mutations = [...];
+for (final state in result.viewStates) {
+  mutations.add(_recordFromState(state));
+}
+
+// 3. Hiveに即座に永続化
+if (mutations.isNotEmpty) {
+  _persistence.saveBatch(mutations);
+}
+
+// 4. スナップショット再生成（必要な場合）
+if (geometry != null) {
+  final result = _layoutEngine.compute(...);
+  _latestSnapshot = result.snapshot;
+}
+
+// 5. リスナーに通知（1回のみ）
+notifyListeners();
+```
+
+#### 重要性
+永続化を怠ると、後続の`syncLibrary()`呼び出しでHiveから**古い値**を読み込み、以下の問題が発生：
+
+1. `contentChanged=true`が誤検出される（メモリ値とHive値の不一致）
+2. 全カードがリビルドされ、視覚的にカード位置が変わる
+3. ユーザー操作（お気に入りクリックなど）で意図しない並び替えが発生
+
+**修正履歴** (commit 9925ac1):
+- `updateGeometry()`に`saveBatch()`呼び出しを追加
+- お気に入りクリック時のグリッド並び替えバグを解消
+
+### 10.4 Snapshot Regeneration Pattern (2025-11-02)
+
+**原則**: カード状態更新時は`_invalidateSnapshot()`ではなく**スナップショット再生成**
+
+#### 実装パターン（updateCard例）
+```dart
+void updateCard({required String id, ...}) {
+  // メモリ＋永続化
+  _viewStates[id] = nextState;
+  await _persistence.saveBatch([_recordFromState(nextState)]);
+
+  // スナップショット再生成
+  final geometry = _geometry;
+  if (geometry != null) {
+    final result = _layoutEngine.compute(
+      geometry: geometry,
+      states: orderedStates,
+    );
+    _previousSnapshot = _latestSnapshot;
+    _latestSnapshot = result.snapshot;  // ← 新しいスナップショット
+  }
+
+  notifyListeners();
+}
+```
+
+#### 効果
+- ミニマップなどスナップショット消費者が**常に最新**を取得
+- `latestSnapshot` getterが`null`を返さない
+- スナップショットIDが変わるため、`shouldRepaint()`が正しく再描画を検出
+
+**修正履歴** (commit 8225c71):
+- `updateCard()`で`_invalidateSnapshot()`を削除、スナップショット再生成に変更
+- カードリサイズ時のミニマップ更新バグを解消
+
+### 10.5 関連コンポーネント
+- `GridLayoutLayoutEngine`: レイアウト計算とスナップショット生成（`lib/system/grid_layout_layout_engine.dart`）
+- `GridCardPreferencesRepository`: Hiveへのバッチ永続化（`lib/data/grid_card_preferences_repository.dart`）
+- `GridLayoutSurface`: Front/Back buffer管理とセマンティクス更新（`lib/ui/widgets/grid_layout_surface.dart`）
+- `GridViewModule`: Entry reconciliationとGridLayoutStore同期（`lib/ui/grid_view_module.dart`）
+
+### 10.6 テスト方針
+- `test/system/state/grid_layout_store_test.dart`: 永続化タイミングとスナップショット生成を検証
+- `updateGeometry()`/`updateCard()`実行後にHiveモックで`saveBatch()`が呼ばれることを確認
+- スナップショットIDが変わることを検証（`latestSnapshot?.id`の変化）
+- `syncLibrary()`実行時に`contentChanged=false`となることを確認（永続化が正しく機能）
