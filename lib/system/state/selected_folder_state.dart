@@ -14,6 +14,7 @@ class SelectedFolderState {
     required this.isValid,
     required this.viewDirectory,
     required this.isMinimapAlwaysVisible,
+    required this.scrollToTopRequested,
   });
 
   factory SelectedFolderState.initial() => const SelectedFolderState(
@@ -25,6 +26,7 @@ class SelectedFolderState {
         isValid: false,
         viewDirectory: null,
         isMinimapAlwaysVisible: false,
+        scrollToTopRequested: false,
       );
 
   final Directory? current;
@@ -35,6 +37,7 @@ class SelectedFolderState {
   final bool isValid;
   final Directory? viewDirectory;
   final bool isMinimapAlwaysVisible;
+  final bool scrollToTopRequested;
 
   SelectedFolderState copyWith({
     Directory? current,
@@ -45,6 +48,7 @@ class SelectedFolderState {
     bool? isValid,
     Directory? viewDirectory,
     bool? isMinimapAlwaysVisible,
+    bool? scrollToTopRequested,
   }) {
     return SelectedFolderState(
       current: current ?? this.current,
@@ -56,6 +60,7 @@ class SelectedFolderState {
       viewDirectory: viewDirectory ?? this.viewDirectory,
       isMinimapAlwaysVisible:
           isMinimapAlwaysVisible ?? this.isMinimapAlwaysVisible,
+      scrollToTopRequested: scrollToTopRequested ?? this.scrollToTopRequested,
     );
   }
 
@@ -69,6 +74,7 @@ class SelectedFolderState {
       'isValid': isValid,
       'viewDirectory': viewDirectory?.path,
       'isMinimapAlwaysVisible': isMinimapAlwaysVisible,
+      'scrollToTopRequested': scrollToTopRequested,
     };
   }
 
@@ -95,6 +101,7 @@ class SelectedFolderState {
           ? Directory(json['viewDirectory'] as String)
           : (currentPath != null ? Directory(currentPath) : null),
       isMinimapAlwaysVisible: json['isMinimapAlwaysVisible'] as bool? ?? false,
+      scrollToTopRequested: json['scrollToTopRequested'] as bool? ?? false,
     );
   }
 
@@ -112,7 +119,8 @@ class SelectedFolderState {
         other.rootScrollOffset == rootScrollOffset &&
         other.isValid == isValid &&
         other.viewDirectory?.path == viewDirectory?.path &&
-        other.isMinimapAlwaysVisible == isMinimapAlwaysVisible;
+        other.isMinimapAlwaysVisible == isMinimapAlwaysVisible &&
+        other.scrollToTopRequested == scrollToTopRequested;
   }
 
   @override
@@ -125,5 +133,6 @@ class SelectedFolderState {
         isValid,
         viewDirectory?.path,
         isMinimapAlwaysVisible,
+        scrollToTopRequested,
       );
 }

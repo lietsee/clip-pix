@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../data/grid_layout_settings_repository.dart';
 import '../../data/models/grid_layout_settings.dart';
 import '../../system/state/grid_resize_controller.dart';
+import '../../system/state/selected_folder_notifier.dart';
 
 class GridSettingsDialog extends StatefulWidget {
   const GridSettingsDialog({super.key});
@@ -206,6 +207,9 @@ class _GridSettingsDialogState extends State<GridSettingsDialog> {
                                 .copyWith(bulkSpan: _bulkSpan),
                           );
                       if (mounted) {
+                        context
+                            .read<SelectedFolderNotifier>()
+                            .requestScrollToTop();
                         setState(() {
                           _isBulkApplying = false;
                         });

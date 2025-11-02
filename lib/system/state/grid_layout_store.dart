@@ -372,10 +372,24 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
       return;
     }
     await _persistence.saveBatch(batch);
+
+    // [FIX] Regenerate snapshot after bulk span to ensure minimap updates
+    final orderedStates = _orderedIds
+        .map((id) => _viewStates[id])
+        .whereType<GridCardViewState>()
+        .toList(growable: false);
+    final result = _layoutEngine.compute(
+      geometry: geometry,
+      states: orderedStates,
+    );
+    if (_latestSnapshot != null) {
+      _previousSnapshot = _latestSnapshot;
+    }
+    _latestSnapshot = result.snapshot;
+
     if (changed) {
       notifyListeners();
     }
-    _invalidateSnapshot();
   }
 
   @override

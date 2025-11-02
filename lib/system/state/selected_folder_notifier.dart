@@ -92,6 +92,16 @@ class SelectedFolderNotifier extends StateNotifier<SelectedFolderState> {
     await persist();
   }
 
+  /// Request scroll to top (does not persist)
+  void requestScrollToTop() {
+    state = state.copyWith(scrollToTopRequested: true);
+  }
+
+  /// Clear scroll to top request (does not persist)
+  void clearScrollToTopRequest() {
+    state = state.copyWith(scrollToTopRequested: false);
+  }
+
   void _validateCurrentFolder() {
     final current = state.current;
     if (current == null) {

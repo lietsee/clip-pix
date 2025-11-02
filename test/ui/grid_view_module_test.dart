@@ -281,6 +281,7 @@ void main() {
       isValid: true,
       viewDirectory: tempDir,
       isMinimapAlwaysVisible: false,
+      scrollToTopRequested: false,
     );
 
     await tester.pumpWidget(

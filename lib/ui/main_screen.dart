@@ -179,6 +179,23 @@ class _MainScreenState extends State<MainScreen> {
     // Watch ImageLibraryState here instead of in build() to prevent
     // MainScreen rebuild on favorite changes (only _buildBody rebuilds)
     final libraryState = context.watch<ImageLibraryState>();
+
+    // Handle scroll to top request from bulk size adjustment
+    if (folderState.scrollToTopRequested &&
+        folderState.viewMode == FolderViewMode.root) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (_rootScrollController.hasClients) {
+          _rootScrollController.animateTo(
+            0.0,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+        context.read<SelectedFolderNotifier>().clearScrollToTopRequest();
+      });
+    }
+
     final directory = folderState.current;
     if (directory == null || !folderState.isValid) {
       return _EmptyState(
