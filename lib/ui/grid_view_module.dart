@@ -122,11 +122,15 @@ class _GridViewModuleState extends State<GridViewModule> {
         'oldCount=${oldWidget.state.images.length}, newCount=${widget.state.images.length}');
     if (imagesChanged) {
       final orderedImages = _applyDirectoryOrder(widget.state.images);
+      final orderChanged = !listEquals(
+        widget.state.images.map((e) => e.id).toList(),
+        orderedImages.map((e) => e.id).toList(),
+      );
       debugPrint(
         '[GridViewModule] order_comparison: '
         'original=[${widget.state.images.take(3).map((e) => e.id.split('/').last).join(', ')}...] '
         'ordered=[${orderedImages.take(3).map((e) => e.id.split('/').last).join(', ')}...] '
-        'orderChanged=${!listEquals(widget.state.images.map((e) => e.id).toList(), orderedImages.map((e) => e.id).toList())}',
+        'orderChanged=$orderChanged',
       );
       // CRITICAL: Sync viewStates BEFORE reconciling entries
       // This ensures viewStates are populated before build() is triggered by setState
@@ -135,9 +139,14 @@ class _GridViewModuleState extends State<GridViewModule> {
         directoryPath: widget.state.activeDirectory?.path,
         notify: false,
       );
-      // CRITICAL: Pass orderedImages to _reconcileEntries to maintain consistent order
-      // This prevents grid reordering when only properties (favorite, memo) change
-      _reconcileEntries(orderedImages);
+
+      if (orderChanged) {
+        // Order changed: reconcile entries to rebuild grid with new order
+        _reconcileEntries(orderedImages);
+      } else {
+        // Only properties changed: update entry items without setState
+        _updateEntriesProperties(orderedImages);
+      }
     }
   }
 
@@ -587,6 +596,22 @@ class _GridViewModuleState extends State<GridViewModule> {
 
   _GridEntry _createEntry(ContentItem item) {
     return _GridEntry(item: item, opacity: 0);
+  }
+
+  /// Update properties of existing entries without changing order or triggering setState
+  /// Used when only properties (favorite, memo) changed but order remained the same
+  void _updateEntriesProperties(List<ContentItem> items) {
+    final itemMap = {for (final item in items) item.id: item};
+    for (final entry in _entries) {
+      final newItem = itemMap[entry.item.id];
+      if (newItem != null) {
+        entry.item = newItem; // Update item properties only
+        // Do NOT increment version - no rebuild needed
+      }
+    }
+    // Do NOT call setState() - layout unchanged, only data updated
+    debugPrint(
+        '[GridViewModule] _updateEntriesProperties: updated ${_entries.length} entries');
   }
 
   void _reconcileEntries(List<ContentItem> newItems) {
