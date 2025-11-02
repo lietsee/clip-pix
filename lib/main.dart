@@ -70,12 +70,6 @@ Future<void> main(List<String> args) async {
   _registerHiveAdapters();
   final boxes = await _openCoreBoxes();
 
-  // [TEMPORARY] Log Hive database path for debugging
-  if (boxes.appStateBox.path != null) {
-    final hivePath = Directory(boxes.appStateBox.path!).parent.path;
-    debugPrint('[HIVE_PATH] $hivePath');
-  }
-
   runZonedGuarded(
     () => runApp(
       ClipPixApp(
