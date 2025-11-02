@@ -154,10 +154,11 @@ class _GridViewModuleState extends State<GridViewModule> {
 
       // CRITICAL: Sync viewStates BEFORE reconciling entries
       // This ensures viewStates are populated before build() is triggered by setState
+      // notify: true ensures GridLayoutSurface._frontStates is updated to prevent visual layout bugs
       _layoutStore.syncLibrary(
         orderedImages,
         directoryPath: widget.state.activeDirectory?.path,
-        notify: false,
+        notify: true,
       );
 
       debugPrint('[GridViewModule] after_syncLibrary: synced ${orderedImages.length} items to layoutStore');
@@ -321,12 +322,15 @@ class _GridViewModuleState extends State<GridViewModule> {
                           // [DIAGNOSTIC] Log _entries order at build time (once per build)
                           if (index == 0) {
                             final entriesBuildIds = _entries.take(10).map((e) => e.item.id.split('/').last).toList();
+                            final viewStatesFirst10 = layoutStore.viewStates.take(10).map((s) => s.id.split('/').last).toList();
                             final note2BuildIdx = _entries.indexWhere((e) => e.item.id.contains('note_2.txt'));
                             final g3jjyBuildIdx = _entries.indexWhere((e) => e.item.id.contains('G3JJYDIa8AAezjR_orig.jpg'));
                             debugPrint(
                               '[GridViewModule] build_pinterest_entries: '
+                              'snapshotId=${snapshot?.id}, isStaging=$isStaging, '
                               'note_2.txt@$note2BuildIdx, G3JJYDIa8AAezjR_orig.jpg@$g3jjyBuildIdx, '
-                              'first10=$entriesBuildIds'
+                              '_entries[0-9]=$entriesBuildIds, '
+                              'viewStates[0-9]=$viewStatesFirst10'
                             );
                           }
 

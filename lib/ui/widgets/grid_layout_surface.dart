@@ -238,6 +238,16 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
       return;
     }
     final latestSnapshot = _store.latestSnapshot;
+
+    // [DIAGNOSTIC] Track store changes and snapshot updates
+    final prevSnapshotId = _frontSnapshot?.id;
+    final nextSnapshotId = latestSnapshot?.id;
+    debugPrint(
+      '[GridLayoutSurface] store_changed: '
+      'prevSnapshot=$prevSnapshotId, nextSnapshot=$nextSnapshotId, '
+      'mutating=$_mutationInProgress, viewStateCount=${_store.viewStates.length}'
+    );
+
     setState(() {
       if (!_mutationInProgress) {
         _frontStates = _cloneStates(_store.viewStates);
@@ -246,6 +256,12 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
           _frontGeometry = latestSnapshot.geometry;
           _debugLog('front_snapshot_updated id=${latestSnapshot.id}');
         }
+
+        // [DIAGNOSTIC] Confirm front buffer update
+        debugPrint(
+          '[GridLayoutSurface] front_buffer_updated: '
+          'snapshotId=${latestSnapshot?.id}, statesCount=${_frontStates.length}'
+        );
       }
     });
     _scheduleSemanticsUpdate();

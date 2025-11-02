@@ -149,6 +149,14 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     String? directoryPath,
     bool notify = true,
   }) {
+    // [DIAGNOSTIC] Track syncLibrary call
+    debugPrint(
+      '[GridLayoutStore] syncLibrary_start: '
+      'notify=$notify, itemCount=${items.length}, '
+      'currentViewStateCount=${_viewStates.length}, '
+      'directoryPath=$directoryPath'
+    );
+
     _directoryPath = directoryPath;
     _items
       ..clear()
@@ -184,6 +192,15 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
       notifyListeners();
     }
     _invalidateSnapshot();
+
+    // [DIAGNOSTIC] Track syncLibrary completion
+    debugPrint(
+      '[GridLayoutStore] syncLibrary_complete: '
+      'orderChanged=$orderChanged, contentChanged=$contentChanged, '
+      'willNotify=${notify && (orderChanged || contentChanged)}, '
+      'newViewStateCount=${_viewStates.length}, '
+      'first3Ids=${_orderedIds.take(3).map((id) => id.split('/').last).join(", ")}'
+    );
   }
 
   bool hasViewState(String id) {
