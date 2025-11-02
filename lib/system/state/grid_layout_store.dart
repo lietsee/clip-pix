@@ -303,13 +303,27 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
             _epsilon ||
         (previousGeometry.gap - geometry.gap).abs() > _epsilon;
     changed = changed || geometryChanged;
+
+    // Collect mutations for persistence
+    final List<GridLayoutPreferenceRecord> mutations = [];
     for (final state in result.viewStates) {
       final existing = _viewStates[state.id];
       if (!changed && existing != null && !_viewStateEquals(existing, state)) {
         changed = true;
       }
       _viewStates[state.id] = state;
+      mutations.add(_recordFromState(state));
     }
+
+    // [FIX] Persist updated geometry to Hive to prevent stale reads in syncLibrary
+    if (mutations.isNotEmpty) {
+      debugPrint(
+        '[GridLayoutStore] updateGeometry_persist: '
+        'mutationCount=${mutations.length}, geometryChanged=$geometryChanged'
+      );
+      _persistence.saveBatch(mutations);
+    }
+
     // Preserve previous snapshot before updating to new one
     if (_latestSnapshot != null) {
       _previousSnapshot = _latestSnapshot;
