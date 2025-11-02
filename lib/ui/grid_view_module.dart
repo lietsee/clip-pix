@@ -123,13 +123,13 @@ class _GridViewModuleState extends State<GridViewModule> {
     if (imagesChanged) {
       // [DIAGNOSTIC] Track specific image positions in state.images
       final stateImages = widget.state.images;
-      final note2Index = stateImages.indexWhere((item) => item.id.contains('note_2.txt'));
-      final g3jjyIndex = stateImages.indexWhere((item) => item.id.contains('G3JJYDIa8AAezjR_orig.jpg'));
-      debugPrint(
-        '[GridViewModule] state_images_order: '
-        'note_2.txt@$note2Index, G3JJYDIa8AAezjR_orig.jpg@$g3jjyIndex, '
-        'first10=[${stateImages.take(10).map((e) => e.id.split('/').last).join(', ')}]'
-      );
+      final note2Index =
+          stateImages.indexWhere((item) => item.id.contains('note_2.txt'));
+      final g3jjyIndex = stateImages
+          .indexWhere((item) => item.id.contains('G3JJYDIa8AAezjR_orig.jpg'));
+      debugPrint('[GridViewModule] state_images_order: '
+          'note_2.txt@$note2Index, G3JJYDIa8AAezjR_orig.jpg@$g3jjyIndex, '
+          'first10=[${stateImages.take(10).map((e) => e.id.split('/').last).join(', ')}]');
 
       final orderedImages = _applyDirectoryOrder(widget.state.images);
       final orderChanged = !listEquals(
@@ -144,37 +144,38 @@ class _GridViewModuleState extends State<GridViewModule> {
       );
 
       // [DIAGNOSTIC] Track orderedImages positions before syncLibrary
-      final note2OrderedIdx = orderedImages.indexWhere((item) => item.id.contains('note_2.txt'));
-      final g3jjyOrderedIdx = orderedImages.indexWhere((item) => item.id.contains('G3JJYDIa8AAezjR_orig.jpg'));
-      debugPrint(
-        '[GridViewModule] before_syncLibrary: '
-        'note_2.txt@$note2OrderedIdx, G3JJYDIa8AAezjR_orig.jpg@$g3jjyOrderedIdx, '
-        'first10=[${orderedImages.take(10).map((e) => e.id.split('/').last).join(', ')}]'
-      );
+      final note2OrderedIdx =
+          orderedImages.indexWhere((item) => item.id.contains('note_2.txt'));
+      final g3jjyOrderedIdx = orderedImages
+          .indexWhere((item) => item.id.contains('G3JJYDIa8AAezjR_orig.jpg'));
+      debugPrint('[GridViewModule] before_syncLibrary: '
+          'note_2.txt@$note2OrderedIdx, G3JJYDIa8AAezjR_orig.jpg@$g3jjyOrderedIdx, '
+          'first10=[${orderedImages.take(10).map((e) => e.id.split('/').last).join(', ')}]');
 
       // CRITICAL: Sync viewStates BEFORE reconciling entries
       // This ensures viewStates are populated before build() is triggered by setState
       // notify: true - Let GridLayoutStore decide when to notify based on orderChanged || contentChanged
       // This ensures snapshot updates are propagated to GridLayoutSurface
-      debugPrint(
-        '[GridViewModule] syncLibrary_params: '
-        'orderChanged=$orderChanged, notify=true'
-      );
+      debugPrint('[GridViewModule] syncLibrary_params: '
+          'orderChanged=$orderChanged, notify=true');
       _layoutStore.syncLibrary(
         orderedImages,
         directoryPath: widget.state.activeDirectory?.path,
         notify: true,
       );
 
-      debugPrint('[GridViewModule] after_syncLibrary: synced ${orderedImages.length} items to layoutStore');
+      debugPrint(
+          '[GridViewModule] after_syncLibrary: synced ${orderedImages.length} items to layoutStore');
 
       // [DIAGNOSTIC] Track which method is called
-      final willReconcile = _entries.isEmpty || orderChanged;
-      debugPrint(
-        '[GridViewModule] reconcile_decision: '
-        '_entries.isEmpty=${_entries.isEmpty}, orderChanged=$orderChanged, '
-        'will_call=${willReconcile ? "_reconcileEntries" : "_updateEntriesProperties"}'
-      );
+      final activeEntriesCount = _entries.where((e) => !e.isRemoving).length;
+      final itemCountChanged = widget.state.images.length != activeEntriesCount;
+      final willReconcile =
+          _entries.isEmpty || orderChanged || itemCountChanged;
+      debugPrint('[GridViewModule] reconcile_decision: '
+          '_entries.isEmpty=${_entries.isEmpty}, orderChanged=$orderChanged, '
+          'itemCountChanged=$itemCountChanged (images=${widget.state.images.length}, activeEntries=$activeEntriesCount), '
+          'will_call=${willReconcile ? "_reconcileEntries" : "_updateEntriesProperties"}');
 
       if (willReconcile) {
         // Initial load or order changed: reconcile entries to rebuild grid
@@ -334,17 +335,24 @@ class _GridViewModuleState extends State<GridViewModule> {
                         (context, index) {
                           // [DIAGNOSTIC] Log _entries order at build time (once per build)
                           if (index == 0) {
-                            final entriesBuildIds = _entries.take(10).map((e) => e.item.id.split('/').last).toList();
-                            final viewStatesFirst10 = layoutStore.viewStates.take(10).map((s) => s.id.split('/').last).toList();
-                            final note2BuildIdx = _entries.indexWhere((e) => e.item.id.contains('note_2.txt'));
-                            final g3jjyBuildIdx = _entries.indexWhere((e) => e.item.id.contains('G3JJYDIa8AAezjR_orig.jpg'));
+                            final entriesBuildIds = _entries
+                                .take(10)
+                                .map((e) => e.item.id.split('/').last)
+                                .toList();
+                            final viewStatesFirst10 = layoutStore.viewStates
+                                .take(10)
+                                .map((s) => s.id.split('/').last)
+                                .toList();
+                            final note2BuildIdx = _entries.indexWhere(
+                                (e) => e.item.id.contains('note_2.txt'));
+                            final g3jjyBuildIdx = _entries.indexWhere((e) =>
+                                e.item.id.contains('G3JJYDIa8AAezjR_orig.jpg'));
                             debugPrint(
-                              '[GridViewModule] build_pinterest_entries: '
-                              'snapshotId=${snapshot?.id}, isStaging=$isStaging, '
-                              'note_2.txt@$note2BuildIdx, G3JJYDIa8AAezjR_orig.jpg@$g3jjyBuildIdx, '
-                              '_entries[0-9]=$entriesBuildIds, '
-                              'viewStates[0-9]=$viewStatesFirst10'
-                            );
+                                '[GridViewModule] build_pinterest_entries: '
+                                'snapshotId=${snapshot?.id}, isStaging=$isStaging, '
+                                'note_2.txt@$note2BuildIdx, G3JJYDIa8AAezjR_orig.jpg@$g3jjyBuildIdx, '
+                                '_entries[0-9]=$entriesBuildIds, '
+                                'viewStates[0-9]=$viewStatesFirst10');
                           }
 
                           if (index >= _entries.length) {
@@ -353,11 +361,9 @@ class _GridViewModuleState extends State<GridViewModule> {
                           final entry = _entries[index];
 
                           // [DIAGNOSTIC] Log EVERY childBuilder call to track render order
-                          debugPrint(
-                            '[GridViewModule] childBuilder_call: '
-                            'index=$index, item=${entry.item.id.split('/').last}, '
-                            'version=${entry.version}, isRemoving=${entry.isRemoving}'
-                          );
+                          debugPrint('[GridViewModule] childBuilder_call: '
+                              'index=$index, item=${entry.item.id.split('/').last}, '
+                              'version=${entry.version}, isRemoving=${entry.isRemoving}');
 
                           // Skip entries being removed to avoid ViewState access errors
                           if (entry.isRemoving) {
@@ -445,12 +451,10 @@ class _GridViewModuleState extends State<GridViewModule> {
     final item = entry.item;
 
     // [DIAGNOSTIC] Log card construction to track which cards are being built
-    debugPrint(
-      '[GridViewModule] _buildCard: '
-      'id=${item.id.split('/').last}, '
-      'version=${entry.version}, '
-      'usePersistentKey=$usePersistentKey'
-    );
+    debugPrint('[GridViewModule] _buildCard: '
+        'id=${item.id.split('/').last}, '
+        'version=${entry.version}, '
+        'usePersistentKey=$usePersistentKey');
 
     final animatedKey = usePersistentKey
         ? ObjectKey(entry)
@@ -670,14 +674,15 @@ class _GridViewModuleState extends State<GridViewModule> {
   /// Used when only properties (favorite, memo) changed but order remained the same
   void _updateEntriesProperties(List<ContentItem> items) {
     // [DIAGNOSTIC] Track _entries order before update
-    final entriesBeforeIds = _entries.take(10).map((e) => e.item.id.split('/').last).toList();
-    final note2BeforeIdx = _entries.indexWhere((e) => e.item.id.contains('note_2.txt'));
-    final g3jjyBeforeIdx = _entries.indexWhere((e) => e.item.id.contains('G3JJYDIa8AAezjR_orig.jpg'));
-    debugPrint(
-      '[GridViewModule] _updateEntriesProperties_before: '
-      'note_2.txt@$note2BeforeIdx, G3JJYDIa8AAezjR_orig.jpg@$g3jjyBeforeIdx, '
-      'first10=$entriesBeforeIds'
-    );
+    final entriesBeforeIds =
+        _entries.take(10).map((e) => e.item.id.split('/').last).toList();
+    final note2BeforeIdx =
+        _entries.indexWhere((e) => e.item.id.contains('note_2.txt'));
+    final g3jjyBeforeIdx = _entries
+        .indexWhere((e) => e.item.id.contains('G3JJYDIa8AAezjR_orig.jpg'));
+    debugPrint('[GridViewModule] _updateEntriesProperties_before: '
+        'note_2.txt@$note2BeforeIdx, G3JJYDIa8AAezjR_orig.jpg@$g3jjyBeforeIdx, '
+        'first10=$entriesBeforeIds');
 
     final itemMap = {for (final item in items) item.id: item};
     int versionIncrementCount = 0;
@@ -685,10 +690,8 @@ class _GridViewModuleState extends State<GridViewModule> {
     int processedCount = 0;
 
     // [DIAGNOSTIC] Log loop start
-    debugPrint(
-      '[GridViewModule] _updateEntriesProperties_loop_start: '
-      'entriesCount=${_entries.length}, itemsCount=${items.length}'
-    );
+    debugPrint('[GridViewModule] _updateEntriesProperties_loop_start: '
+        'entriesCount=${_entries.length}, itemsCount=${items.length}');
 
     try {
       for (final entry in _entries) {
@@ -706,11 +709,9 @@ class _GridViewModuleState extends State<GridViewModule> {
 
           // [DIAGNOSTIC] Log only if item changed (reduce log volume)
           if (itemChanged) {
-            debugPrint(
-              '[GridViewModule] item_changed: '
-              'id=$shortId, favoriteChanged=$favoriteChanged, '
-              'memoChanged=$memoChanged, pathChanged=$pathChanged'
-            );
+            debugPrint('[GridViewModule] item_changed: '
+                'id=$shortId, favoriteChanged=$favoriteChanged, '
+                'memoChanged=$memoChanged, pathChanged=$pathChanged');
           }
 
           final oldFavorite = entry.item.favorite;
@@ -725,13 +726,11 @@ class _GridViewModuleState extends State<GridViewModule> {
 
             // [DIAGNOSTIC] Log which specific card's version was incremented and why
             try {
-              debugPrint(
-                '[GridViewModule] version_increment: '
-                'item=$shortId, '
-                'newVersion=${entry.version}, '
-                'favoriteChanged=$favoriteChanged (old=$oldFavorite, new=$newFavorite), '
-                'memoChanged=$memoChanged, pathChanged=$pathChanged'
-              );
+              debugPrint('[GridViewModule] version_increment: '
+                  'item=$shortId, '
+                  'newVersion=${entry.version}, '
+                  'favoriteChanged=$favoriteChanged (old=$oldFavorite, new=$newFavorite), '
+                  'memoChanged=$memoChanged, pathChanged=$pathChanged');
             } catch (e) {
               debugPrint('[GridViewModule] version_increment_log_error: $e');
             }
@@ -740,24 +739,24 @@ class _GridViewModuleState extends State<GridViewModule> {
       }
     } catch (e, stackTrace) {
       debugPrint('[GridViewModule] _updateEntriesProperties_error: $e');
-      debugPrint('[GridViewModule] _updateEntriesProperties_stackTrace: $stackTrace');
+      debugPrint(
+          '[GridViewModule] _updateEntriesProperties_stackTrace: $stackTrace');
     }
 
-    debugPrint(
-      '[GridViewModule] _updateEntriesProperties_loop_complete: '
-      'processedCount=$processedCount, versionIncrementCount=$versionIncrementCount'
-    );
+    debugPrint('[GridViewModule] _updateEntriesProperties_loop_complete: '
+        'processedCount=$processedCount, versionIncrementCount=$versionIncrementCount');
 
     // [DIAGNOSTIC] Track _entries order after update
-    final entriesAfterIds = _entries.take(10).map((e) => e.item.id.split('/').last).toList();
-    final note2AfterIdx = _entries.indexWhere((e) => e.item.id.contains('note_2.txt'));
-    final g3jjyAfterIdx = _entries.indexWhere((e) => e.item.id.contains('G3JJYDIa8AAezjR_orig.jpg'));
+    final entriesAfterIds =
+        _entries.take(10).map((e) => e.item.id.split('/').last).toList();
+    final note2AfterIdx =
+        _entries.indexWhere((e) => e.item.id.contains('note_2.txt'));
+    final g3jjyAfterIdx = _entries
+        .indexWhere((e) => e.item.id.contains('G3JJYDIa8AAezjR_orig.jpg'));
 
-    debugPrint(
-      '[GridViewModule] _updateEntriesProperties_after: '
-      'note_2.txt@$note2AfterIdx, G3JJYDIa8AAezjR_orig.jpg@$g3jjyAfterIdx, '
-      'first10=$entriesAfterIds, updated=${_entries.length} entries, versionIncremented=$versionIncrementCount'
-    );
+    debugPrint('[GridViewModule] _updateEntriesProperties_after: '
+        'note_2.txt@$note2AfterIdx, G3JJYDIa8AAezjR_orig.jpg@$g3jjyAfterIdx, '
+        'first10=$entriesAfterIds, updated=${_entries.length} entries, versionIncremented=$versionIncrementCount');
 
     // Call setState() only if any item changed to trigger ImageCard rebuilds
     if (anyChanged) {
@@ -808,8 +807,8 @@ class _GridViewModuleState extends State<GridViewModule> {
         // Only increment version if item properties actually changed
         // This prevents mass rebuilds when only one item's favorite/memo changed
         final itemChanged = existing.item.favorite != item.favorite ||
-                           existing.item.memo != item.memo ||
-                           existing.item.filePath != item.filePath;
+            existing.item.memo != item.memo ||
+            existing.item.filePath != item.filePath;
         existing.item = item;
         updatedCount++;
         if (existing.isRemoving) {
@@ -843,8 +842,7 @@ class _GridViewModuleState extends State<GridViewModule> {
     }
 
     _logEntries('reconcile_after_pending', reordered);
-    debugPrint(
-        '[GridViewModule] _reconcileEntries completed: '
+    debugPrint('[GridViewModule] _reconcileEntries completed: '
         'updated=$updatedCount, new=$newCount, versionIncremented=$versionIncrementCount, total=${reordered.length}');
     setState(() {
       _entries = reordered;
