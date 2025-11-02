@@ -150,12 +150,10 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     bool notify = true,
   }) {
     // [DIAGNOSTIC] Track syncLibrary call
-    debugPrint(
-      '[GridLayoutStore] syncLibrary_start: '
-      'notify=$notify, itemCount=${items.length}, '
-      'currentViewStateCount=${_viewStates.length}, '
-      'directoryPath=$directoryPath'
-    );
+    debugPrint('[GridLayoutStore] syncLibrary_start: '
+        'notify=$notify, itemCount=${items.length}, '
+        'currentViewStateCount=${_viewStates.length}, '
+        'directoryPath=$directoryPath');
 
     _directoryPath = directoryPath;
     _items
@@ -183,7 +181,8 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
 
     // [DIAGNOSTIC] If contentChanged, log which states differ
     if (contentChanged) {
-      debugPrint('[GridLayoutStore] contentChanged=true, checking differences...');
+      debugPrint(
+          '[GridLayoutStore] contentChanged=true, checking differences...');
       int diffCount = 0;
       for (final entry in nextStates.entries) {
         final oldState = _viewStates[entry.key];
@@ -193,13 +192,11 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
         } else if (!_viewStateEquals(oldState, entry.value)) {
           final old = oldState;
           final next = entry.value;
-          debugPrint(
-            '  [DIFF] ${entry.key.split('/').last}: '
-            'width=${old.width.toStringAsFixed(2)}→${next.width.toStringAsFixed(2)}, '
-            'height=${old.height.toStringAsFixed(2)}→${next.height.toStringAsFixed(2)}, '
-            'span=${old.columnSpan}→${next.columnSpan}, '
-            'customH=${old.customHeight?.toStringAsFixed(2)}→${next.customHeight?.toStringAsFixed(2)}'
-          );
+          debugPrint('  [DIFF] ${entry.key.split('/').last}: '
+              'width=${old.width.toStringAsFixed(2)}→${next.width.toStringAsFixed(2)}, '
+              'height=${old.height.toStringAsFixed(2)}→${next.height.toStringAsFixed(2)}, '
+              'span=${old.columnSpan}→${next.columnSpan}, '
+              'customH=${old.customHeight?.toStringAsFixed(2)}→${next.customHeight?.toStringAsFixed(2)}');
           diffCount++;
         }
       }
@@ -242,10 +239,8 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
         _latestSnapshot = result.snapshot;
 
         // [DIAGNOSTIC] Track snapshot regeneration
-        debugPrint(
-          '[GridLayoutStore] snapshot_regenerated: '
-          'prevId=$prevSnapshotId, newId=${_latestSnapshot?.id}'
-        );
+        debugPrint('[GridLayoutStore] snapshot_regenerated: '
+            'prevId=$prevSnapshotId, newId=${_latestSnapshot?.id}');
       } else {
         // No geometry available yet, just invalidate
         _invalidateSnapshot();
@@ -260,13 +255,11 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     }
 
     // [DIAGNOSTIC] Track syncLibrary completion
-    debugPrint(
-      '[GridLayoutStore] syncLibrary_complete: '
-      'orderChanged=$orderChanged, contentChanged=$contentChanged, '
-      'willNotify=${notify && (orderChanged || contentChanged)}, '
-      'newViewStateCount=${_viewStates.length}, '
-      'first3Ids=${_orderedIds.take(3).map((id) => id.split('/').last).join(", ")}'
-    );
+    debugPrint('[GridLayoutStore] syncLibrary_complete: '
+        'orderChanged=$orderChanged, contentChanged=$contentChanged, '
+        'willNotify=${notify && (orderChanged || contentChanged)}, '
+        'newViewStateCount=${_viewStates.length}, '
+        'first3Ids=${_orderedIds.take(3).map((id) => id.split('/').last).join(", ")}');
   }
 
   bool hasViewState(String id) {
@@ -317,10 +310,8 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
 
     // [FIX] Persist updated geometry to Hive to prevent stale reads in syncLibrary
     if (mutations.isNotEmpty) {
-      debugPrint(
-        '[GridLayoutStore] updateGeometry_persist: '
-        'mutationCount=${mutations.length}, geometryChanged=$geometryChanged'
-      );
+      debugPrint('[GridLayoutStore] updateGeometry_persist: '
+          'mutationCount=${mutations.length}, geometryChanged=$geometryChanged');
       _persistence.saveBatch(mutations);
     }
 
@@ -502,8 +493,25 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
 
     _viewStates[id] = nextState;
     await _persistence.saveBatch([_recordFromState(nextState)]);
+
+    // [FIX] Regenerate snapshot after card update to ensure minimap updates
+    final geometry = _geometry;
+    if (geometry != null) {
+      final orderedStates = _orderedIds
+          .map((id) => _viewStates[id])
+          .whereType<GridCardViewState>()
+          .toList(growable: false);
+      final result = _layoutEngine.compute(
+        geometry: geometry,
+        states: orderedStates,
+      );
+      if (_latestSnapshot != null) {
+        _previousSnapshot = _latestSnapshot;
+      }
+      _latestSnapshot = result.snapshot;
+    }
+
     notifyListeners();
-    _invalidateSnapshot();
   }
 
   bool _statesEqual(
