@@ -590,19 +590,18 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   void _reconcileEntries(List<ContentItem> newItems) {
-    final orderedItems = _applyDirectoryOrder(newItems);
     debugPrint(
-        '[GridViewModule] _reconcileEntries: newItems=${newItems.length}, orderedItems=${orderedItems.length}, currentEntries=${_entries.length}');
+        '[GridViewModule] _reconcileEntries: newItems=${newItems.length}, currentEntries=${_entries.length}');
     _logEntries('reconcile_before', _entries);
     final duplicateIncoming = _findDuplicateIds(
-      orderedItems.map((item) => item.id),
+      newItems.map((item) => item.id),
     );
     if (duplicateIncoming.isNotEmpty) {
       debugPrint(
         '[GridViewModule] incoming duplicates detected: $duplicateIncoming',
       );
     }
-    final newIds = orderedItems.map((item) => item.id).toSet();
+    final newIds = newItems.map((item) => item.id).toSet();
     final existingMap = {for (final entry in _entries) entry.item.id: entry};
 
     for (final entry in _entries) {
@@ -624,7 +623,7 @@ class _GridViewModuleState extends State<GridViewModule> {
     int updatedCount = 0;
     int newCount = 0;
     final List<_GridEntry> reordered = <_GridEntry>[];
-    for (final item in orderedItems) {
+    for (final item in newItems) {
       final existing = existingMap[item.id];
       if (existing != null) {
         existing.item = item;
