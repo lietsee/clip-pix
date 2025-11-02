@@ -67,12 +67,14 @@ Future<void> main(List<String> args) async {
   _configureLogging();
 
   await Hive.initFlutter();
-
-  // [TEMPORARY] Log Hive database path for debugging
-  debugPrint('[HIVE_PATH] ${Directory(Hive.path!).absolute.path}');
-
   _registerHiveAdapters();
   final boxes = await _openCoreBoxes();
+
+  // [TEMPORARY] Log Hive database path for debugging
+  if (boxes.appStateBox.path != null) {
+    final hivePath = Directory(boxes.appStateBox.path!).parent.path;
+    debugPrint('[HIVE_PATH] $hivePath');
+  }
 
   runZonedGuarded(
     () => runApp(
