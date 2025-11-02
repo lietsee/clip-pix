@@ -141,19 +141,33 @@ class _GridViewModuleState extends State<GridViewModule> {
     }
   }
 
-  /// Check if image list changed based on IDs, order, and properties
+  /// Check if image list changed based on IDs or properties (order-independent)
+  /// Returns false if only order changed, true if IDs or properties changed
   bool _imagesChanged(List<ContentItem> oldList, List<ContentItem> newList) {
-    if (oldList.length != newList.length) return true;
-    for (int i = 0; i < oldList.length; i++) {
-      final oldItem = oldList[i];
-      final newItem = newList[i];
-      if (oldItem.id != newItem.id) return true;
-      // Check property changes that should trigger reconciliation
+    // Check if IDs changed (additions/deletions)
+    final oldIds = oldList.map((e) => e.id).toSet();
+    final newIds = newList.map((e) => e.id).toSet();
+
+    // Different set sizes or different members = IDs changed
+    if (oldIds.length != newIds.length) return true;
+    if (!oldIds.containsAll(newIds)) return true;
+
+    // Build maps for property comparison (order-independent)
+    final oldMap = {for (var item in oldList) item.id: item};
+    final newMap = {for (var item in newList) item.id: item};
+
+    // Check if properties changed for any ID
+    for (final id in newIds) {
+      final oldItem = oldMap[id]!;
+      final newItem = newMap[id]!;
+
       if (oldItem.favorite != newItem.favorite ||
           oldItem.memo != newItem.memo) {
         return true;
       }
     }
+
+    // Only order changed, not IDs or properties
     return false;
   }
 
