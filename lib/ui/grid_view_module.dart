@@ -122,6 +122,12 @@ class _GridViewModuleState extends State<GridViewModule> {
         'oldCount=${oldWidget.state.images.length}, newCount=${widget.state.images.length}');
     if (imagesChanged) {
       final orderedImages = _applyDirectoryOrder(widget.state.images);
+      debugPrint(
+        '[GridViewModule] order_comparison: '
+        'original=[${widget.state.images.take(3).map((e) => e.id.split('/').last).join(', ')}...] '
+        'ordered=[${orderedImages.take(3).map((e) => e.id.split('/').last).join(', ')}...] '
+        'orderChanged=${!listEquals(widget.state.images.map((e) => e.id).toList(), orderedImages.map((e) => e.id).toList())}',
+      );
       // CRITICAL: Sync viewStates BEFORE reconciling entries
       // This ensures viewStates are populated before build() is triggered by setState
       _layoutStore.syncLibrary(
@@ -129,7 +135,9 @@ class _GridViewModuleState extends State<GridViewModule> {
         directoryPath: widget.state.activeDirectory?.path,
         notify: false,
       );
-      _reconcileEntries(widget.state.images);
+      // CRITICAL: Pass orderedImages to _reconcileEntries to maintain consistent order
+      // This prevents grid reordering when only properties (favorite, memo) change
+      _reconcileEntries(orderedImages);
     }
   }
 
