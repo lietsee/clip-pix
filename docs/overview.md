@@ -38,6 +38,22 @@ UI操作(Ctrl+C) → ClipboardCopyService → (ガード付クリップボード
 - **セマンティクス問題解決**: ExcludeSemanticsとオーバーレイ方式でアサーション解決
 - **詳細**: `docs/system/pinterest_grid_migration.md`, `docs/system/grid_layout_surface.md` 参照
 
+### 最近の重要な修正 (2025-11-02)
+1. **ミニマップ更新バグ修正** (commit 8225c71)
+   - 個別カードリサイズ時にミニマップが更新されない問題を解決
+   - `GridLayoutStore.updateCard()`でスナップショット再生成パターンを確立
+   - 詳細: `docs/system/grid_layout_store_migration.md#snapshot-regeneration-pattern-2025-11-02`
+
+2. **グリッド並び替えバグ修正** (commit 9925ac1)
+   - お気に入りクリック時にグリッド全体が並び替わる問題を解決
+   - `GridLayoutStore.updateGeometry()`でHive永続化を徹底（write-through cacheパターン）
+   - 詳細: `docs/system/grid_layout_store_migration.md#persistence-synchronization-2025-11-02`
+
+3. **テキストコピー時のアサーション失敗修正** (commit 62608ac)
+   - クリップボード監視中にテキストをコピーすると画面が赤くなる問題を解決
+   - `GridViewModule`の reconcile 判定に`itemCountChanged`チェックを追加
+   - 詳細: `docs/ui/grid_view.md#12-entry-reconciliation-decision-2025-11-02追加`
+
 ## 7. URL画像保存 ✅ 実装完了
 - **実装状況**: `UrlDownloadService` として実装完了（2025-10-25）
 - **使用パッケージ**: `http` パッケージ

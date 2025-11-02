@@ -217,6 +217,105 @@ ClipPixプロジェクトの実装に合わせて、包括的なドキュメン�
 
 ---
 
+## Update 2025-11-02: Bug Fix Documentation
+
+**更新日**: 2025-11-02
+**ステータス**: 完了
+
+### 概要
+
+2025年11月2日に修正された3つの重要なバグを反映して、7つのコアドキュメントを更新しました。
+
+### 修正されたバグ
+
+1. **ミニマップ更新バグ** (commit 8225c71)
+   - 問題: 個別カードリサイズ時にミニマップが更新されない
+   - 原因: `updateCard()`が`_invalidateSnapshot()`を呼び出し、`_latestSnapshot`を`null`にセット
+   - 修正: スナップショット再生成パターンを確立
+   - ファイル: `lib/system/state/grid_layout_store.dart`
+
+2. **グリッド並び替えバグ** (commit 9925ac1)
+   - 問題: お気に入りクリック時にグリッド全体が並び替わる
+   - 原因: `updateGeometry()`がHiveに永続化していない
+   - 修正: Write-through cacheパターンで即座に永続化
+   - ファイル: `lib/system/state/grid_layout_store.dart`
+
+3. **テキストコピー時のアサーション失敗** (commit 62608ac)
+   - 問題: クリップボード監視中にテキストをコピーすると画面が赤くなる
+   - 原因: `itemCountChanged`検出がなく、`_updateEntriesProperties()`が新規エントリーを追加しない
+   - 修正: Reconcile判定に`itemCountChanged`チェックを追加
+   - ファイル: `lib/ui/grid_view_module.dart`
+
+### 更新されたドキュメント（7ファイル）
+
+#### Phase 1: コアアーキテクチャドキュメント (HIGH PRIORITY)
+
+1. **docs/system/grid_layout_store_migration.md** ✅
+   - 「実装状況」セクション追加（完了した改善、進行中の課題）
+   - 「Snapshot Regeneration Pattern」セクション追加
+   - 「Persistence Synchronization」セクション追加
+   - コード例（Before/After）とフロー説明
+
+2. **docs/system/state_management.md** ✅
+   - セクション10「GridLayoutStore」を追加
+   - 主要APIと永続化タイミングを表形式で整理
+   - Persistence Synchronization Patternを詳細説明
+   - Snapshot Regeneration Patternを詳細説明
+   - テスト方針を追加
+
+3. **docs/architecture/grid_rendering_pipeline.md** ✅
+   - Stage 4-B「個別カード更新フロー」を追加
+   - Mermaidシーケンス図追加（updateCard フロー）
+   - commit 8225c71の修正内容（Before/After）を詳述
+
+4. **docs/architecture/data_flow.md** ✅
+   - フロー4「カードリサイズ」を更新
+   - Mermaidシーケンス図にMinimapを追加
+   - 「重要な改善 (2025-11-02)」セクションを追加
+   - Before/After比較とコード例
+
+5. **docs/ui/grid_view.md** ✅
+   - セクション12「Entry Reconciliation Decision」を追加
+   - 決定ロジックの詳細説明（実装コード付き）
+   - 修正履歴 (commit 62608ac) を詳述
+   - `_reconcileEntries()` vs `_updateEntriesProperties()` の比較表
+   - パフォーマンス考慮を追加
+
+#### Phase 2: メタドキュメント (MEDIUM PRIORITY)
+
+6. **docs/overview.md** ✅
+   - セクション6に「最近の重要な修正 (2025-11-02)」を追加
+   - 3つのバグ修正を簡潔に要約
+   - 詳細ドキュメントへのリンク
+
+7. **docs/DOCUMENTATION_UPDATE_2025-10-28.md** ✅ (本ファイル)
+   - 「Update 2025-11-02: Bug Fix Documentation」セクションを追加
+
+### ドキュメント統計（2025-11-02更新分）
+
+- **更新ファイル数**: 7
+- **追加行数**: 約500行
+- **追加セクション**: 9個
+- **Mermaidダイアグラム追加**: 2個
+- **コード例**: 10個以上
+
+### 更新内容の特徴
+
+- ✅ Before/Afterコード比較で修正内容を明確化
+- ✅ Mermaidダイアグラムで視覚的に説明
+- ✅ 根本原因と修正方法を詳述
+- ✅ コミットハッシュで追跡可能
+- ✅ 関連ドキュメントへのクロスリファレンス
+
+### 関連コミット
+
+- 8225c71: fix: regenerate snapshot after card update to ensure minimap updates
+- 9925ac1: fix: update GridLayoutStore.updateGeometry() to persist to Hive
+- 62608ac: fix: detect item count changes to prevent assertion failure on text copy
+- d8290ae: docs: update core architecture docs with recent bug fixes (Phase 1)
+
+---
+
 **作成者**: Claude Code
 **レビュー**: 必要に応じてプロジェクトメンテナーによるレビュー推奨
 **次回更新**: 新機能実装時、または四半期ごとの定期レビュー
