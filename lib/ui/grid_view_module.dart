@@ -696,12 +696,6 @@ class _GridViewModuleState extends State<GridViewModule> {
         final itemId = entry.item.id;
         final shortId = itemId.split('/').last;
 
-        // [DIAGNOSTIC] Log each entry processing start
-        debugPrint(
-          '[GridViewModule] processing_entry: '
-          'index=$processedCount, id=$shortId, currentFavorite=${entry.item.favorite}'
-        );
-
         final newItem = itemMap[itemId];
         if (newItem != null) {
           // Check if properties that affect visual display have changed
@@ -710,12 +704,14 @@ class _GridViewModuleState extends State<GridViewModule> {
           final pathChanged = entry.item.filePath != newItem.filePath;
           final itemChanged = favoriteChanged || memoChanged || pathChanged;
 
-          // [DIAGNOSTIC] Log change detection
-          debugPrint(
-            '[GridViewModule] change_detection: '
-            'id=$shortId, itemChanged=$itemChanged, '
-            'favoriteChanged=$favoriteChanged, memoChanged=$memoChanged, pathChanged=$pathChanged'
-          );
+          // [DIAGNOSTIC] Log only if item changed (reduce log volume)
+          if (itemChanged) {
+            debugPrint(
+              '[GridViewModule] item_changed: '
+              'id=$shortId, favoriteChanged=$favoriteChanged, '
+              'memoChanged=$memoChanged, pathChanged=$pathChanged'
+            );
+          }
 
           final oldFavorite = entry.item.favorite;
           final newFavorite = newItem.favorite;
@@ -740,8 +736,6 @@ class _GridViewModuleState extends State<GridViewModule> {
               debugPrint('[GridViewModule] version_increment_log_error: $e');
             }
           }
-        } else {
-          debugPrint('[GridViewModule] item_not_found_in_map: id=$shortId');
         }
       }
     } catch (e, stackTrace) {

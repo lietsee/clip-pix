@@ -181,6 +181,37 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     final bool orderChanged = !listEquals(_orderedIds, nextOrder);
     final bool contentChanged = !_statesEqual(_viewStates, nextStates);
 
+    // [DIAGNOSTIC] If contentChanged, log which states differ
+    if (contentChanged) {
+      debugPrint('[GridLayoutStore] contentChanged=true, checking differences...');
+      int diffCount = 0;
+      for (final entry in nextStates.entries) {
+        final oldState = _viewStates[entry.key];
+        if (oldState == null) {
+          debugPrint('  [NEW] ${entry.key.split('/').last}');
+          diffCount++;
+        } else if (!_viewStateEquals(oldState, entry.value)) {
+          final old = oldState;
+          final next = entry.value;
+          debugPrint(
+            '  [DIFF] ${entry.key.split('/').last}: '
+            'width=${old.width.toStringAsFixed(2)}→${next.width.toStringAsFixed(2)}, '
+            'height=${old.height.toStringAsFixed(2)}→${next.height.toStringAsFixed(2)}, '
+            'span=${old.columnSpan}→${next.columnSpan}, '
+            'customH=${old.customHeight?.toStringAsFixed(2)}→${next.customHeight?.toStringAsFixed(2)}'
+          );
+          diffCount++;
+        }
+      }
+      for (final oldKey in _viewStates.keys) {
+        if (!nextStates.containsKey(oldKey)) {
+          debugPrint('  [REMOVED] ${oldKey.split('/').last}');
+          diffCount++;
+        }
+      }
+      debugPrint('[GridLayoutStore] Total differences: $diffCount');
+    }
+
     _viewStates
       ..clear()
       ..addAll(nextStates);
