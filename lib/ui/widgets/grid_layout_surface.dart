@@ -260,7 +260,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
         // [DIAGNOSTIC] Confirm front buffer update
         debugPrint(
           '[GridLayoutSurface] front_buffer_updated: '
-          'snapshotId=${latestSnapshot?.id}, statesCount=${_frontStates.length}'
+          'snapshotId=${latestSnapshot?.id}, statesCount=${_frontStates?.length ?? 0}'
         );
       }
     });
