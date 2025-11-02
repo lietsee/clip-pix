@@ -682,35 +682,77 @@ class _GridViewModuleState extends State<GridViewModule> {
     final itemMap = {for (final item in items) item.id: item};
     int versionIncrementCount = 0;
     bool anyChanged = false;
+    int processedCount = 0;
 
-    for (final entry in _entries) {
-      final newItem = itemMap[entry.item.id];
-      if (newItem != null) {
-        // Check if properties that affect visual display have changed
-        final favoriteChanged = entry.item.favorite != newItem.favorite;
-        final memoChanged = entry.item.memo != newItem.memo;
-        final pathChanged = entry.item.filePath != newItem.filePath;
-        final itemChanged = favoriteChanged || memoChanged || pathChanged;
+    // [DIAGNOSTIC] Log loop start
+    debugPrint(
+      '[GridViewModule] _updateEntriesProperties_loop_start: '
+      'entriesCount=${_entries.length}, itemsCount=${items.length}'
+    );
 
-        final oldItem = entry.item;
-        entry.item = newItem; // Update item properties
+    try {
+      for (final entry in _entries) {
+        processedCount++;
+        final itemId = entry.item.id;
+        final shortId = itemId.split('/').last;
 
-        if (itemChanged) {
-          entry.version += 1; // Trigger ImageCard rebuild only if changed
-          versionIncrementCount++;
-          anyChanged = true;
+        // [DIAGNOSTIC] Log each entry processing start
+        debugPrint(
+          '[GridViewModule] processing_entry: '
+          'index=$processedCount, id=$shortId, currentFavorite=${entry.item.favorite}'
+        );
 
-          // [DIAGNOSTIC] Log which specific card's version was incremented and why
+        final newItem = itemMap[itemId];
+        if (newItem != null) {
+          // Check if properties that affect visual display have changed
+          final favoriteChanged = entry.item.favorite != newItem.favorite;
+          final memoChanged = entry.item.memo != newItem.memo;
+          final pathChanged = entry.item.filePath != newItem.filePath;
+          final itemChanged = favoriteChanged || memoChanged || pathChanged;
+
+          // [DIAGNOSTIC] Log change detection
           debugPrint(
-            '[GridViewModule] version_increment: '
-            'item=${entry.item.id.split('/').last}, '
-            'newVersion=${entry.version}, '
-            'favoriteChanged=$favoriteChanged (${oldItem.favorite}→${newItem.favorite}), '
-            'memoChanged=$memoChanged, pathChanged=$pathChanged'
+            '[GridViewModule] change_detection: '
+            'id=$shortId, itemChanged=$itemChanged, '
+            'favoriteChanged=$favoriteChanged, memoChanged=$memoChanged, pathChanged=$pathChanged'
           );
+
+          final oldFavorite = entry.item.favorite;
+          final newFavorite = newItem.favorite;
+          final oldItem = entry.item;
+          entry.item = newItem; // Update item properties
+
+          if (itemChanged) {
+            entry.version += 1; // Trigger ImageCard rebuild only if changed
+            versionIncrementCount++;
+            anyChanged = true;
+
+            // [DIAGNOSTIC] Log which specific card's version was incremented and why
+            try {
+              debugPrint(
+                '[GridViewModule] version_increment: '
+                'item=$shortId, '
+                'newVersion=${entry.version}, '
+                'favoriteChanged=$favoriteChanged (old=$oldFavorite, new=$newFavorite), '
+                'memoChanged=$memoChanged, pathChanged=$pathChanged'
+              );
+            } catch (e) {
+              debugPrint('[GridViewModule] version_increment_log_error: $e');
+            }
+          }
+        } else {
+          debugPrint('[GridViewModule] item_not_found_in_map: id=$shortId');
         }
       }
+    } catch (e, stackTrace) {
+      debugPrint('[GridViewModule] _updateEntriesProperties_error: $e');
+      debugPrint('[GridViewModule] _updateEntriesProperties_stackTrace: $stackTrace');
     }
+
+    debugPrint(
+      '[GridViewModule] _updateEntriesProperties_loop_complete: '
+      'processedCount=$processedCount, versionIncrementCount=$versionIncrementCount'
+    );
 
     // [DIAGNOSTIC] Track _entries order after update
     final entriesAfterIds = _entries.take(10).map((e) => e.item.id.split('/').last).toList();
