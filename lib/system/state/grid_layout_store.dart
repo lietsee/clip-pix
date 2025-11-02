@@ -188,10 +188,45 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
       ..clear()
       ..addAll(nextOrder);
 
+    // Regenerate snapshot if order or content changed
+    // This ensures PinterestGrid gets a new snapshot ID and can detect layout changes
+    if (orderChanged || contentChanged) {
+      final geometry = _geometry;
+      if (geometry != null) {
+        // Generate new snapshot with updated viewStates
+        final orderedStates = _orderedIds
+            .map((id) => _viewStates[id])
+            .whereType<GridCardViewState>()
+            .toList(growable: false);
+        final result = _layoutEngine.compute(
+          geometry: geometry,
+          states: orderedStates,
+        );
+
+        // Preserve previous snapshot before updating
+        final prevSnapshotId = _latestSnapshot?.id;
+        if (_latestSnapshot != null) {
+          _previousSnapshot = _latestSnapshot;
+        }
+        _latestSnapshot = result.snapshot;
+
+        // [DIAGNOSTIC] Track snapshot regeneration
+        debugPrint(
+          '[GridLayoutStore] snapshot_regenerated: '
+          'prevId=$prevSnapshotId, newId=${_latestSnapshot?.id}'
+        );
+      } else {
+        // No geometry available yet, just invalidate
+        _invalidateSnapshot();
+      }
+    } else {
+      // No changes, just invalidate (keeps previous behavior)
+      _invalidateSnapshot();
+    }
+
     if (notify && (orderChanged || contentChanged)) {
       notifyListeners();
     }
-    _invalidateSnapshot();
 
     // [DIAGNOSTIC] Track syncLibrary completion
     debugPrint(
