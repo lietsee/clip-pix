@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
 import 'package:state_notifier/state_notifier.dart';
 
 import '../../data/file_info_manager.dart';
+import '../../data/grid_order_repository.dart';
 import '../../data/image_repository.dart';
 import '../../data/models/content_item.dart';
 import 'image_library_state.dart';
@@ -12,13 +15,16 @@ class ImageLibraryNotifier extends StateNotifier<ImageLibraryState> {
   ImageLibraryNotifier(
     this._repository, {
     FileInfoManager? fileInfoManager,
+    GridOrderRepository? orderRepository,
     Logger? logger,
   })  : _fileInfoManager = fileInfoManager,
+        _orderRepository = orderRepository,
         _logger = logger ?? Logger('ImageLibraryNotifier'),
         super(ImageLibraryState.initial());
 
   final ImageRepository _repository;
   final FileInfoManager? _fileInfoManager;
+  final GridOrderRepository? _orderRepository;
   final Logger _logger;
   Future<void>? _loadingTask;
 
@@ -39,8 +45,11 @@ class ImageLibraryNotifier extends StateNotifier<ImageLibraryState> {
       return;
     }
 
+    // Apply Hive DB order
+    final orderedImages = _applyDirectoryOrder(images, directory.path);
+
     state = state.copyWith(
-      images: images,
+      images: orderedImages,
       isLoading: false,
       clearError: true,
       activeDirectory: directory,
@@ -76,7 +85,9 @@ class ImageLibraryNotifier extends StateNotifier<ImageLibraryState> {
     } else {
       updated.insert(0, item);
     }
-    state = state.copyWith(images: updated, clearError: true);
+    // Apply Hive DB order (new item added, need to reorder)
+    final orderedUpdated = _applyDirectoryOrder(updated, directory.path);
+    state = state.copyWith(images: orderedUpdated, clearError: true);
   }
 
   void remove(String path) {
@@ -168,5 +179,55 @@ class ImageLibraryNotifier extends StateNotifier<ImageLibraryState> {
 
   void clear() {
     state = ImageLibraryState.initial();
+  }
+
+  /// Apply directory order from GridOrderRepository (Hive DB)
+  List<ContentItem> _applyDirectoryOrder(
+    List<ContentItem> items,
+    String directoryPath,
+  ) {
+    final repo = _orderRepository;
+    if (repo == null) {
+      return items;
+    }
+
+    final stored = repo.getOrder(directoryPath);
+    if (items.isEmpty) {
+      return items;
+    }
+
+    final ids = items.map((item) => item.id).toList();
+    final currentSet = ids.toSet();
+    final orderedIds = <String>[];
+
+    // Apply stored order
+    for (final id in stored) {
+      if (currentSet.contains(id)) {
+        orderedIds.add(id);
+      }
+    }
+
+    // Add new items not in stored order
+    for (final id in ids) {
+      if (!orderedIds.contains(id)) {
+        orderedIds.add(id);
+      }
+    }
+
+    // Save updated order if changed
+    if (!listEquals(stored, orderedIds)) {
+      scheduleMicrotask(() => repo.save(directoryPath, orderedIds));
+    }
+
+    // Create ordered list
+    final map = {for (final item in items) item.id: item};
+    final orderedItems = <ContentItem>[];
+    for (final id in orderedIds) {
+      final item = map[id];
+      if (item != null) {
+        orderedItems.add(item);
+      }
+    }
+    return orderedItems;
   }
 }

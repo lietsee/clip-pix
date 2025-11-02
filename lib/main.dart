@@ -398,6 +398,7 @@ class ClipPixApp extends StatelessWidget {
         create: (context) => ImageLibraryNotifier(
           context.read<ImageRepository>(),
           fileInfoManager: context.read<FileInfoManager>(),
+          orderRepository: context.read<GridOrderRepository>(),
         ),
       ),
       Provider<FolderPickerService>(create: (_) => FolderPickerService()),
