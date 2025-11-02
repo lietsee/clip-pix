@@ -140,8 +140,8 @@ class _GridViewModuleState extends State<GridViewModule> {
         notify: false,
       );
 
-      if (orderChanged) {
-        // Order changed: reconcile entries to rebuild grid with new order
+      if (_entries.isEmpty || orderChanged) {
+        // Initial load or order changed: reconcile entries to rebuild grid
         _reconcileEntries(orderedImages);
       } else {
         // Only properties changed: update entry items without setState
