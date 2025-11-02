@@ -168,7 +168,15 @@ class _GridViewModuleState extends State<GridViewModule> {
 
       debugPrint('[GridViewModule] after_syncLibrary: synced ${orderedImages.length} items to layoutStore');
 
-      if (_entries.isEmpty || orderChanged) {
+      // [DIAGNOSTIC] Track which method is called
+      final willReconcile = _entries.isEmpty || orderChanged;
+      debugPrint(
+        '[GridViewModule] reconcile_decision: '
+        '_entries.isEmpty=${_entries.isEmpty}, orderChanged=$orderChanged, '
+        'will_call=${willReconcile ? "_reconcileEntries" : "_updateEntriesProperties"}'
+      );
+
+      if (willReconcile) {
         // Initial load or order changed: reconcile entries to rebuild grid
         _reconcileEntries(orderedImages);
       } else {
@@ -708,10 +716,16 @@ class _GridViewModuleState extends State<GridViewModule> {
 
     int updatedCount = 0;
     int newCount = 0;
+    int versionIncrementCount = 0;
     final List<_GridEntry> reordered = <_GridEntry>[];
     for (final item in newItems) {
       final existing = existingMap[item.id];
       if (existing != null) {
+        // Only increment version if item properties actually changed
+        // This prevents mass rebuilds when only one item's favorite/memo changed
+        final itemChanged = existing.item.favorite != item.favorite ||
+                           existing.item.memo != item.memo ||
+                           existing.item.filePath != item.filePath;
         existing.item = item;
         updatedCount++;
         if (existing.isRemoving) {
@@ -721,7 +735,10 @@ class _GridViewModuleState extends State<GridViewModule> {
         if (existing.opacity != 1) {
           existing.opacity = 1;
         }
-        existing.version += 1;
+        if (itemChanged) {
+          existing.version += 1;
+          versionIncrementCount++;
+        }
         reordered.add(existing);
       } else {
         final entry = _createEntry(item);
@@ -743,7 +760,8 @@ class _GridViewModuleState extends State<GridViewModule> {
 
     _logEntries('reconcile_after_pending', reordered);
     debugPrint(
-        '[GridViewModule] _reconcileEntries completed: updated=$updatedCount, new=$newCount, total=${reordered.length}');
+        '[GridViewModule] _reconcileEntries completed: '
+        'updated=$updatedCount, new=$newCount, versionIncremented=$versionIncrementCount, total=${reordered.length}');
     setState(() {
       _entries = reordered;
     });
