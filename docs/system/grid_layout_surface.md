@@ -2,11 +2,14 @@
 
 **実装ファイル**: `lib/ui/widgets/grid_layout_surface.dart`
 **作成日**: 2025-10-28
+**最終更新**: 2025-11-02
 **ステータス**: 実装完了
 
 ## 概要
 
 `GridLayoutSurface` は、グリッドレイアウトのレンダリングを管理するSurfaceレイヤーのウィジェットです。Front/Backダブルバッファアーキテクチャを採用し、ジオメトリ変更時のスムーズな遷移とセマンティクスアサーションの防止を実現しています。
+
+> **Recent Updates (2025-11-02)**: スナップショット再生成はSurface層ではなく、GridLayoutStore層（`lib/system/state/grid_layout_store.dart`）で実施されます。`updateCard()`および`updateGeometry()`メソッドが新しいスナップショットを生成し、Surfaceはそれを受け取ってレンダリングします。詳細は`docs/system/grid_layout_store_migration.md#snapshot-regeneration-pattern-2025-11-02`を参照してください。
 
 ### 設計原則
 

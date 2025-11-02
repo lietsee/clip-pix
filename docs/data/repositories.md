@@ -70,6 +70,18 @@ Future<void> saveBatch(List<GridCardPreference> prefs)  // 一括保存
 void delete(String id)  // 削除
 ```
 
+#### 重要性 (2025-11-02追加)
+
+`saveBatch()`はGridLayoutStoreの**write-through cacheパターン**の中核です：
+
+- **メモリとHiveの同期**: すべてのカード状態更新メソッド（`updateGeometry()`, `updateCard()`, `applyBulkSpan()`, `restoreSnapshot()`）は、メモリ状態を更新後、即座に`saveBatch()`を呼び出してHiveに永続化します。
+
+- **永続化を怠ると**: 後続の`syncLibrary()`呼び出しでHiveから**古い値**を読み込み、メモリ値とHive値の不一致が発生し、意図しないカードリビルドやグリッド並び替えが発生します（commit 9925ac1で修正）。
+
+- **パフォーマンス**: バッチ保存により、個別保存よりもI/O効率が向上します。
+
+詳細は`docs/system/state_management.md#103-persistence-synchronization-pattern-2025-11-02`を参照してください。
+
 ### 3. GridOrderRepository
 
 **ファイル**: `lib/data/grid_order_repository.dart`
