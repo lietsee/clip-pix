@@ -154,11 +154,16 @@ class _GridViewModuleState extends State<GridViewModule> {
 
       // CRITICAL: Sync viewStates BEFORE reconciling entries
       // This ensures viewStates are populated before build() is triggered by setState
-      // notify: true ensures GridLayoutSurface._frontStates is updated to prevent visual layout bugs
+      // notify: orderChanged - Only notify GridLayoutSurface when order changes to avoid unnecessary rebuilds
+      // Property-only changes (favorite/memo) are handled quietly by _updateEntriesProperties()
+      debugPrint(
+        '[GridViewModule] syncLibrary_params: '
+        'orderChanged=$orderChanged, notify=$orderChanged'
+      );
       _layoutStore.syncLibrary(
         orderedImages,
         directoryPath: widget.state.activeDirectory?.path,
-        notify: true,
+        notify: orderChanged,
       );
 
       debugPrint('[GridViewModule] after_syncLibrary: synced ${orderedImages.length} items to layoutStore');
