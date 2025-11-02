@@ -351,6 +351,14 @@ class _GridViewModuleState extends State<GridViewModule> {
                             return null;
                           }
                           final entry = _entries[index];
+
+                          // [DIAGNOSTIC] Log EVERY childBuilder call to track render order
+                          debugPrint(
+                            '[GridViewModule] childBuilder_call: '
+                            'index=$index, item=${entry.item.id.split('/').last}, '
+                            'version=${entry.version}, isRemoving=${entry.isRemoving}'
+                          );
+
                           // Skip entries being removed to avoid ViewState access errors
                           if (entry.isRemoving) {
                             return null;
@@ -435,6 +443,15 @@ class _GridViewModuleState extends State<GridViewModule> {
     String? snapshotId,
   }) {
     final item = entry.item;
+
+    // [DIAGNOSTIC] Log card construction to track which cards are being built
+    debugPrint(
+      '[GridViewModule] _buildCard: '
+      'id=${item.id.split('/').last}, '
+      'version=${entry.version}, '
+      'usePersistentKey=$usePersistentKey'
+    );
+
     final animatedKey = usePersistentKey
         ? ObjectKey(entry)
         : ValueKey(
@@ -670,16 +687,27 @@ class _GridViewModuleState extends State<GridViewModule> {
       final newItem = itemMap[entry.item.id];
       if (newItem != null) {
         // Check if properties that affect visual display have changed
-        final itemChanged = entry.item.favorite != newItem.favorite ||
-                           entry.item.memo != newItem.memo ||
-                           entry.item.filePath != newItem.filePath;
+        final favoriteChanged = entry.item.favorite != newItem.favorite;
+        final memoChanged = entry.item.memo != newItem.memo;
+        final pathChanged = entry.item.filePath != newItem.filePath;
+        final itemChanged = favoriteChanged || memoChanged || pathChanged;
 
+        final oldItem = entry.item;
         entry.item = newItem; // Update item properties
 
         if (itemChanged) {
           entry.version += 1; // Trigger ImageCard rebuild only if changed
           versionIncrementCount++;
           anyChanged = true;
+
+          // [DIAGNOSTIC] Log which specific card's version was incremented and why
+          debugPrint(
+            '[GridViewModule] version_increment: '
+            'item=${entry.item.id.split('/').last}, '
+            'newVersion=${entry.version}, '
+            'favoriteChanged=$favoriteChanged (${oldItem.favorite}→${newItem.favorite}), '
+            'memoChanged=$memoChanged, pathChanged=$pathChanged'
+          );
         }
       }
     }

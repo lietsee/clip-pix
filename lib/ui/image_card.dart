@@ -158,6 +158,13 @@ class _ImageCardState extends State<ImageCard> {
     }
     // Trigger rebuild when favorite changes to update FavoriteIndicator
     if (oldWidget.item.favorite != widget.item.favorite) {
+      // [DIAGNOSTIC] Log favorite property change detection
+      debugPrint(
+        '[ImageCard] didUpdateWidget_favorite_changed: '
+        'item=${widget.item.id.split('/').last}, '
+        'oldFavorite=${oldWidget.item.favorite}, '
+        'newFavorite=${widget.item.favorite}'
+      );
       setState(() {});
     }
     if (oldWidget.columnWidth != widget.columnWidth ||
@@ -238,6 +245,13 @@ class _ImageCardState extends State<ImageCard> {
 
   @override
   Widget build(BuildContext context) {
+    // [DIAGNOSTIC] Log every ImageCard build to track actual rebuilds
+    debugPrint(
+      '[ImageCard] build_called: '
+      'item=${widget.item.id.split('/').last}, '
+      'favorite=${widget.item.favorite}'
+    );
+
     return Focus(
       focusNode: _focusNode,
       onKeyEvent: _handleKeyEvent,
