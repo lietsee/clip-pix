@@ -121,6 +121,16 @@ class _GridViewModuleState extends State<GridViewModule> {
         '[GridViewModule] didUpdateWidget: imagesChanged=$imagesChanged, '
         'oldCount=${oldWidget.state.images.length}, newCount=${widget.state.images.length}');
     if (imagesChanged) {
+      // [DIAGNOSTIC] Track specific image positions in state.images
+      final stateImages = widget.state.images;
+      final note2Index = stateImages.indexWhere((item) => item.id.contains('note_2.txt'));
+      final g3jjyIndex = stateImages.indexWhere((item) => item.id.contains('G3JJYDIa8AAezjR_orig.jpg'));
+      debugPrint(
+        '[GridViewModule] state_images_order: '
+        'note_2.txt@$note2Index, G3JJYDIa8AAezjR_orig.jpg@$g3jjyIndex, '
+        'first10=[${stateImages.take(10).map((e) => e.id.split('/').last).join(', ')}]'
+      );
+
       final orderedImages = _applyDirectoryOrder(widget.state.images);
       final orderChanged = !listEquals(
         widget.state.images.map((e) => e.id).toList(),
@@ -132,6 +142,16 @@ class _GridViewModuleState extends State<GridViewModule> {
         'ordered=[${orderedImages.take(3).map((e) => e.id.split('/').last).join(', ')}...] '
         'orderChanged=$orderChanged',
       );
+
+      // [DIAGNOSTIC] Track orderedImages positions before syncLibrary
+      final note2OrderedIdx = orderedImages.indexWhere((item) => item.id.contains('note_2.txt'));
+      final g3jjyOrderedIdx = orderedImages.indexWhere((item) => item.id.contains('G3JJYDIa8AAezjR_orig.jpg'));
+      debugPrint(
+        '[GridViewModule] before_syncLibrary: '
+        'note_2.txt@$note2OrderedIdx, G3JJYDIa8AAezjR_orig.jpg@$g3jjyOrderedIdx, '
+        'first10=[${orderedImages.take(10).map((e) => e.id.split('/').last).join(', ')}]'
+      );
+
       // CRITICAL: Sync viewStates BEFORE reconciling entries
       // This ensures viewStates are populated before build() is triggered by setState
       _layoutStore.syncLibrary(
@@ -139,6 +159,8 @@ class _GridViewModuleState extends State<GridViewModule> {
         directoryPath: widget.state.activeDirectory?.path,
         notify: false,
       );
+
+      debugPrint('[GridViewModule] after_syncLibrary: synced ${orderedImages.length} items to layoutStore');
 
       if (_entries.isEmpty || orderChanged) {
         // Initial load or order changed: reconcile entries to rebuild grid
@@ -296,6 +318,18 @@ class _GridViewModuleState extends State<GridViewModule> {
                       ),
                       delegate: SliverChildBuilderDelegate(
                         (context, index) {
+                          // [DIAGNOSTIC] Log _entries order at build time (once per build)
+                          if (index == 0) {
+                            final entriesBuildIds = _entries.take(10).map((e) => e.item.id.split('/').last).toList();
+                            final note2BuildIdx = _entries.indexWhere((e) => e.item.id.contains('note_2.txt'));
+                            final g3jjyBuildIdx = _entries.indexWhere((e) => e.item.id.contains('G3JJYDIa8AAezjR_orig.jpg'));
+                            debugPrint(
+                              '[GridViewModule] build_pinterest_entries: '
+                              'note_2.txt@$note2BuildIdx, G3JJYDIa8AAezjR_orig.jpg@$g3jjyBuildIdx, '
+                              'first10=$entriesBuildIds'
+                            );
+                          }
+
                           if (index >= _entries.length) {
                             return null;
                           }
@@ -601,6 +635,16 @@ class _GridViewModuleState extends State<GridViewModule> {
   /// Update properties of existing entries without changing order or triggering setState
   /// Used when only properties (favorite, memo) changed but order remained the same
   void _updateEntriesProperties(List<ContentItem> items) {
+    // [DIAGNOSTIC] Track _entries order before update
+    final entriesBeforeIds = _entries.take(10).map((e) => e.item.id.split('/').last).toList();
+    final note2BeforeIdx = _entries.indexWhere((e) => e.item.id.contains('note_2.txt'));
+    final g3jjyBeforeIdx = _entries.indexWhere((e) => e.item.id.contains('G3JJYDIa8AAezjR_orig.jpg'));
+    debugPrint(
+      '[GridViewModule] _updateEntriesProperties_before: '
+      'note_2.txt@$note2BeforeIdx, G3JJYDIa8AAezjR_orig.jpg@$g3jjyBeforeIdx, '
+      'first10=$entriesBeforeIds'
+    );
+
     final itemMap = {for (final item in items) item.id: item};
     for (final entry in _entries) {
       final newItem = itemMap[entry.item.id];
@@ -609,9 +653,17 @@ class _GridViewModuleState extends State<GridViewModule> {
         // Do NOT increment version - no rebuild needed
       }
     }
+
+    // [DIAGNOSTIC] Track _entries order after update
+    final entriesAfterIds = _entries.take(10).map((e) => e.item.id.split('/').last).toList();
+    final note2AfterIdx = _entries.indexWhere((e) => e.item.id.contains('note_2.txt'));
+    final g3jjyAfterIdx = _entries.indexWhere((e) => e.item.id.contains('G3JJYDIa8AAezjR_orig.jpg'));
     // Do NOT call setState() - layout unchanged, only data updated
     debugPrint(
-        '[GridViewModule] _updateEntriesProperties: updated ${_entries.length} entries');
+      '[GridViewModule] _updateEntriesProperties_after: '
+      'note_2.txt@$note2AfterIdx, G3JJYDIa8AAezjR_orig.jpg@$g3jjyAfterIdx, '
+      'first10=$entriesAfterIds, updated=${_entries.length} entries'
+    );
   }
 
   void _reconcileEntries(List<ContentItem> newItems) {
