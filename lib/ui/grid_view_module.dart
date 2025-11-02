@@ -154,16 +154,16 @@ class _GridViewModuleState extends State<GridViewModule> {
 
       // CRITICAL: Sync viewStates BEFORE reconciling entries
       // This ensures viewStates are populated before build() is triggered by setState
-      // notify: orderChanged - Only notify GridLayoutSurface when order changes to avoid unnecessary rebuilds
-      // Property-only changes (favorite/memo) are handled quietly by _updateEntriesProperties()
+      // notify: true - Let GridLayoutStore decide when to notify based on orderChanged || contentChanged
+      // This ensures snapshot updates are propagated to GridLayoutSurface
       debugPrint(
         '[GridViewModule] syncLibrary_params: '
-        'orderChanged=$orderChanged, notify=$orderChanged'
+        'orderChanged=$orderChanged, notify=true'
       );
       _layoutStore.syncLibrary(
         orderedImages,
         directoryPath: widget.state.activeDirectory?.path,
-        notify: orderChanged,
+        notify: true,
       );
 
       debugPrint('[GridViewModule] after_syncLibrary: synced ${orderedImages.length} items to layoutStore');
@@ -663,11 +663,24 @@ class _GridViewModuleState extends State<GridViewModule> {
     );
 
     final itemMap = {for (final item in items) item.id: item};
+    int versionIncrementCount = 0;
+    bool anyChanged = false;
+
     for (final entry in _entries) {
       final newItem = itemMap[entry.item.id];
       if (newItem != null) {
-        entry.item = newItem; // Update item properties only
-        // Do NOT increment version - no rebuild needed
+        // Check if properties that affect visual display have changed
+        final itemChanged = entry.item.favorite != newItem.favorite ||
+                           entry.item.memo != newItem.memo ||
+                           entry.item.filePath != newItem.filePath;
+
+        entry.item = newItem; // Update item properties
+
+        if (itemChanged) {
+          entry.version += 1; // Trigger ImageCard rebuild only if changed
+          versionIncrementCount++;
+          anyChanged = true;
+        }
       }
     }
 
@@ -675,12 +688,19 @@ class _GridViewModuleState extends State<GridViewModule> {
     final entriesAfterIds = _entries.take(10).map((e) => e.item.id.split('/').last).toList();
     final note2AfterIdx = _entries.indexWhere((e) => e.item.id.contains('note_2.txt'));
     final g3jjyAfterIdx = _entries.indexWhere((e) => e.item.id.contains('G3JJYDIa8AAezjR_orig.jpg'));
-    // Do NOT call setState() - layout unchanged, only data updated
+
     debugPrint(
       '[GridViewModule] _updateEntriesProperties_after: '
       'note_2.txt@$note2AfterIdx, G3JJYDIa8AAezjR_orig.jpg@$g3jjyAfterIdx, '
-      'first10=$entriesAfterIds, updated=${_entries.length} entries'
+      'first10=$entriesAfterIds, updated=${_entries.length} entries, versionIncremented=$versionIncrementCount'
     );
+
+    // Call setState() only if any item changed to trigger ImageCard rebuilds
+    if (anyChanged) {
+      setState(() {
+        // Entry versions updated above
+      });
+    }
   }
 
   void _reconcileEntries(List<ContentItem> newItems) {
