@@ -1079,7 +1079,8 @@ class _GridViewModuleState extends State<GridViewModule> {
 
       if (windowAppeared) {
         // Register process with manager (handles tracking and exit monitoring)
-        _processManager!.registerProcess(item.id, process);
+        await _processManager!
+            .registerProcess(item.id, process, alwaysOnTop: false);
         debugPrint('[GridViewModule] Launched text preview for ${item.id}');
         return true;
       } else {

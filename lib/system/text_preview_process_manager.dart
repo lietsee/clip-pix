@@ -50,11 +50,16 @@ class TextPreviewProcessManager extends ChangeNotifier {
   }
 
   /// Register a running process
-  void registerProcess(String itemId, Process process) {
+  Future<void> registerProcess(String itemId, Process process,
+      {bool alwaysOnTop = false}) async {
     _processes[itemId] = process;
     _launching.remove(itemId);
+
+    // Persist to repository for restoration on next app start
+    await _repository?.add(itemId, alwaysOnTop: alwaysOnTop);
+
     debugPrint(
-        '[TextPreviewProcessManager] Registered process for $itemId (PID: ${process.pid})');
+        '[TextPreviewProcessManager] Registered process for $itemId (PID: ${process.pid}, alwaysOnTop: $alwaysOnTop)');
 
     // Monitor process exit
     process.exitCode.then((exitCode) {
@@ -113,16 +118,13 @@ class TextPreviewProcessManager extends ChangeNotifier {
       debugPrint(
           '[TextPreviewProcessManager] Killing process ${entry.key} (PID: ${entry.value.pid})');
       entry.value.kill();
-      // Synchronously remove from repository
-      _repository?.remove(entry.key);
-      debugPrint(
-          '[TextPreviewProcessManager] Removed ${entry.key} from open previews repository');
+      // DON'T remove from repository - preserve for next session restoration
     }
 
     _processes.clear();
     _launching.clear();
     debugPrint(
-        '[TextPreviewProcessManager] All processes killed and cleaned up');
+        '[TextPreviewProcessManager] All processes killed (repository preserved for restoration)');
     notifyListeners();
   }
 
