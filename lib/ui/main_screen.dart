@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:window_manager/window_manager.dart';
 
 import '../data/models/image_entry.dart';
 import '../data/models/image_source_type.dart';
@@ -32,7 +33,7 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
+class _MainScreenState extends State<MainScreen> with WindowListener {
   late ScrollController _rootScrollController;
   late final ScrollController _subfolderScrollController;
   String? _lastLoadedPath;
@@ -53,6 +54,7 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void initState() {
     super.initState();
+    windowManager.addListener(this);
     _rootScrollController = ScrollController();
     _subfolderScrollController = ScrollController();
     _keyboardFocusNode = FocusNode();
@@ -60,6 +62,8 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   void dispose() {
+    windowManager.removeListener(this);
+
     // Kill all text preview processes before disposing
     try {
       final processManager = context.read<TextPreviewProcessManager>();
@@ -74,6 +78,25 @@ class _MainScreenState extends State<MainScreen> {
     _rootScrollController.dispose();
     _subfolderScrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  Future<void> onWindowClose() async {
+    debugPrint('[MainScreen] onWindowClose called');
+
+    // Kill all text preview processes BEFORE window closes
+    try {
+      final processManager = context.read<TextPreviewProcessManager>();
+      processManager.killAll();
+      debugPrint(
+          '[MainScreen] Killed all text preview processes in onWindowClose');
+    } catch (e) {
+      debugPrint(
+          '[MainScreen] Error killing preview processes in onWindowClose: $e');
+    }
+
+    // Allow window to close
+    await windowManager.destroy();
   }
 
   @override
