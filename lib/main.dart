@@ -388,19 +388,22 @@ Future<void> _launchTextPreviewMode(String payload) async {
 
     await windowManager.focus();
     debugPrint('[TextPreviewMode] Window focused');
+
+    // Run app AFTER window is fully initialized
+    // This keeps the event loop alive and prevents early process exit
+    runApp(
+      _TextPreviewApp(
+        item: item,
+        initialAlwaysOnTop: initialTop,
+        repository: repository,
+      ),
+    );
+
+    debugPrint('[TextPreviewMode] runApp completed inside callback');
   });
 
-      debugPrint('[TextPreviewMode] waitUntilReadyToShow completed');
-
-      runApp(
-        _TextPreviewApp(
-          item: item,
-          initialAlwaysOnTop: initialTop,
-          repository: repository,
-        ),
-      );
-
-      debugPrint('[TextPreviewMode] runApp completed');
+      debugPrint('[TextPreviewMode] waitUntilReadyToShow callback scheduled');
+      // Event loop is now maintained by runApp, process stays alive
     },
     (error, stackTrace) {
       debugPrint('[TextPreviewMode] FATAL ERROR: $error');
