@@ -294,29 +294,40 @@ Future<void> _launchTextPreviewMode(String payload) async {
   // Initialize window_manager for frameless window
   await windowManager.ensureInitialized();
 
-  // Initialize Hive for text preview state persistence
-  await Hive.initFlutter();
-  _registerHiveAdapters();
-  await Hive.openBox<TextPreviewState>('text_preview_state');
-
-  // Load saved window bounds
-  final repository = TextPreviewStateRepository();
-  final validator = ScreenBoundsValidator();
-  final savedState = repository.get(item.id);
+  // Initialize Hive with SEPARATE path for this preview process
+  TextPreviewStateRepository? repository;
   Rect? restoredBounds;
 
-  if (savedState != null &&
-      savedState.x != null &&
-      savedState.y != null &&
-      savedState.width != null &&
-      savedState.height != null) {
-    final bounds = Rect.fromLTWH(
-      savedState.x!,
-      savedState.y!,
-      savedState.width!,
-      savedState.height!,
+  try {
+    await Hive.initFlutter('text_preview_hive'); // Unique subdirectory
+    _registerHiveAdapters();
+    await Hive.openBox<TextPreviewState>('text_preview_state');
+
+    // Load saved window bounds
+    repository = TextPreviewStateRepository();
+    final validator = ScreenBoundsValidator();
+    final savedState = repository.get(item.id);
+
+    if (savedState != null &&
+        savedState.x != null &&
+        savedState.y != null &&
+        savedState.width != null &&
+        savedState.height != null) {
+      final bounds = Rect.fromLTWH(
+        savedState.x!,
+        savedState.y!,
+        savedState.width!,
+        savedState.height!,
+      );
+      restoredBounds = validator.adjustIfOffScreen(bounds);
+    }
+  } catch (error, stackTrace) {
+    Logger('TextPreviewWindow').warning(
+      'Failed to initialize Hive for text preview, using default window bounds',
+      error,
+      stackTrace,
     );
-    restoredBounds = validator.adjustIfOffScreen(bounds);
+    // Continue without persistence - repository remains null
   }
 
   // Window options with saved or default bounds
@@ -355,12 +366,12 @@ class _TextPreviewApp extends StatelessWidget {
   const _TextPreviewApp({
     required this.item,
     required this.initialAlwaysOnTop,
-    required this.repository,
+    this.repository,
   });
 
   final TextContentItem item;
   final bool initialAlwaysOnTop;
-  final TextPreviewStateRepository repository;
+  final TextPreviewStateRepository? repository;
 
   @override
   Widget build(BuildContext context) {
