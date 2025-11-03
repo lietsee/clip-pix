@@ -471,7 +471,7 @@ class ClipPixApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     debugPrint('[ClipPixApp] building; isWindows=${Platform.isWindows}');
-    final openPreviewsRepo = OpenPreviewsRepository(openPreviewsBox);
+    final openPreviewsRepo = OpenPreviewsRepository();
     final List<SingleChildWidget> providersList = <SingleChildWidget>[
       ...AppStateProvider.providers(
         appStateBox: appStateBox,
