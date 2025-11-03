@@ -61,6 +61,7 @@ class _GridViewModuleState extends State<GridViewModule> {
   final Map<String, ScrollController> _stagingControllers = {};
   final Map<String, GlobalKey> _cardKeys = {};
   final Map<String, Process> _openTextPreviews = {};
+  final Set<String> _launchingTextPreviews = {};
   GridLayoutSettingsRepository? _layoutSettingsRepository;
   GridOrderRepository? _orderRepository;
   late GridLayoutStore _layoutStore;
@@ -943,15 +944,29 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   Future<bool> _launchTextPreviewWindowProcess(TextContentItem item) async {
+    // Check if already launching (prevent double-click duplicate launches)
+    if (_launchingTextPreviews.contains(item.id)) {
+      debugPrint(
+          '[GridViewModule] Text preview already launching for ${item.id}');
+      return true;
+    }
+
     // Check if already open
     final existingProcess = _openTextPreviews[item.id];
     if (existingProcess != null) {
-      // Check if process is still alive
+      // Check if process is still alive (Windows-compatible check)
       try {
-        // Sending signal 0 doesn't kill but checks existence (Unix-like)
-        // On Windows, we'll rely on the exitCode future
-        existingProcess.kill(ProcessSignal.sigusr1);
-        // Process exists, activate the window
+        // Check if exitCode future completes immediately (process already exited)
+        await existingProcess.exitCode
+            .timeout(const Duration(milliseconds: 1), onTimeout: () {
+          // Timeout means process is still running
+          return -1;
+        });
+        // If we reach here without timeout, process has exited
+        _openTextPreviews.remove(item.id);
+        debugPrint('[GridViewModule] Removed dead process for ${item.id}');
+      } on TimeoutException {
+        // Process is alive, activate the window
         _activateTextPreviewWindow(item.id);
         debugPrint(
             '[GridViewModule] Activated existing text preview for ${item.id}');
@@ -959,7 +974,8 @@ class _GridViewModuleState extends State<GridViewModule> {
       } catch (e) {
         // Process doesn't exist anymore, remove from tracking
         _openTextPreviews.remove(item.id);
-        debugPrint('[GridViewModule] Removed dead process for ${item.id}');
+        debugPrint(
+            '[GridViewModule] Removed dead process for ${item.id}: $e');
       }
     }
 
@@ -968,6 +984,10 @@ class _GridViewModuleState extends State<GridViewModule> {
       debugPrint('[GridViewModule] preview exe not found');
       return false;
     }
+
+    // Mark as launching to prevent duplicate launches
+    _launchingTextPreviews.add(item.id);
+
     final payload = jsonEncode({
       'item': {
         'id': item.id,
@@ -981,6 +1001,7 @@ class _GridViewModuleState extends State<GridViewModule> {
       },
       'alwaysOnTop': false,
     });
+
     try {
       final process = await Process.start(
         exePath,
@@ -988,7 +1009,7 @@ class _GridViewModuleState extends State<GridViewModule> {
         mode: ProcessStartMode.detached,
       );
 
-      // Track the process
+      // Track the process immediately (before any await)
       _openTextPreviews[item.id] = process;
 
       // Clean up tracking when process exits
@@ -997,6 +1018,7 @@ class _GridViewModuleState extends State<GridViewModule> {
         debugPrint('[GridViewModule] Text preview closed for ${item.id}');
       }));
 
+      debugPrint('[GridViewModule] Launched text preview for ${item.id}');
       return true;
     } catch (error, stackTrace) {
       debugPrint('[GridViewModule] failed to launch text preview: $error');
@@ -1006,6 +1028,9 @@ class _GridViewModuleState extends State<GridViewModule> {
         stackTrace,
       );
       return false;
+    } finally {
+      // Always remove launching flag
+      _launchingTextPreviews.remove(item.id);
     }
   }
 
