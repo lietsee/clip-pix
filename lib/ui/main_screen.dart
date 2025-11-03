@@ -87,7 +87,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     // Kill all text preview processes BEFORE window closes
     try {
       final processManager = context.read<TextPreviewProcessManager>();
-      processManager.killAll();
+      await processManager.killAll();
       debugPrint(
           '[MainScreen] Killed all text preview processes in onWindowClose');
     } catch (e) {

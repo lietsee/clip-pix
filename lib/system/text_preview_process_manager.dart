@@ -110,16 +110,23 @@ class TextPreviewProcessManager extends ChangeNotifier {
   }
 
   /// Kill all managed processes (called on app exit)
-  void killAll() {
+  Future<void> killAll(
+      {Duration gracePeriod = const Duration(milliseconds: 500)}) async {
     debugPrint(
         '[TextPreviewProcessManager] Killing all ${_processes.length} preview processes');
 
+    // Send SIGTERM to all processes
     for (final entry in _processes.entries) {
       debugPrint(
           '[TextPreviewProcessManager] Killing process ${entry.key} (PID: ${entry.value.pid})');
       entry.value.kill();
       // DON'T remove from repository - preserve for next session restoration
     }
+
+    // Wait for graceful shutdown to allow async Hive writes to complete
+    debugPrint(
+        '[TextPreviewProcessManager] Waiting ${gracePeriod.inMilliseconds}ms for graceful shutdown');
+    await Future.delayed(gracePeriod);
 
     _processes.clear();
     _launching.clear();

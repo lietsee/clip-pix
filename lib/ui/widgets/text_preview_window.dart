@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:hive/hive.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
 import 'package:win32/win32.dart';
@@ -157,7 +158,12 @@ class _TextPreviewWindowState extends State<TextPreviewWindow> {
           bounds,
           alwaysOnTop: _isAlwaysOnTop,
         );
-        _logger.fine('Saved window bounds and state: $bounds, alwaysOnTop: $_isAlwaysOnTop');
+
+        // Flush Hive to disk before exit to ensure writes complete
+        await Hive.close();
+
+        _logger.fine(
+            'Saved and flushed window bounds and state: $bounds, alwaysOnTop: $_isAlwaysOnTop');
       } catch (e, stackTrace) {
         _logger.warning('Failed to save window bounds', e, stackTrace);
       }
