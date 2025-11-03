@@ -24,9 +24,11 @@ import 'data/models/grid_layout_settings.dart';
 import 'data/models/image_entry.dart';
 import 'data/models/image_item.dart';
 import 'data/models/image_source_type.dart';
+import 'data/models/image_preview_state.dart';
 import 'data/models/open_preview_item.dart';
 import 'data/models/text_content_item.dart';
 import 'data/models/text_preview_state.dart';
+import 'data/image_preview_state_repository.dart';
 import 'data/open_previews_repository.dart';
 import 'data/text_preview_state_repository.dart';
 import 'system/app_lifecycle_service.dart';
@@ -163,6 +165,10 @@ void _registerHiveAdapters() {
   if (!Hive.isAdapterRegistered(9)) {
     Hive.registerAdapter(OpenPreviewItemAdapter());
   }
+  // 新規追加: ImagePreviewState (typeId: 10)
+  if (!Hive.isAdapterRegistered(10)) {
+    Hive.registerAdapter(ImagePreviewStateAdapter());
+  }
 }
 
 Future<
@@ -173,6 +179,7 @@ Future<
       Box<dynamic> gridLayoutBox,
       Box<dynamic> gridOrderBox,
       Box<TextPreviewState> textPreviewStateBox,
+      Box<ImagePreviewState> imagePreviewStateBox,
       Box<OpenPreviewItem> openPreviewsBox,
     })> _openCoreBoxes() async {
   final appStateBox = await Hive.openBox<dynamic>('app_state');
@@ -185,6 +192,9 @@ Future<
   final textPreviewStateBox = await Hive.openBox<TextPreviewState>(
     'text_preview_state',
   );
+  final imagePreviewStateBox = await Hive.openBox<ImagePreviewState>(
+    'image_preview_state',
+  );
   final openPreviewsBox = await Hive.openBox<OpenPreviewItem>(
     'open_previews',
   );
@@ -195,6 +205,7 @@ Future<
     gridLayoutBox: gridLayoutBox,
     gridOrderBox: gridOrderBox,
     textPreviewStateBox: textPreviewStateBox,
+    imagePreviewStateBox: imagePreviewStateBox,
     openPreviewsBox: openPreviewsBox,
   );
 }

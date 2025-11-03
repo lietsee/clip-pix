@@ -4,6 +4,7 @@ import 'package:provider/single_child_widget.dart';
 import 'package:flutter_state_notifier/flutter_state_notifier.dart';
 
 import '../../data/open_previews_repository.dart';
+import '../image_preview_process_manager.dart';
 import '../text_preview_process_manager.dart';
 import 'image_history_notifier.dart';
 import 'image_history_state.dart';
@@ -30,6 +31,9 @@ class AppStateProvider {
       ),
       ChangeNotifierProvider<TextPreviewProcessManager>(
         create: (_) => TextPreviewProcessManager(repository: openPreviewsRepo),
+      ),
+      ChangeNotifierProvider<ImagePreviewProcessManager>(
+        create: (_) => ImagePreviewProcessManager(repository: openPreviewsRepo),
       ),
     ];
   }
