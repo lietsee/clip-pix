@@ -211,58 +211,182 @@ Future<
 }
 
 Future<void> _launchPreviewMode(String payload) async {
-  _configureLogging();
-  Map<String, dynamic> data;
-  try {
-    data = jsonDecode(payload) as Map<String, dynamic>;
-  } catch (error) {
-    Logger('ImagePreviewWindow').severe('Invalid preview payload', error);
-    return;
-  }
+  await runZonedGuarded(
+    () async {
+      _configureLogging();
+      debugPrint(
+          '[ImagePreviewMode] Starting with payload length: ${payload.length}');
 
-  final itemMap = (data['item'] as Map<String, dynamic>?);
-  if (itemMap == null) {
-    Logger('ImagePreviewWindow').warning('Preview payload missing item');
-    return;
-  }
+      Map<String, dynamic> data;
+      try {
+        data = jsonDecode(payload) as Map<String, dynamic>;
+        debugPrint('[ImagePreviewMode] Payload parsed successfully');
+      } catch (error) {
+        Logger('ImagePreviewWindow').severe('Invalid preview payload', error);
+        debugPrint('[ImagePreviewMode] ERROR: Failed to parse payload');
+        return;
+      }
 
-  final savedAtString = itemMap['savedAt'] as String?;
-  DateTime? savedAt;
-  if (savedAtString != null) {
-    savedAt = DateTime.tryParse(savedAtString)?.toUtc();
-  }
+      final itemMap = (data['item'] as Map<String, dynamic>?);
+      if (itemMap == null) {
+        Logger('ImagePreviewWindow').warning('Preview payload missing item');
+        debugPrint('[ImagePreviewMode] ERROR: Payload missing item');
+        return;
+      }
 
-  final item = ImageItem(
-    id: itemMap['id'] as String,
-    filePath: itemMap['filePath'] as String,
-    metadataPath: itemMap['metadataPath'] as String?,
-    sourceType: ImageSourceType.values[(itemMap['sourceType'] as int?) ?? 0],
-    savedAt: savedAt,
-    source: itemMap['source'] as String?,
-  );
+      final savedAtString = itemMap['savedAt'] as String?;
+      DateTime? savedAt;
+      if (savedAtString != null) {
+        savedAt = DateTime.tryParse(savedAtString)?.toUtc();
+      }
 
-  final initialTop = data['alwaysOnTop'] as bool? ?? false;
-  final copyService = ClipboardCopyService();
+      final item = ImageItem(
+        id: itemMap['id'] as String,
+        filePath: itemMap['filePath'] as String,
+        metadataPath: itemMap['metadataPath'] as String?,
+        sourceType:
+            ImageSourceType.values[(itemMap['sourceType'] as int?) ?? 0],
+        savedAt: savedAt,
+        source: itemMap['source'] as String?,
+      );
 
-  runApp(
-    _PreviewApp(
-      item: item,
-      copyService: copyService,
-      initialAlwaysOnTop: initialTop,
-    ),
+      debugPrint(
+          '[ImagePreviewMode] Item created: id=${item.id}, hashCode=${item.id.hashCode}');
+
+      final initialTop = data['alwaysOnTop'] as bool? ?? false;
+
+      // Initialize window_manager for frameless window
+      debugPrint('[ImagePreviewMode] Initializing window manager...');
+      await windowManager.ensureInitialized();
+      debugPrint('[ImagePreviewMode] Window manager initialized');
+
+      // Initialize Hive with SEPARATE path for this preview process
+      ImagePreviewStateRepository? repository;
+      Rect? restoredBounds;
+
+      // Generate unique Hive directory name based on item ID
+      String getHiveDirectoryName(String itemId) {
+        final bytes = utf8.encode(itemId);
+        final digest = md5.convert(bytes);
+        return 'image_preview_${digest.toString().substring(0, 8)}';
+      }
+
+      try {
+        final hiveDir = getHiveDirectoryName(item.id);
+        debugPrint(
+            '[ImagePreviewMode] Initializing Hive with directory: $hiveDir');
+        await Hive.initFlutter(hiveDir); // Unique subdirectory per item
+        _registerHiveAdapters();
+        await Hive.openBox<ImagePreviewState>('image_preview_state');
+        debugPrint('[ImagePreviewMode] Hive initialized successfully');
+
+        // Load saved window bounds
+        repository = ImagePreviewStateRepository();
+        final validator = ScreenBoundsValidator();
+        final savedState = repository.get(item.id);
+
+        if (savedState != null &&
+            savedState.x != null &&
+            savedState.y != null &&
+            savedState.width != null &&
+            savedState.height != null) {
+          final bounds = Rect.fromLTWH(
+            savedState.x!,
+            savedState.y!,
+            savedState.width!,
+            savedState.height!,
+          );
+          restoredBounds = validator.adjustIfOffScreen(bounds);
+          debugPrint('[ImagePreviewMode] Loaded saved bounds: $restoredBounds');
+        }
+      } catch (error, stackTrace) {
+        Logger('ImagePreviewWindow').warning(
+          'Failed to initialize Hive for image preview, using default window bounds',
+          error,
+          stackTrace,
+        );
+        debugPrint(
+            '[ImagePreviewMode] ERROR: Hive initialization failed: $error');
+        // Continue without persistence - repository remains null
+      }
+
+      // Window options with saved or default bounds
+      final windowOptions = WindowOptions(
+        size: restoredBounds?.size ?? const Size(1200, 800),
+        minimumSize: const Size(600, 400),
+        center: restoredBounds == null, // Only center if no saved position
+        backgroundColor: Colors.transparent,
+        skipTaskbar: false,
+        titleBarStyle: TitleBarStyle.hidden,
+      );
+
+      debugPrint('[ImagePreviewMode] Window options created');
+
+      final copyService = ClipboardCopyService();
+
+      await windowManager.waitUntilReadyToShow(windowOptions, () async {
+        // Set unique window title for window activation (FindWindow)
+        final windowTitle = 'clip_pix_image_${item.id.hashCode}';
+        debugPrint('[ImagePreviewMode] Setting window title: $windowTitle');
+        await windowManager.setTitle(windowTitle);
+        debugPrint('[ImagePreviewMode] Window title set successfully');
+
+        await windowManager.show();
+        debugPrint('[ImagePreviewMode] Window shown');
+
+        // Restore saved position if available
+        if (restoredBounds != null) {
+          await windowManager.setPosition(
+            Offset(restoredBounds.left, restoredBounds.top),
+          );
+          debugPrint('[ImagePreviewMode] Position restored');
+        }
+
+        await windowManager.focus();
+        debugPrint('[ImagePreviewMode] Window focused');
+
+        // Run app AFTER window is fully initialized
+        // This keeps the event loop alive and prevents early process exit
+        runApp(
+          _ImagePreviewApp(
+            item: item,
+            copyService: copyService,
+            initialAlwaysOnTop: initialTop,
+            repository: repository,
+          ),
+        );
+
+        debugPrint('[ImagePreviewMode] runApp completed inside callback');
+      });
+
+      debugPrint('[ImagePreviewMode] waitUntilReadyToShow callback scheduled');
+      // Event loop is now maintained by runApp, process stays alive
+    },
+    (error, stackTrace) {
+      debugPrint('[ImagePreviewMode] FATAL ERROR: $error');
+      debugPrint('[ImagePreviewMode] Stack trace:\n$stackTrace');
+      Logger('ImagePreviewWindow').severe(
+        'Unhandled exception in image preview mode',
+        error,
+        stackTrace,
+      );
+      exit(1);
+    },
   );
 }
 
-class _PreviewApp extends StatelessWidget {
-  const _PreviewApp({
+class _ImagePreviewApp extends StatelessWidget {
+  const _ImagePreviewApp({
     required this.item,
     required this.copyService,
     required this.initialAlwaysOnTop,
+    this.repository,
   });
 
   final ImageItem item;
   final ClipboardCopyService copyService;
   final bool initialAlwaysOnTop;
+  final ImagePreviewStateRepository? repository;
 
   @override
   Widget build(BuildContext context) {
@@ -272,6 +396,7 @@ class _PreviewApp extends StatelessWidget {
       home: ImagePreviewWindow(
         item: item,
         initialAlwaysOnTop: initialAlwaysOnTop,
+        repository: repository,
         onCopyImage: (image) => copyService.copyImage(image),
         onClose: () => exit(0),
         onToggleAlwaysOnTop: (_) {},
