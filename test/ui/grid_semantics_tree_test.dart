@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:clip_pix/system/grid_layout_layout_engine.dart' as layout;
 import 'package:clip_pix/system/state/grid_layout_store.dart';
 import 'package:clip_pix/ui/widgets/grid_semantics_tree.dart';

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/scheduler.dart';
-import 'package:flutter/semantics.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter/rendering.dart';
 
@@ -242,11 +241,9 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     // [DIAGNOSTIC] Track store changes and snapshot updates
     final prevSnapshotId = _frontSnapshot?.id;
     final nextSnapshotId = latestSnapshot?.id;
-    debugPrint(
-      '[GridLayoutSurface] store_changed: '
-      'prevSnapshot=$prevSnapshotId, nextSnapshot=$nextSnapshotId, '
-      'mutating=$_mutationInProgress, viewStateCount=${_store.viewStates.length}'
-    );
+    debugPrint('[GridLayoutSurface] store_changed: '
+        'prevSnapshot=$prevSnapshotId, nextSnapshot=$nextSnapshotId, '
+        'mutating=$_mutationInProgress, viewStateCount=${_store.viewStates.length}');
 
     setState(() {
       if (!_mutationInProgress) {
@@ -258,10 +255,8 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
         }
 
         // [DIAGNOSTIC] Confirm front buffer update
-        debugPrint(
-          '[GridLayoutSurface] front_buffer_updated: '
-          'snapshotId=${latestSnapshot?.id}, statesCount=${_frontStates?.length ?? 0}'
-        );
+        debugPrint('[GridLayoutSurface] front_buffer_updated: '
+            'snapshotId=${latestSnapshot?.id}, statesCount=${_frontStates?.length ?? 0}');
       }
     });
     _scheduleSemanticsUpdate();

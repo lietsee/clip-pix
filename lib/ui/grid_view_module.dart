@@ -14,8 +14,6 @@ import 'package:win32/win32.dart';
 
 import '../data/grid_layout_settings_repository.dart';
 import '../data/grid_order_repository.dart';
-import '../data/open_previews_repository.dart';
-import '../data/text_preview_state_repository.dart';
 import '../data/models/content_item.dart';
 import '../data/models/content_type.dart';
 import '../data/models/grid_layout_settings.dart';
