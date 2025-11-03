@@ -23,13 +23,14 @@ class TextPreviewStateAdapter extends TypeAdapter<TextPreviewState> {
       x: fields[3] as double?,
       y: fields[4] as double?,
       lastOpened: fields[5] as DateTime,
+      alwaysOnTop: fields[6] as bool,
     );
   }
 
   @override
   void write(BinaryWriter writer, TextPreviewState obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(7)
       ..writeByte(0)
       ..write(obj.textId)
       ..writeByte(1)
@@ -41,7 +42,9 @@ class TextPreviewStateAdapter extends TypeAdapter<TextPreviewState> {
       ..writeByte(4)
       ..write(obj.y)
       ..writeByte(5)
-      ..write(obj.lastOpened);
+      ..write(obj.lastOpened)
+      ..writeByte(6)
+      ..write(obj.alwaysOnTop);
   }
 
   @override

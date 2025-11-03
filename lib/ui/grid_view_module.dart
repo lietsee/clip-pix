@@ -14,6 +14,8 @@ import 'package:win32/win32.dart';
 
 import '../data/grid_layout_settings_repository.dart';
 import '../data/grid_order_repository.dart';
+import '../data/open_previews_repository.dart';
+import '../data/text_preview_state_repository.dart';
 import '../data/models/content_item.dart';
 import '../data/models/content_type.dart';
 import '../data/models/grid_layout_settings.dart';
@@ -64,6 +66,7 @@ class _GridViewModuleState extends State<GridViewModule> {
   final Set<String> _launchingTextPreviews = {};
   GridLayoutSettingsRepository? _layoutSettingsRepository;
   GridOrderRepository? _orderRepository;
+  OpenPreviewsRepository? _openPreviewsRepo;
   late GridLayoutStore _layoutStore;
   OverlayEntry? _dragOverlay;
   String? _draggingId;
@@ -91,6 +94,7 @@ class _GridViewModuleState extends State<GridViewModule> {
       _layoutStore = context.read<GridLayoutStore>();
       _layoutSettingsRepository = context.read<GridLayoutSettingsRepository>();
       _orderRepository = context.read<GridOrderRepository>();
+      _openPreviewsRepo = OpenPreviewsRepository();
       final orderedImages = _applyDirectoryOrder(widget.state.images);
       _entries = orderedImages.map(_createEntry).toList(growable: true);
       _layoutStore.syncLibrary(
@@ -106,6 +110,8 @@ class _GridViewModuleState extends State<GridViewModule> {
         for (final entry in _entries) {
           _animateEntryVisible(entry);
         }
+        // Restore text preview windows after first frame
+        _restoreTextPreviewWindows();
       });
     } else {
       _layoutStore = context.read<GridLayoutStore>();
@@ -603,7 +609,10 @@ class _GridViewModuleState extends State<GridViewModule> {
         child: TextPreviewWindow(
           item: item,
           onSave: _handleSaveText,
-          onClose: () => Navigator.of(context).pop(),
+          onClose: () {
+            Navigator.of(context).pop();
+            _handleTextPreviewClosed(item.id);
+          },
         ),
       ),
     );
@@ -1007,15 +1016,15 @@ class _GridViewModuleState extends State<GridViewModule> {
       final process = await Process.start(
         exePath,
         ['--preview-text', payload],
-        mode: ProcessStartMode.detached,
+        mode: ProcessStartMode.detachedWithStdio,
       );
 
       debugPrint(
           '[GridViewModule] Process started, waiting for window to appear...');
 
-      // Wait for window to appear (poll for 3 seconds)
+      // Wait for window to appear (poll for 5 seconds)
       bool windowAppeared = false;
-      for (int i = 0; i < 30; i++) {
+      for (int i = 0; i < 50; i++) {
         await Future.delayed(const Duration(milliseconds: 100));
         if (_isTextPreviewWindowOpen(item.id)) {
           windowAppeared = true;
@@ -1028,11 +1037,13 @@ class _GridViewModuleState extends State<GridViewModule> {
       if (windowAppeared) {
         // Track the process only if window appeared
         _openTextPreviews[item.id] = process;
+        // Save to open previews repository for restoration on next startup
+        await _openPreviewsRepo?.add(item.id, alwaysOnTop: false);
         debugPrint('[GridViewModule] Launched text preview for ${item.id}');
         return true;
       } else {
         debugPrint(
-            '[GridViewModule] ERROR: Window did not appear after 3s, killing process');
+            '[GridViewModule] ERROR: Window did not appear after 5s, killing process');
         process.kill();
         return false;
       }
@@ -1700,6 +1711,85 @@ class _GridViewModuleState extends State<GridViewModule> {
         (a.top - b.top).abs() <= tolerance &&
         (a.width - b.width).abs() <= tolerance &&
         (a.height - b.height).abs() <= tolerance;
+  }
+
+  /// Restore text preview windows from previous session
+  Future<void> _restoreTextPreviewWindows() async {
+    if (_openPreviewsRepo == null) {
+      debugPrint('[GridViewModule] OpenPreviewsRepo is null, skipping restoration');
+      return;
+    }
+
+    try {
+      final openPreviews = _openPreviewsRepo!.getAll();
+      debugPrint('[GridViewModule] Restoring ${openPreviews.length} text preview windows');
+
+      if (openPreviews.isEmpty) {
+        return;
+      }
+
+      // Clean up old entries (older than 30 days)
+      await _openPreviewsRepo!.removeOlderThan(const Duration(days: 30));
+
+      int restoredCount = 0;
+      int failedCount = 0;
+      const maxRestore = 10; // Limit to 10 windows
+
+      for (final preview in openPreviews.take(maxRestore)) {
+        try {
+          // Find the item in current library
+          final item = widget.state.images.firstWhere(
+            (img) => img.id == preview.itemId,
+            orElse: () => throw StateError('Item not found'),
+          );
+
+          if (item is! TextContentItem) {
+            debugPrint('[GridViewModule] Item ${preview.itemId} is not a TextContentItem, skipping');
+            await _openPreviewsRepo!.remove(preview.itemId);
+            continue;
+          }
+
+          // Launch the preview window
+          debugPrint('[GridViewModule] Restoring preview for ${item.id}');
+          final success = await _launchTextPreviewWindowProcess(item);
+
+          if (success) {
+            restoredCount++;
+            debugPrint('[GridViewModule] Successfully restored preview for ${item.id}');
+          } else {
+            failedCount++;
+            debugPrint('[GridViewModule] Failed to restore preview for ${item.id}');
+            // Remove from repository if restoration failed
+            await _openPreviewsRepo!.remove(preview.itemId);
+          }
+
+          // Add delay between launches to avoid resource contention
+          if (preview != openPreviews.last) {
+            await Future.delayed(const Duration(milliseconds: 150));
+          }
+        } catch (error) {
+          failedCount++;
+          debugPrint('[GridViewModule] Error restoring preview ${preview.itemId}: $error');
+          // Remove from repository if item no longer exists
+          await _openPreviewsRepo!.remove(preview.itemId);
+        }
+      }
+
+      debugPrint('[GridViewModule] Preview restoration complete: $restoredCount restored, $failedCount failed');
+    } catch (error, stackTrace) {
+      Logger('GridViewModule').warning(
+        'Failed to restore text preview windows',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  /// Handle text preview window closed
+  void _handleTextPreviewClosed(String itemId) {
+    _openTextPreviews.remove(itemId);
+    _openPreviewsRepo?.remove(itemId);
+    debugPrint('[GridViewModule] Text preview closed for $itemId');
   }
 }
 

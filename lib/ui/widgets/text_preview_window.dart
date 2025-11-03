@@ -148,12 +148,16 @@ class _TextPreviewWindowState extends State<TextPreviewWindow> {
       _handleSave();
     }
 
-    // Save window bounds before closing
+    // Save window bounds and always-on-top state before closing
     if (widget.repository != null) {
       try {
         final bounds = await windowManager.getBounds();
-        await widget.repository!.save(widget.item.id, bounds);
-        _logger.fine('Saved window bounds: $bounds');
+        await widget.repository!.save(
+          widget.item.id,
+          bounds,
+          alwaysOnTop: _isAlwaysOnTop,
+        );
+        _logger.fine('Saved window bounds and state: $bounds, alwaysOnTop: $_isAlwaysOnTop');
       } catch (e, stackTrace) {
         _logger.warning('Failed to save window bounds', e, stackTrace);
       }

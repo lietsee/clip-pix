@@ -12,8 +12,12 @@ class TextPreviewStateRepository {
 
   late final Box<TextPreviewState> _box;
 
-  /// ウィンドウ境界を保存
-  Future<void> save(String textId, Rect bounds) async {
+  /// ウィンドウ境界と状態を保存
+  Future<void> save(
+    String textId,
+    Rect bounds, {
+    bool alwaysOnTop = false,
+  }) async {
     final state = TextPreviewState(
       textId: textId,
       width: bounds.width,
@@ -21,6 +25,7 @@ class TextPreviewStateRepository {
       x: bounds.left,
       y: bounds.top,
       lastOpened: DateTime.now(),
+      alwaysOnTop: alwaysOnTop,
     );
     await _box.put(textId, state);
   }

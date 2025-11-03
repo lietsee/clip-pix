@@ -12,6 +12,7 @@ class TextPreviewState extends HiveObject {
     this.x,
     this.y,
     required this.lastOpened,
+    this.alwaysOnTop = false,
   });
 
   /// TextContentItemのID
@@ -38,6 +39,10 @@ class TextPreviewState extends HiveObject {
   @HiveField(5)
   final DateTime lastOpened;
 
+  /// 最前面表示状態
+  @HiveField(6)
+  final bool alwaysOnTop;
+
   TextPreviewState copyWith({
     String? textId,
     double? width,
@@ -45,6 +50,7 @@ class TextPreviewState extends HiveObject {
     double? x,
     double? y,
     DateTime? lastOpened,
+    bool? alwaysOnTop,
   }) {
     return TextPreviewState(
       textId: textId ?? this.textId,
@@ -53,11 +59,12 @@ class TextPreviewState extends HiveObject {
       x: x ?? this.x,
       y: y ?? this.y,
       lastOpened: lastOpened ?? this.lastOpened,
+      alwaysOnTop: alwaysOnTop ?? this.alwaysOnTop,
     );
   }
 
   @override
   String toString() {
-    return 'TextPreviewState(textId: $textId, width: $width, height: $height, x: $x, y: $y, lastOpened: $lastOpened)';
+    return 'TextPreviewState(textId: $textId, width: $width, height: $height, x: $x, y: $y, lastOpened: $lastOpened, alwaysOnTop: $alwaysOnTop)';
   }
 }

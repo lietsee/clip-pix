@@ -23,6 +23,7 @@ import 'data/models/grid_layout_settings.dart';
 import 'data/models/image_entry.dart';
 import 'data/models/image_item.dart';
 import 'data/models/image_source_type.dart';
+import 'data/models/open_preview_item.dart';
 import 'data/models/text_content_item.dart';
 import 'data/models/text_preview_state.dart';
 import 'data/text_preview_state_repository.dart';
@@ -155,6 +156,10 @@ void _registerHiveAdapters() {
   if (!Hive.isAdapterRegistered(8)) {
     Hive.registerAdapter(TextPreviewStateAdapter());
   }
+  // 新規追加: OpenPreviewItem (typeId: 9)
+  if (!Hive.isAdapterRegistered(9)) {
+    Hive.registerAdapter(OpenPreviewItemAdapter());
+  }
 }
 
 Future<
@@ -165,6 +170,7 @@ Future<
       Box<dynamic> gridLayoutBox,
       Box<dynamic> gridOrderBox,
       Box<TextPreviewState> textPreviewStateBox,
+      Box<OpenPreviewItem> openPreviewsBox,
     })> _openCoreBoxes() async {
   final appStateBox = await Hive.openBox<dynamic>('app_state');
   final imageHistoryBox = await Hive.openBox<dynamic>('image_history');
@@ -176,6 +182,9 @@ Future<
   final textPreviewStateBox = await Hive.openBox<TextPreviewState>(
     'text_preview_state',
   );
+  final openPreviewsBox = await Hive.openBox<OpenPreviewItem>(
+    'open_previews',
+  );
   return (
     appStateBox: appStateBox,
     imageHistoryBox: imageHistoryBox,
@@ -183,6 +192,7 @@ Future<
     gridLayoutBox: gridLayoutBox,
     gridOrderBox: gridOrderBox,
     textPreviewStateBox: textPreviewStateBox,
+    openPreviewsBox: openPreviewsBox,
   );
 }
 
@@ -257,8 +267,11 @@ class _PreviewApp extends StatelessWidget {
 }
 
 Future<void> _launchTextPreviewMode(String payload) async {
-  _configureLogging();
-  debugPrint('[TextPreviewMode] Starting with payload length: ${payload.length}');
+  await runZonedGuarded(
+    () async {
+      _configureLogging();
+      debugPrint(
+          '[TextPreviewMode] Starting with payload length: ${payload.length}');
 
   Map<String, dynamic> data;
   try {
@@ -377,14 +390,28 @@ Future<void> _launchTextPreviewMode(String payload) async {
     debugPrint('[TextPreviewMode] Window focused');
   });
 
-  debugPrint('[TextPreviewMode] waitUntilReadyToShow completed');
+      debugPrint('[TextPreviewMode] waitUntilReadyToShow completed');
 
-  runApp(
-    _TextPreviewApp(
-      item: item,
-      initialAlwaysOnTop: initialTop,
-      repository: repository,
-    ),
+      runApp(
+        _TextPreviewApp(
+          item: item,
+          initialAlwaysOnTop: initialTop,
+          repository: repository,
+        ),
+      );
+
+      debugPrint('[TextPreviewMode] runApp completed');
+    },
+    (error, stackTrace) {
+      debugPrint('[TextPreviewMode] FATAL ERROR: $error');
+      debugPrint('[TextPreviewMode] Stack trace:\n$stackTrace');
+      Logger('TextPreviewWindow').severe(
+        'Unhandled exception in text preview mode',
+        error,
+        stackTrace,
+      );
+      exit(1);
+    },
   );
 }
 
