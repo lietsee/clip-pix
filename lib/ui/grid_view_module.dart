@@ -22,6 +22,7 @@ import '../data/models/grid_layout_settings.dart';
 import '../data/models/image_item.dart';
 import '../data/models/text_content_item.dart';
 import '../system/clipboard_copy_service.dart';
+import '../system/text_preview_process_manager.dart';
 import '../system/state/folder_view_mode.dart';
 import '../system/state/grid_layout_mutation_controller.dart';
 import '../system/state/grid_layout_store.dart';
@@ -62,12 +63,10 @@ class _GridViewModuleState extends State<GridViewModule> {
   final Map<String, ScrollController> _directoryControllers = {};
   final Map<String, ScrollController> _stagingControllers = {};
   final Map<String, GlobalKey> _cardKeys = {};
-  final Map<String, Process> _openTextPreviews = {};
-  final Set<String> _launchingTextPreviews = {};
   bool _needsRestorationRetry = false;
+  TextPreviewProcessManager? _processManager;
   GridLayoutSettingsRepository? _layoutSettingsRepository;
   GridOrderRepository? _orderRepository;
-  OpenPreviewsRepository? _openPreviewsRepo;
   late GridLayoutStore _layoutStore;
   OverlayEntry? _dragOverlay;
   String? _draggingId;
@@ -95,7 +94,7 @@ class _GridViewModuleState extends State<GridViewModule> {
       _layoutStore = context.read<GridLayoutStore>();
       _layoutSettingsRepository = context.read<GridLayoutSettingsRepository>();
       _orderRepository = context.read<GridOrderRepository>();
-      _openPreviewsRepo = OpenPreviewsRepository();
+      _processManager = context.read<TextPreviewProcessManager>();
       final orderedImages = _applyDirectoryOrder(widget.state.images);
       _entries = orderedImages.map(_createEntry).toList(growable: true);
       _layoutStore.syncLibrary(
@@ -240,17 +239,7 @@ class _GridViewModuleState extends State<GridViewModule> {
 
   @override
   void dispose() {
-    // Kill all running text preview processes and clean repository
-    for (final entry in _openTextPreviews.entries) {
-      debugPrint('[GridViewModule] Killing text preview process ${entry.key}');
-      entry.value.kill();
-      // Synchronously remove from repository (don't wait for async exitCode callback)
-      _openPreviewsRepo?.remove(entry.key);
-      debugPrint(
-          '[GridViewModule] Removed ${entry.key} from open previews repository');
-    }
-    _openTextPreviews.clear();
-
+    // Text preview processes are cleaned up by MainScreen.dispose()
     // Dispose other resources
     for (final entry in _entries) {
       entry.removalTimer?.cancel();
@@ -593,16 +582,20 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   Future<void> _showTextPreviewDialog(TextContentItem item) async {
+    if (_processManager == null) {
+      debugPrint('[GridViewModule] ProcessManager is null');
+      return;
+    }
+
     // 起動中の場合は何もしない
-    if (_launchingTextPreviews.contains(item.id)) {
+    if (_processManager!.isLaunching(item.id)) {
       debugPrint(
           '[GridViewModule] Text preview already launching for ${item.id}');
       return;
     }
 
     // 既にウィンドウが開いている場合はアクティブ化
-    final existingProcess = _openTextPreviews[item.id];
-    if (existingProcess != null) {
+    if (_processManager!.isRunning(item.id)) {
       debugPrint(
           '[GridViewModule] Existing process found for ${item.id}, checking window...');
       // ウィンドウが実際に存在するか確認
@@ -614,8 +607,7 @@ class _GridViewModuleState extends State<GridViewModule> {
       } else {
         // ウィンドウが閉じられている場合、プロセス参照をクリーンアップ
         debugPrint(
-            '[GridViewModule] Removing dead process reference for ${item.id}');
-        _openTextPreviews.remove(item.id);
+            '[GridViewModule] Process manager will clean up dead process for ${item.id}');
       }
     }
 
@@ -1004,10 +996,16 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   Future<bool> _launchTextPreviewWindowProcess(TextContentItem item) async {
-    // Check if already launching (prevent double-click duplicate launches)
-    if (_launchingTextPreviews.contains(item.id)) {
+    if (_processManager == null) {
+      debugPrint('[GridViewModule] ProcessManager is null');
+      return false;
+    }
+
+    // Check if already launching or running
+    if (_processManager!.isLaunching(item.id) ||
+        _processManager!.isRunning(item.id)) {
       debugPrint(
-          '[GridViewModule] Text preview already launching for ${item.id}');
+          '[GridViewModule] Text preview already launching/running for ${item.id}');
       return true;
     }
 
@@ -1018,7 +1016,7 @@ class _GridViewModuleState extends State<GridViewModule> {
     }
 
     // Mark as launching to prevent duplicate launches
-    _launchingTextPreviews.add(item.id);
+    _processManager!.markLaunching(item.id);
 
     final payload = jsonEncode({
       'item': {
@@ -1062,16 +1060,7 @@ class _GridViewModuleState extends State<GridViewModule> {
         }
       });
 
-      // Monitor process exit
-      process.exitCode.then((exitCode) {
-        debugPrint(
-            '[GridViewModule] Text preview process ${item.id} exited with code $exitCode');
-        if (exitCode != 0) {
-          debugPrint(
-              '[GridViewModule] ERROR: Text preview process crashed (exit code $exitCode)');
-        }
-        _handleTextPreviewClosed(item.id);
-      });
+      // Note: process exit monitoring is handled by TextPreviewProcessManager
 
       debugPrint(
           '[GridViewModule] Process started, waiting for window to appear...');
@@ -1089,16 +1078,15 @@ class _GridViewModuleState extends State<GridViewModule> {
       }
 
       if (windowAppeared) {
-        // Track the process only if window appeared
-        _openTextPreviews[item.id] = process;
-        // Save to open previews repository for restoration on next startup
-        await _openPreviewsRepo?.add(item.id, alwaysOnTop: false);
+        // Register process with manager (handles tracking and exit monitoring)
+        _processManager!.registerProcess(item.id, process);
         debugPrint('[GridViewModule] Launched text preview for ${item.id}');
         return true;
       } else {
         debugPrint(
             '[GridViewModule] ERROR: Window did not appear after 10s, killing process');
         process.kill();
+        _processManager!.removeLaunching(item.id);
         return false;
       }
     } catch (error, stackTrace) {
@@ -1108,10 +1096,8 @@ class _GridViewModuleState extends State<GridViewModule> {
         error,
         stackTrace,
       );
+      _processManager!.removeLaunching(item.id);
       return false;
-    } finally {
-      // Always remove launching flag
-      _launchingTextPreviews.remove(item.id);
     }
   }
 
@@ -1137,10 +1123,8 @@ class _GridViewModuleState extends State<GridViewModule> {
       debugPrint('[GridViewModule] IsWindow result: $isValid for hwnd=$hwnd');
 
       if (!isValid) {
-        // Window was closed, clean up dead process reference
-        _openTextPreviews.remove(textId);
-        debugPrint(
-            '[GridViewModule] Removed dead window reference for $textId');
+        // Window was closed (cleanup handled by process manager)
+        debugPrint('[GridViewModule] Window $textId is no longer valid');
       }
 
       return isValid;
@@ -1170,7 +1154,6 @@ class _GridViewModuleState extends State<GridViewModule> {
       if (IsWindow(hwnd) == 0) {
         debugPrint(
             '[GridViewModule] IsWindow returned invalid: $titleHash (hwnd=$hwnd)');
-        _openTextPreviews.remove(textId);
         return;
       }
 
@@ -1768,9 +1751,9 @@ class _GridViewModuleState extends State<GridViewModule> {
 
   /// Restore text preview windows from previous session
   Future<void> _restoreTextPreviewWindows() async {
-    if (_openPreviewsRepo == null) {
+    if (_processManager == null) {
       debugPrint(
-          '[GridViewModule] OpenPreviewsRepo is null, skipping restoration');
+          '[GridViewModule] ProcessManager is null, skipping restoration');
       return;
     }
 
@@ -1783,7 +1766,7 @@ class _GridViewModuleState extends State<GridViewModule> {
     }
 
     try {
-      final openPreviews = _openPreviewsRepo!.getAll();
+      final openPreviews = _processManager!.getOpenPreviews();
       debugPrint(
           '[GridViewModule] Restoring ${openPreviews.length} text preview windows from ${widget.state.images.length} loaded images');
 
@@ -1793,7 +1776,7 @@ class _GridViewModuleState extends State<GridViewModule> {
       }
 
       // Clean up old entries (older than 30 days)
-      await _openPreviewsRepo!.removeOlderThan(const Duration(days: 30));
+      await _processManager!.removeOldPreviews(const Duration(days: 30));
 
       int restoredCount = 0;
       int failedCount = 0;
@@ -1810,7 +1793,7 @@ class _GridViewModuleState extends State<GridViewModule> {
           if (item is! TextContentItem) {
             debugPrint(
                 '[GridViewModule] Item ${preview.itemId} is not a TextContentItem, skipping');
-            await _openPreviewsRepo!.remove(preview.itemId);
+            await _processManager!.removePreview(preview.itemId);
             continue;
           }
 
@@ -1827,7 +1810,7 @@ class _GridViewModuleState extends State<GridViewModule> {
             debugPrint(
                 '[GridViewModule] Failed to restore preview for ${item.id}');
             // Remove from repository if restoration failed
-            await _openPreviewsRepo!.remove(preview.itemId);
+            await _processManager!.removePreview(preview.itemId);
           }
 
           // Add delay between launches to avoid resource contention
@@ -1839,7 +1822,7 @@ class _GridViewModuleState extends State<GridViewModule> {
           debugPrint(
               '[GridViewModule] Error restoring preview ${preview.itemId}: $error');
           // Remove from repository if item no longer exists
-          await _openPreviewsRepo!.remove(preview.itemId);
+          await _processManager!.removePreview(preview.itemId);
         }
       }
 
@@ -1858,8 +1841,7 @@ class _GridViewModuleState extends State<GridViewModule> {
 
   /// Handle text preview window closed
   void _handleTextPreviewClosed(String itemId) {
-    _openTextPreviews.remove(itemId);
-    _openPreviewsRepo?.remove(itemId);
+    // Cleanup is now handled by TextPreviewProcessManager
     debugPrint('[GridViewModule] Text preview closed for $itemId');
   }
 }

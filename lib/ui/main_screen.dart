@@ -9,6 +9,7 @@ import '../data/models/image_source_type.dart';
 import '../system/clipboard_monitor.dart';
 import '../system/file_watcher.dart';
 import '../system/folder_picker_service.dart';
+import '../system/text_preview_process_manager.dart';
 import '../system/state/grid_layout_store.dart';
 import '../system/state/image_history_state.dart';
 import '../system/state/image_library_notifier.dart';
@@ -59,6 +60,15 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   void dispose() {
+    // Kill all text preview processes before disposing
+    try {
+      final processManager = context.read<TextPreviewProcessManager>();
+      processManager.killAll();
+      debugPrint('[MainScreen] Killed all text preview processes on dispose');
+    } catch (e) {
+      debugPrint('[MainScreen] Error killing preview processes: $e');
+    }
+
     _minimapService?.dispose();
     _keyboardFocusNode.dispose();
     _rootScrollController.dispose();

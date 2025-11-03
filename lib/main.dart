@@ -83,6 +83,7 @@ Future<void> main(List<String> args) async {
         gridCardPrefBox: boxes.gridCardPrefBox,
         gridLayoutBox: boxes.gridLayoutBox,
         gridOrderBox: boxes.gridOrderBox,
+        openPreviewsBox: boxes.openPreviewsBox,
       ),
     ),
     (error, stackTrace) =>
@@ -273,134 +274,137 @@ Future<void> _launchTextPreviewMode(String payload) async {
       debugPrint(
           '[TextPreviewMode] Starting with payload length: ${payload.length}');
 
-  Map<String, dynamic> data;
-  try {
-    data = jsonDecode(payload) as Map<String, dynamic>;
-    debugPrint('[TextPreviewMode] Payload parsed successfully');
-  } catch (error) {
-    Logger('TextPreviewWindow').severe('Invalid preview payload', error);
-    debugPrint('[TextPreviewMode] ERROR: Failed to parse payload');
-    return;
-  }
+      Map<String, dynamic> data;
+      try {
+        data = jsonDecode(payload) as Map<String, dynamic>;
+        debugPrint('[TextPreviewMode] Payload parsed successfully');
+      } catch (error) {
+        Logger('TextPreviewWindow').severe('Invalid preview payload', error);
+        debugPrint('[TextPreviewMode] ERROR: Failed to parse payload');
+        return;
+      }
 
-  final itemMap = (data['item'] as Map<String, dynamic>?);
-  if (itemMap == null) {
-    Logger('TextPreviewWindow').warning('Preview payload missing item');
-    debugPrint('[TextPreviewMode] ERROR: Payload missing item');
-    return;
-  }
+      final itemMap = (data['item'] as Map<String, dynamic>?);
+      if (itemMap == null) {
+        Logger('TextPreviewWindow').warning('Preview payload missing item');
+        debugPrint('[TextPreviewMode] ERROR: Payload missing item');
+        return;
+      }
 
-  final savedAtString = itemMap['savedAt'] as String?;
-  DateTime? savedAt;
-  if (savedAtString != null) {
-    savedAt = DateTime.tryParse(savedAtString)?.toUtc();
-  }
+      final savedAtString = itemMap['savedAt'] as String?;
+      DateTime? savedAt;
+      if (savedAtString != null) {
+        savedAt = DateTime.tryParse(savedAtString)?.toUtc();
+      }
 
-  final item = TextContentItem(
-    id: itemMap['id'] as String,
-    filePath: itemMap['filePath'] as String,
-    sourceType: ImageSourceType.values[(itemMap['sourceType'] as int?) ?? 0],
-    savedAt: savedAt,
-    source: itemMap['source'] as String?,
-    fontSize: (itemMap['fontSize'] as num?)?.toDouble() ?? 14.0,
-    memo: itemMap['memo'] as String? ?? '',
-    favorite: itemMap['favorite'] as int? ?? 0,
-  );
-
-  debugPrint('[TextPreviewMode] Item created: id=${item.id}, hashCode=${item.id.hashCode}');
-
-  final initialTop = data['alwaysOnTop'] as bool? ?? false;
-
-  // Initialize window_manager for frameless window
-  debugPrint('[TextPreviewMode] Initializing window manager...');
-  await windowManager.ensureInitialized();
-  debugPrint('[TextPreviewMode] Window manager initialized');
-
-  // Initialize Hive with SEPARATE path for this preview process
-  TextPreviewStateRepository? repository;
-  Rect? restoredBounds;
-
-  try {
-    debugPrint('[TextPreviewMode] Initializing Hive...');
-    await Hive.initFlutter('text_preview_hive'); // Unique subdirectory
-    _registerHiveAdapters();
-    await Hive.openBox<TextPreviewState>('text_preview_state');
-    debugPrint('[TextPreviewMode] Hive initialized successfully');
-
-    // Load saved window bounds
-    repository = TextPreviewStateRepository();
-    final validator = ScreenBoundsValidator();
-    final savedState = repository.get(item.id);
-
-    if (savedState != null &&
-        savedState.x != null &&
-        savedState.y != null &&
-        savedState.width != null &&
-        savedState.height != null) {
-      final bounds = Rect.fromLTWH(
-        savedState.x!,
-        savedState.y!,
-        savedState.width!,
-        savedState.height!,
+      final item = TextContentItem(
+        id: itemMap['id'] as String,
+        filePath: itemMap['filePath'] as String,
+        sourceType:
+            ImageSourceType.values[(itemMap['sourceType'] as int?) ?? 0],
+        savedAt: savedAt,
+        source: itemMap['source'] as String?,
+        fontSize: (itemMap['fontSize'] as num?)?.toDouble() ?? 14.0,
+        memo: itemMap['memo'] as String? ?? '',
+        favorite: itemMap['favorite'] as int? ?? 0,
       );
-      restoredBounds = validator.adjustIfOffScreen(bounds);
-      debugPrint('[TextPreviewMode] Loaded saved bounds: $restoredBounds');
-    }
-  } catch (error, stackTrace) {
-    Logger('TextPreviewWindow').warning(
-      'Failed to initialize Hive for text preview, using default window bounds',
-      error,
-      stackTrace,
-    );
-    debugPrint('[TextPreviewMode] ERROR: Hive initialization failed: $error');
-    // Continue without persistence - repository remains null
-  }
 
-  // Window options with saved or default bounds
-  final windowOptions = WindowOptions(
-    size: restoredBounds?.size ?? const Size(900, 700),
-    minimumSize: const Size(400, 300),
-    center: restoredBounds == null, // Only center if no saved position
-    backgroundColor: Colors.transparent,
-    skipTaskbar: false,
-    titleBarStyle: TitleBarStyle.hidden,
-  );
+      debugPrint(
+          '[TextPreviewMode] Item created: id=${item.id}, hashCode=${item.id.hashCode}');
 
-  debugPrint('[TextPreviewMode] Window options created');
+      final initialTop = data['alwaysOnTop'] as bool? ?? false;
 
-  await windowManager.waitUntilReadyToShow(windowOptions, () async {
-    // Set unique window title for window activation (FindWindow)
-    final windowTitle = 'clip_pix_text_${item.id.hashCode}';
-    debugPrint('[TextPreviewMode] Setting window title: $windowTitle');
-    await windowManager.setTitle(windowTitle);
-    debugPrint('[TextPreviewMode] Window title set successfully');
+      // Initialize window_manager for frameless window
+      debugPrint('[TextPreviewMode] Initializing window manager...');
+      await windowManager.ensureInitialized();
+      debugPrint('[TextPreviewMode] Window manager initialized');
 
-    await windowManager.show();
-    debugPrint('[TextPreviewMode] Window shown');
+      // Initialize Hive with SEPARATE path for this preview process
+      TextPreviewStateRepository? repository;
+      Rect? restoredBounds;
 
-    // Restore saved position if available
-    if (restoredBounds != null) {
-      await windowManager.setPosition(
-        Offset(restoredBounds.left, restoredBounds.top),
+      try {
+        debugPrint('[TextPreviewMode] Initializing Hive...');
+        await Hive.initFlutter('text_preview_hive'); // Unique subdirectory
+        _registerHiveAdapters();
+        await Hive.openBox<TextPreviewState>('text_preview_state');
+        debugPrint('[TextPreviewMode] Hive initialized successfully');
+
+        // Load saved window bounds
+        repository = TextPreviewStateRepository();
+        final validator = ScreenBoundsValidator();
+        final savedState = repository.get(item.id);
+
+        if (savedState != null &&
+            savedState.x != null &&
+            savedState.y != null &&
+            savedState.width != null &&
+            savedState.height != null) {
+          final bounds = Rect.fromLTWH(
+            savedState.x!,
+            savedState.y!,
+            savedState.width!,
+            savedState.height!,
+          );
+          restoredBounds = validator.adjustIfOffScreen(bounds);
+          debugPrint('[TextPreviewMode] Loaded saved bounds: $restoredBounds');
+        }
+      } catch (error, stackTrace) {
+        Logger('TextPreviewWindow').warning(
+          'Failed to initialize Hive for text preview, using default window bounds',
+          error,
+          stackTrace,
+        );
+        debugPrint(
+            '[TextPreviewMode] ERROR: Hive initialization failed: $error');
+        // Continue without persistence - repository remains null
+      }
+
+      // Window options with saved or default bounds
+      final windowOptions = WindowOptions(
+        size: restoredBounds?.size ?? const Size(900, 700),
+        minimumSize: const Size(400, 300),
+        center: restoredBounds == null, // Only center if no saved position
+        backgroundColor: Colors.transparent,
+        skipTaskbar: false,
+        titleBarStyle: TitleBarStyle.hidden,
       );
-      debugPrint('[TextPreviewMode] Position restored');
-    }
 
-    await windowManager.focus();
-    debugPrint('[TextPreviewMode] Window focused');
+      debugPrint('[TextPreviewMode] Window options created');
 
-    // Run app AFTER window is fully initialized
-    // This keeps the event loop alive and prevents early process exit
-    runApp(
-      _TextPreviewApp(
-        item: item,
-        initialAlwaysOnTop: initialTop,
-        repository: repository,
-      ),
-    );
+      await windowManager.waitUntilReadyToShow(windowOptions, () async {
+        // Set unique window title for window activation (FindWindow)
+        final windowTitle = 'clip_pix_text_${item.id.hashCode}';
+        debugPrint('[TextPreviewMode] Setting window title: $windowTitle');
+        await windowManager.setTitle(windowTitle);
+        debugPrint('[TextPreviewMode] Window title set successfully');
 
-    debugPrint('[TextPreviewMode] runApp completed inside callback');
-  });
+        await windowManager.show();
+        debugPrint('[TextPreviewMode] Window shown');
+
+        // Restore saved position if available
+        if (restoredBounds != null) {
+          await windowManager.setPosition(
+            Offset(restoredBounds.left, restoredBounds.top),
+          );
+          debugPrint('[TextPreviewMode] Position restored');
+        }
+
+        await windowManager.focus();
+        debugPrint('[TextPreviewMode] Window focused');
+
+        // Run app AFTER window is fully initialized
+        // This keeps the event loop alive and prevents early process exit
+        runApp(
+          _TextPreviewApp(
+            item: item,
+            initialAlwaysOnTop: initialTop,
+            repository: repository,
+          ),
+        );
+
+        debugPrint('[TextPreviewMode] runApp completed inside callback');
+      });
 
       debugPrint('[TextPreviewMode] waitUntilReadyToShow callback scheduled');
       // Event loop is now maintained by runApp, process stays alive
@@ -453,6 +457,7 @@ class ClipPixApp extends StatelessWidget {
     required this.gridCardPrefBox,
     required this.gridLayoutBox,
     required this.gridOrderBox,
+    required this.openPreviewsBox,
   });
 
   final Box<dynamic> appStateBox;
@@ -460,14 +465,17 @@ class ClipPixApp extends StatelessWidget {
   final Box<GridCardPreference> gridCardPrefBox;
   final Box<dynamic> gridLayoutBox;
   final Box<dynamic> gridOrderBox;
+  final Box<OpenPreviewItem> openPreviewsBox;
 
   @override
   Widget build(BuildContext context) {
     debugPrint('[ClipPixApp] building; isWindows=${Platform.isWindows}');
+    final openPreviewsRepo = OpenPreviewsRepository(openPreviewsBox);
     final List<SingleChildWidget> providersList = <SingleChildWidget>[
       ...AppStateProvider.providers(
         appStateBox: appStateBox,
         imageHistoryBox: imageHistoryBox,
+        openPreviewsRepo: openPreviewsRepo,
       ),
       Provider<GridCardPreferencesRepository>(
         create: (_) => GridCardPreferencesRepository(gridCardPrefBox),
