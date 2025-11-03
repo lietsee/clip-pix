@@ -563,6 +563,12 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   Future<void> _showTextPreviewDialog(TextContentItem item) async {
+    // 既に起動中または開いている場合は何もしない
+    if (_launchingTextPreviews.contains(item.id) ||
+        _openTextPreviews.containsKey(item.id)) {
+      return;
+    }
+
     if (await _launchTextPreviewWindowProcess(item)) {
       return;
     }

@@ -59,6 +59,7 @@ class _TextCardState extends State<TextCard> {
   bool _showControls = false;
   bool _isResizing = false;
   bool _isEditing = false;
+  bool _isOpeningPreview = false;
   Size? _resizeStartSize;
   Offset? _resizeStartGlobalPosition;
   int _currentSpan = 1;
@@ -346,8 +347,14 @@ class _TextCardState extends State<TextCard> {
     });
   }
 
-  void _handleDoubleTap() {
-    widget.onOpenPreview(widget.item);
+  void _handleDoubleTap() async {
+    if (_isOpeningPreview) return;
+    _isOpeningPreview = true;
+    try {
+      await widget.onOpenPreview(widget.item);
+    } finally {
+      _isOpeningPreview = false;
+    }
   }
 
   void _handleSaveText(String text) async {
