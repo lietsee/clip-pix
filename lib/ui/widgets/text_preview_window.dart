@@ -35,7 +35,8 @@ class TextPreviewWindow extends StatefulWidget {
   State<TextPreviewWindow> createState() => _TextPreviewWindowState();
 }
 
-class _TextPreviewWindowState extends State<TextPreviewWindow> {
+class _TextPreviewWindowState extends State<TextPreviewWindow>
+    with WindowListener {
   final Logger _logger = Logger('TextPreviewWindow');
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
@@ -49,9 +50,14 @@ class _TextPreviewWindowState extends State<TextPreviewWindow> {
   bool _showUIElements = true;
   Timer? _autoHideTimer;
 
+  // Window bounds saving state
+  Timer? _boundsDebounceTimer;
+  bool _needsSave = false;
+
   @override
   void initState() {
     super.initState();
+    windowManager.addListener(this);
     _fontSize = widget.item.fontSize;
     _controller = TextEditingController();
     _focusNode = FocusNode();
@@ -72,6 +78,8 @@ class _TextPreviewWindowState extends State<TextPreviewWindow> {
   void dispose() {
     _autoSaveTimer?.cancel();
     _autoHideTimer?.cancel();
+    _boundsDebounceTimer?.cancel();
+    windowManager.removeListener(this);
     if (_isAlwaysOnTop) {
       _applyAlwaysOnTop(false);
     }
@@ -142,34 +150,81 @@ class _TextPreviewWindowState extends State<TextPreviewWindow> {
     }
   }
 
-  Future<void> _handleClose() async {
+  /// Trigger debounced save (called on resize/move events)
+  void _triggerDebouncedSave() {
+    _needsSave = true;
+    _boundsDebounceTimer?.cancel();
+    _boundsDebounceTimer = Timer(const Duration(milliseconds: 300), () {
+      _saveBounds(flush: false);
+    });
+  }
+
+  /// Common method to save window bounds
+  Future<void> _saveBounds({required bool flush}) async {
+    if (widget.repository == null) return;
+
+    try {
+      final bounds = await windowManager.getBounds();
+      await widget.repository!.save(
+        widget.item.id,
+        bounds,
+        alwaysOnTop: _isAlwaysOnTop,
+      );
+
+      _needsSave = false; // Clear dirty flag after successful save
+
+      if (flush) {
+        await Hive.close(); // Flush to disk on window close
+      }
+
+      _logger.fine(
+          'Saved window bounds: $bounds, alwaysOnTop: $_isAlwaysOnTop, flush: $flush');
+    } catch (e, stackTrace) {
+      _logger.warning('Failed to save window bounds', e, stackTrace);
+    }
+  }
+
+  // WindowListener implementation
+  @override
+  void onWindowResized() {
+    debugPrint('[TextPreviewWindow] onWindowResized triggered');
+    _triggerDebouncedSave();
+  }
+
+  @override
+  void onWindowMoved() {
+    debugPrint('[TextPreviewWindow] onWindowMoved triggered');
+    _triggerDebouncedSave();
+  }
+
+  @override
+  Future<void> onWindowClose() async {
+    debugPrint('[TextPreviewWindow] onWindowClose triggered');
     if (_isClosing) return;
     _isClosing = true;
+
+    _boundsDebounceTimer?.cancel(); // Cancel any pending debounced save
+
     if (_hasUnsavedChanges) {
-      _handleSave();
+      _handleSave(); // Save text content
     }
 
-    // Save window bounds and always-on-top state before closing
-    if (widget.repository != null) {
-      try {
-        final bounds = await windowManager.getBounds();
-        await widget.repository!.save(
-          widget.item.id,
-          bounds,
-          alwaysOnTop: _isAlwaysOnTop,
-        );
-
-        // Flush Hive to disk before exit to ensure writes complete
-        await Hive.close();
-
-        _logger.fine(
-            'Saved and flushed window bounds and state: $bounds, alwaysOnTop: $_isAlwaysOnTop');
-      } catch (e, stackTrace) {
-        _logger.warning('Failed to save window bounds', e, stackTrace);
-      }
+    // Save window bounds only if there are unsaved changes or debounce timer was active
+    if (_needsSave || _boundsDebounceTimer != null) {
+      debugPrint(
+          '[TextPreviewWindow] Saving bounds on close (needsSave: $_needsSave, timerActive: ${_boundsDebounceTimer != null})');
+      await _saveBounds(flush: true);
+    } else {
+      debugPrint(
+          '[TextPreviewWindow] Skipping bounds save on close (already saved)');
     }
 
     widget.onClose?.call();
+  }
+
+  Future<void> _handleClose() async {
+    // Delegate to onWindowClose for consistent behavior
+    await onWindowClose();
   }
 
   void _toggleAlwaysOnTop() {
@@ -178,6 +233,8 @@ class _TextPreviewWindowState extends State<TextPreviewWindow> {
       setState(() {
         _isAlwaysOnTop = newValue;
       });
+      _needsSave =
+          true; // Mark that bounds need to be saved (alwaysOnTop state changed)
       widget.onToggleAlwaysOnTop?.call(newValue);
     }
   }

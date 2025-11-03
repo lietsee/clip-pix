@@ -64,14 +64,9 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   void dispose() {
     windowManager.removeListener(this);
 
-    // Kill all text preview processes before disposing
-    try {
-      final processManager = context.read<TextPreviewProcessManager>();
-      processManager.killAll();
-      debugPrint('[MainScreen] Killed all text preview processes on dispose');
-    } catch (e) {
-      debugPrint('[MainScreen] Error killing preview processes: $e');
-    }
+    // NOTE: Don't kill text preview processes here
+    // Each TextPreviewWindow handles its own state saving via WindowListener.onWindowClose()
+    // The parent's onWindowClose() below will handle cleanup when app exits
 
     _minimapService?.dispose();
     _keyboardFocusNode.dispose();
