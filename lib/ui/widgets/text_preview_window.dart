@@ -255,6 +255,8 @@ class _TextPreviewWindowState extends State<TextPreviewWindow> {
       preferredSize: const Size.fromHeight(kToolbarHeight),
       child: DragToMoveArea(
         child: AppBar(
+          backgroundColor: const Color(0xFF5BA570),
+          elevation: 2,
           title: Row(
             children: [
               Expanded(
@@ -345,13 +347,17 @@ class _TextPreviewWindowState extends State<TextPreviewWindow> {
               expands: true,
               textAlignVertical: TextAlignVertical.top,
               onChanged: (_) => _handleTextChange(),
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
                 hintText: 'テキストを入力してください...',
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: const Color(0xFF72CC82),
+                hintStyle: TextStyle(
+                  color: Colors.black.withOpacity(0.5),
+                ),
               ),
               style: TextStyle(
+                color: Colors.black,
                 fontSize: _fontSize,
                 fontFamily: 'monospace',
               ),
@@ -360,24 +366,28 @@ class _TextPreviewWindowState extends State<TextPreviewWindow> {
         ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade50,
+          decoration: const BoxDecoration(
+            color: Color(0xFF72CC82),
             border: Border(
-              top: BorderSide(color: Colors.grey.shade300),
+              top: BorderSide(color: Color(0xFF5BA570)),
             ),
           ),
           child: Row(
             children: [
-              const Icon(Icons.info_outline, size: 16, color: Colors.grey),
+              Icon(
+                Icons.info_outline,
+                size: 16,
+                color: Colors.white.withOpacity(0.8),
+              ),
               const SizedBox(width: 8),
               const Text(
                 '変更は2秒後に自動保存されます',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
+                style: TextStyle(fontSize: 12, color: Colors.white),
               ),
               const Spacer(),
               Text(
                 '${_controller.text.length} 文字',
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                style: const TextStyle(fontSize: 12, color: Colors.white),
               ),
             ],
           ),
