@@ -20,6 +20,7 @@ import '../data/models/grid_layout_settings.dart';
 import '../data/models/image_item.dart';
 import '../data/models/text_content_item.dart';
 import '../system/clipboard_copy_service.dart';
+import '../system/image_preview_process_manager.dart';
 import '../system/text_preview_process_manager.dart';
 import '../system/state/folder_view_mode.dart';
 import '../system/state/grid_layout_mutation_controller.dart';
@@ -62,7 +63,9 @@ class _GridViewModuleState extends State<GridViewModule> {
   final Map<String, ScrollController> _stagingControllers = {};
   final Map<String, GlobalKey> _cardKeys = {};
   bool _needsRestorationRetry = false;
+  bool _needsImageRestorationRetry = false;
   TextPreviewProcessManager? _processManager;
+  ImagePreviewProcessManager? _imagePreviewManager;
   GridLayoutSettingsRepository? _layoutSettingsRepository;
   GridOrderRepository? _orderRepository;
   late GridLayoutStore _layoutStore;
@@ -93,6 +96,7 @@ class _GridViewModuleState extends State<GridViewModule> {
       _layoutSettingsRepository = context.read<GridLayoutSettingsRepository>();
       _orderRepository = context.read<GridOrderRepository>();
       _processManager = context.read<TextPreviewProcessManager>();
+      _imagePreviewManager = context.read<ImagePreviewProcessManager>();
       final orderedImages = _applyDirectoryOrder(widget.state.images);
       _entries = orderedImages.map(_createEntry).toList(growable: true);
       _layoutStore.syncLibrary(
@@ -110,6 +114,8 @@ class _GridViewModuleState extends State<GridViewModule> {
         }
         // Restore text preview windows after first frame
         _restoreTextPreviewWindows();
+        // Restore image preview windows after first frame
+        _restoreOpenImagePreviews();
       });
     } else {
       _layoutStore = context.read<GridLayoutStore>();
@@ -201,6 +207,15 @@ class _GridViewModuleState extends State<GridViewModule> {
           '[GridViewModule] Retrying text preview restoration with ${widget.state.images.length} images loaded');
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _restoreTextPreviewWindows();
+      });
+    }
+
+    // Retry image preview restoration if it was deferred due to empty images
+    if (_needsImageRestorationRetry && widget.state.images.isNotEmpty) {
+      debugPrint(
+          '[GridViewModule] Retrying image preview restoration with ${widget.state.images.length} images loaded');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _restoreOpenImagePreviews();
       });
     }
   }
@@ -946,22 +961,67 @@ class _GridViewModuleState extends State<GridViewModule> {
     return math.max(1, math.min(target, capped));
   }
 
-  void _showPreviewDialog(ImageItem item) {
-    if (Platform.isWindows) {
-      final launched = _launchPreviewWindowProcess(item);
-      if (launched) {
+  Future<void> _showPreviewDialog(ImageItem item) async {
+    if (_imagePreviewManager == null) {
+      debugPrint('[GridViewModule] ImagePreviewProcessManager is null');
+      _showFallbackPreview(item);
+      return;
+    }
+
+    // 起動中の場合は何もしない
+    if (_imagePreviewManager!.isLaunching(item.id)) {
+      debugPrint(
+          '[GridViewModule] Image preview already launching for ${item.id}');
+      return;
+    }
+
+    // 既にウィンドウが開いている場合はアクティブ化
+    if (_imagePreviewManager!.isRunning(item.id)) {
+      debugPrint(
+          '[GridViewModule] Existing process found for ${item.id}, checking window...');
+      // ウィンドウが実際に存在するか確認
+      if (_isImagePreviewWindowOpen(item.id)) {
+        debugPrint(
+            '[GridViewModule] Activating existing image preview for ${item.id}');
+        _activateImagePreviewWindow(item.id);
         return;
+      } else {
+        // ウィンドウが閉じられている場合、プロセス参照をクリーンアップ
+        debugPrint(
+            '[GridViewModule] Process manager will clean up dead process for ${item.id}');
       }
+    }
+
+    // 新しいウィンドウを起動
+    if (await _launchPreviewWindowProcess(item)) {
+      return;
     }
     _showFallbackPreview(item);
   }
 
-  bool _launchPreviewWindowProcess(ImageItem item) {
+  Future<bool> _launchPreviewWindowProcess(ImageItem item) async {
+    if (_imagePreviewManager == null) {
+      debugPrint('[GridViewModule] ImagePreviewProcessManager is null');
+      return false;
+    }
+
+    // Check if already launching or running
+    if (_imagePreviewManager!.isLaunching(item.id) ||
+        _imagePreviewManager!.isRunning(item.id)) {
+      debugPrint(
+          '[GridViewModule] Image preview already launching/running for ${item.id}');
+      return true;
+    }
+
     final exePath = _resolveExecutablePath();
     if (exePath == null) {
       debugPrint('[GridViewModule] preview exe not found');
       return false;
     }
+
+    // Mark as launching to prevent duplicate launches
+    _imagePreviewManager!.markLaunching(item.id);
+
     final payload = jsonEncode({
       'item': {
         'id': item.id,
@@ -973,22 +1033,73 @@ class _GridViewModuleState extends State<GridViewModule> {
       },
       'alwaysOnTop': false,
     });
+
     try {
-      unawaited(
-        Process.start(
-          exePath,
-          ['--preview', payload],
-          mode: ProcessStartMode.detached,
-        ),
+      debugPrint(
+          '[GridViewModule] Starting image preview process for ${item.id} (hashCode=${item.id.hashCode})');
+      final process = await Process.start(
+        exePath,
+        ['--preview', payload],
+        mode: ProcessStartMode.normal,
       );
-      return true;
+
+      debugPrint('[GridViewModule] Process started, PID: ${process.pid}');
+
+      // Capture stdout and stderr from preview process
+      process.stdout.transform(utf8.decoder).listen((data) {
+        for (final line in data.split('\n')) {
+          if (line.trim().isNotEmpty) {
+            debugPrint('[ImagePreview:${item.id.hashCode}] $line');
+          }
+        }
+      });
+
+      process.stderr.transform(utf8.decoder).listen((data) {
+        for (final line in data.split('\n')) {
+          if (line.trim().isNotEmpty) {
+            debugPrint('[ImagePreview:${item.id.hashCode} ERROR] $line');
+          }
+        }
+      });
+
+      // Note: process exit monitoring is handled by ImagePreviewProcessManager
+
+      debugPrint(
+          '[GridViewModule] Process started, waiting for window to appear...');
+
+      // Wait for window to appear (poll for 10 seconds)
+      bool windowAppeared = false;
+      for (int i = 0; i < 100; i++) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        if (_isImagePreviewWindowOpen(item.id)) {
+          windowAppeared = true;
+          debugPrint(
+              '[GridViewModule] Window appeared after ${(i + 1) * 100}ms');
+          break;
+        }
+      }
+
+      if (windowAppeared) {
+        // Register process with manager (handles tracking and exit monitoring)
+        await _imagePreviewManager!
+            .registerProcess(item.id, process, alwaysOnTop: false);
+        debugPrint('[GridViewModule] Launched image preview for ${item.id}');
+        return true;
+      } else {
+        debugPrint(
+            '[GridViewModule] ERROR: Window did not appear after 10s, killing process');
+        process.kill();
+        _imagePreviewManager!.removeLaunching(item.id);
+        return false;
+      }
     } catch (error, stackTrace) {
-      debugPrint('[GridViewModule] failed to launch preview: $error');
+      debugPrint('[GridViewModule] failed to launch image preview: $error');
       Logger('GridViewModule').warning(
-        'Failed to launch preview window',
+        'Failed to launch image preview window',
         error,
         stackTrace,
       );
+      _imagePreviewManager!.removeLaunching(item.id);
       return false;
     }
   }
@@ -1842,6 +1953,211 @@ class _GridViewModuleState extends State<GridViewModule> {
   void _handleTextPreviewClosed(String itemId) {
     // Cleanup is now handled by TextPreviewProcessManager
     debugPrint('[GridViewModule] Text preview closed for $itemId');
+  }
+
+  /// Check if image preview window is open by finding its window handle
+  bool _isImagePreviewWindowOpen(String imageId) {
+    if (!Platform.isWindows) return false;
+
+    try {
+      final titleHash = 'clip_pix_image_${imageId.hashCode}';
+      final titlePtr = TEXT(titleHash);
+      // Search by window title only (class name = nullptr)
+      final hwnd = FindWindow(Pointer.fromAddress(0), titlePtr);
+      calloc.free(titlePtr);
+
+      debugPrint(
+          '[GridViewModule] _isImagePreviewWindowOpen: imageId="$imageId", hashCode=${imageId.hashCode}, titleHash="$titleHash", hwnd=$hwnd');
+
+      if (hwnd == 0) {
+        return false;
+      }
+
+      // Verify the window handle is still valid
+      final isValid = IsWindow(hwnd) != 0;
+      debugPrint('[GridViewModule] IsWindow result: $isValid for hwnd=$hwnd');
+
+      if (!isValid) {
+        // Window was closed (cleanup handled by process manager)
+        debugPrint('[GridViewModule] Window $imageId is no longer valid');
+      }
+
+      return isValid;
+    } catch (e) {
+      debugPrint('[GridViewModule] Error checking window existence: $e');
+      return false;
+    }
+  }
+
+  /// Activate existing image preview window
+  void _activateImagePreviewWindow(String imageId) {
+    if (!Platform.isWindows) return;
+
+    try {
+      // Window title hash used for FindWindow
+      final titleHash = 'clip_pix_image_${imageId.hashCode}';
+      final titlePtr = TEXT(titleHash);
+      // Search by window title only (class name = nullptr)
+      final hwnd = FindWindow(Pointer.fromAddress(0), titlePtr);
+      calloc.free(titlePtr);
+
+      if (hwnd == 0) {
+        debugPrint('[GridViewModule] Window not found: $titleHash');
+        return;
+      }
+
+      // Verify window is still valid
+      if (IsWindow(hwnd) == 0) {
+        debugPrint(
+            '[GridViewModule] IsWindow returned invalid: $titleHash (hwnd=$hwnd)');
+        return;
+      }
+
+      // Restore if minimized
+      if (IsIconic(hwnd) != 0) {
+        final restoreResult = ShowWindow(hwnd, SW_RESTORE);
+        debugPrint(
+            '[GridViewModule] ShowWindow(SW_RESTORE) result: $restoreResult');
+      }
+
+      // Get thread IDs for input attachment
+      final foregroundHwnd = GetForegroundWindow();
+      final foregroundThreadId = GetWindowThreadProcessId(
+          foregroundHwnd, Pointer<Uint32>.fromAddress(0));
+      final targetThreadId =
+          GetWindowThreadProcessId(hwnd, Pointer<Uint32>.fromAddress(0));
+
+      debugPrint(
+          '[GridViewModule] Thread IDs: foreground=$foregroundThreadId, target=$targetThreadId');
+
+      // Attach input if different threads
+      int attachResult = 0;
+      if (foregroundThreadId != targetThreadId && foregroundThreadId != 0) {
+        attachResult = AttachThreadInput(foregroundThreadId, targetThreadId, 1);
+        debugPrint('[GridViewModule] AttachThreadInput result: $attachResult');
+      }
+
+      // Multiple activation attempts for reliability
+      final bringToTopResult = BringWindowToTop(hwnd);
+      final showResult = ShowWindow(hwnd, SW_SHOW);
+      final setForegroundResult = SetForegroundWindow(hwnd);
+      final setFocusResult = SetFocus(hwnd);
+
+      debugPrint('[GridViewModule] Activation results: '
+          'BringWindowToTop=$bringToTopResult, ShowWindow=$showResult, '
+          'SetForegroundWindow=$setForegroundResult, SetFocus=$setFocusResult');
+
+      // Detach input
+      if (foregroundThreadId != targetThreadId && foregroundThreadId != 0) {
+        final detachResult =
+            AttachThreadInput(foregroundThreadId, targetThreadId, 0);
+        debugPrint('[GridViewModule] DetachThreadInput result: $detachResult');
+      }
+
+      debugPrint('[GridViewModule] Activated window: $titleHash (hwnd=$hwnd)');
+    } catch (e, stackTrace) {
+      Logger('GridViewModule').warning(
+        'Failed to activate image preview window',
+        e,
+        stackTrace,
+      );
+    }
+  }
+
+  /// Restore image preview windows from previous session
+  Future<void> _restoreOpenImagePreviews() async {
+    if (_imagePreviewManager == null) {
+      debugPrint(
+          '[GridViewModule] ImagePreviewProcessManager is null, skipping restoration');
+      return;
+    }
+
+    // Skip restoration if image library is not yet loaded
+    if (widget.state.images.isEmpty) {
+      debugPrint(
+          '[GridViewModule] Image library is empty, deferring restoration');
+      _needsImageRestorationRetry = true;
+      return;
+    }
+
+    try {
+      final openPreviews = _imagePreviewManager!.getOpenPreviews();
+      debugPrint(
+          '[GridViewModule] Restoring ${openPreviews.length} image preview windows from ${widget.state.images.length} loaded images');
+
+      if (openPreviews.isEmpty) {
+        _needsImageRestorationRetry = false;
+        return;
+      }
+
+      // Clean up old entries (older than 30 days)
+      await _imagePreviewManager!.removeOldPreviews(const Duration(days: 30));
+
+      int restoredCount = 0;
+      int failedCount = 0;
+      const maxRestore = 10; // Limit to 10 windows
+
+      for (final preview in openPreviews.take(maxRestore)) {
+        try {
+          // Find the item in current library
+          final item = widget.state.images.firstWhere(
+            (img) => img.id == preview.itemId,
+            orElse: () => throw StateError('Item not found'),
+          );
+
+          if (item is! ImageItem) {
+            debugPrint(
+                '[GridViewModule] Item ${preview.itemId} is not an ImageItem, skipping');
+            await _imagePreviewManager!.removePreview(preview.itemId);
+            continue;
+          }
+
+          // Launch the preview window
+          debugPrint('[GridViewModule] Restoring preview for ${item.id}');
+          final success = await _launchPreviewWindowProcess(item);
+
+          if (success) {
+            restoredCount++;
+            debugPrint(
+                '[GridViewModule] Successfully restored preview for ${item.id}');
+          } else {
+            failedCount++;
+            debugPrint(
+                '[GridViewModule] Failed to restore preview for ${item.id}');
+            // Remove from repository if restoration failed
+            await _imagePreviewManager!.removePreview(preview.itemId);
+          }
+
+          // Add delay between launches to avoid resource contention
+          if (preview != openPreviews.last) {
+            await Future.delayed(const Duration(milliseconds: 150));
+          }
+        } catch (error) {
+          failedCount++;
+          debugPrint(
+              '[GridViewModule] Error restoring preview ${preview.itemId}: $error');
+          // Remove from repository if item no longer exists
+          await _imagePreviewManager!.removePreview(preview.itemId);
+        }
+      }
+
+      debugPrint(
+          '[GridViewModule] Image preview restoration complete: $restoredCount restored, $failedCount failed');
+      _needsImageRestorationRetry = false;
+    } catch (error, stackTrace) {
+      Logger('GridViewModule').warning(
+        'Failed to restore image preview windows',
+        error,
+        stackTrace,
+      );
+      _needsImageRestorationRetry = false;
+    }
+  }
+
+  /// Handle image preview window closed
+  void _handleImagePreviewClosed(String itemId) {
+    // Cleanup is now handled by ImagePreviewProcessManager
+    debugPrint('[GridViewModule] Image preview closed for $itemId');
   }
 }
 
