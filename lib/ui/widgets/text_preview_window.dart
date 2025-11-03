@@ -290,7 +290,21 @@ class _TextPreviewWindowState extends State<TextPreviewWindow> {
               child: Scaffold(
                 backgroundColor: const Color(0xFF72CC82),
                 appBar: _buildAppBar(context),
-                body: _buildTextEditor(),
+                body: Stack(
+                  children: [
+                    _buildTextEditor(),
+                    if (!_showUIElements)
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: 40,
+                        child: DragToMoveArea(
+                          child: Container(color: Colors.transparent),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -304,10 +318,8 @@ class _TextPreviewWindowState extends State<TextPreviewWindow> {
 
     if (!_showUIElements) {
       return PreferredSize(
-        preferredSize: const Size.fromHeight(40),
-        child: DragToMoveArea(
-          child: Container(color: Colors.transparent),
-        ),
+        preferredSize: Size.zero,
+        child: SizedBox.shrink(),
       );
     }
 
