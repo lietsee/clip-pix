@@ -39,7 +39,7 @@ class TextCard extends StatefulWidget {
   final void Function(String id, String memo) onEditMemo;
   final void Function(String id, int favorite) onFavoriteToggle;
   final void Function(TextContentItem item) onCopyText;
-  final void Function(TextContentItem item) onOpenPreview;
+  final Future<void> Function(TextContentItem item) onOpenPreview;
   final void Function(String id, String text) onSaveText;
   final double columnWidth;
   final int columnCount;
