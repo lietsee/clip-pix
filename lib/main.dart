@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_state_notifier/flutter_state_notifier.dart';
@@ -324,9 +325,18 @@ Future<void> _launchTextPreviewMode(String payload) async {
       TextPreviewStateRepository? repository;
       Rect? restoredBounds;
 
+      // Generate unique Hive directory name based on item ID
+      String getHiveDirectoryName(String itemId) {
+        final bytes = utf8.encode(itemId);
+        final digest = md5.convert(bytes);
+        return 'text_preview_${digest.toString().substring(0, 8)}';
+      }
+
       try {
-        debugPrint('[TextPreviewMode] Initializing Hive...');
-        await Hive.initFlutter('text_preview_hive'); // Unique subdirectory
+        final hiveDir = getHiveDirectoryName(item.id);
+        debugPrint(
+            '[TextPreviewMode] Initializing Hive with directory: $hiveDir');
+        await Hive.initFlutter(hiveDir); // Unique subdirectory per item
         _registerHiveAdapters();
         await Hive.openBox<TextPreviewState>('text_preview_state');
         debugPrint('[TextPreviewMode] Hive initialized successfully');
