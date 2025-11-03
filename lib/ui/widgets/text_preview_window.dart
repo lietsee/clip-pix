@@ -42,6 +42,8 @@ class _TextPreviewWindowState extends State<TextPreviewWindow> {
   bool _hasUnsavedChanges = false;
   late bool _isAlwaysOnTop;
   bool _isClosing = false;
+  bool _showUIElements = true;
+  Timer? _autoHideTimer;
 
   @override
   void initState() {
@@ -65,6 +67,7 @@ class _TextPreviewWindowState extends State<TextPreviewWindow> {
   @override
   void dispose() {
     _autoSaveTimer?.cancel();
+    _autoHideTimer?.cancel();
     if (_isAlwaysOnTop) {
       _applyAlwaysOnTop(false);
     }
@@ -199,6 +202,45 @@ class _TextPreviewWindowState extends State<TextPreviewWindow> {
     });
   }
 
+  void _toggleUIElements() {
+    setState(() {
+      _showUIElements = !_showUIElements;
+    });
+
+    if (!_showUIElements) {
+      _autoHideTimer?.cancel();
+      _autoHideTimer = null;
+    }
+  }
+
+  void _showTemporarily() {
+    _autoHideTimer?.cancel();
+
+    setState(() {
+      _showUIElements = true;
+    });
+
+    _autoHideTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          _showUIElements = false;
+        });
+      }
+    });
+  }
+
+  void _handleMouseMove(Offset position) {
+    if (!_showUIElements) {
+      final size = MediaQuery.of(context).size;
+      final isTopArea = position.dy < size.height * 0.1;
+      final isBottomArea = position.dy > size.height * 0.9;
+
+      if (isTopArea || isBottomArea) {
+        _showTemporarily();
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final shortcuts = <ShortcutActivator, Intent>{
@@ -212,35 +254,43 @@ class _TextPreviewWindowState extends State<TextPreviewWindow> {
       ): const _ToggleAlwaysOnTopIntent(),
       const SingleActivator(LogicalKeyboardKey.keyS, control: true):
           const _SaveIntent(),
+      const SingleActivator(LogicalKeyboardKey.f11):
+          const _ToggleUIElementsIntent(),
     };
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
-      child: Shortcuts(
-        shortcuts: shortcuts,
-        child: Actions(
-          actions: <Type, Action<Intent>>{
-            _CloseIntent: CallbackAction<_CloseIntent>(onInvoke: (_) {
-              _handleClose();
-              return null;
-            }),
-            _ToggleAlwaysOnTopIntent:
-                CallbackAction<_ToggleAlwaysOnTopIntent>(onInvoke: (_) {
-              _toggleAlwaysOnTop();
-              return null;
-            }),
-            _SaveIntent: CallbackAction<_SaveIntent>(onInvoke: (_) {
-              _handleSave();
-              return null;
-            }),
-          },
-          child: Focus(
-            autofocus: true,
-            child: Scaffold(
-              backgroundColor: const Color(0xFF72CC82),
-              appBar: _buildAppBar(context),
-              body: Positioned.fill(
-                child: _buildTextEditor(),
+      child: MouseRegion(
+        onHover: (event) => _handleMouseMove(event.localPosition),
+        child: Shortcuts(
+          shortcuts: shortcuts,
+          child: Actions(
+            actions: <Type, Action<Intent>>{
+              _CloseIntent: CallbackAction<_CloseIntent>(onInvoke: (_) {
+                _handleClose();
+                return null;
+              }),
+              _ToggleAlwaysOnTopIntent:
+                  CallbackAction<_ToggleAlwaysOnTopIntent>(onInvoke: (_) {
+                _toggleAlwaysOnTop();
+                return null;
+              }),
+              _SaveIntent: CallbackAction<_SaveIntent>(onInvoke: (_) {
+                _handleSave();
+                return null;
+              }),
+              _ToggleUIElementsIntent:
+                  CallbackAction<_ToggleUIElementsIntent>(onInvoke: (_) {
+                _toggleUIElements();
+                return null;
+              }),
+            },
+            child: Focus(
+              autofocus: true,
+              child: Scaffold(
+                backgroundColor: const Color(0xFF72CC82),
+                appBar: _buildAppBar(context),
+                body: _buildTextEditor(),
               ),
             ),
           ),
@@ -251,81 +301,96 @@ class _TextPreviewWindowState extends State<TextPreviewWindow> {
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {
     final title = p.basename(widget.item.filePath);
+
+    if (!_showUIElements) {
+      return PreferredSize(
+        preferredSize: const Size.fromHeight(40),
+        child: DragToMoveArea(
+          child: Container(color: Colors.transparent),
+        ),
+      );
+    }
+
     return PreferredSize(
       preferredSize: const Size.fromHeight(kToolbarHeight),
-      child: DragToMoveArea(
-        child: AppBar(
-          backgroundColor: const Color(0xFF5BA570),
-          elevation: 2,
-          title: Row(
-            children: [
-              Expanded(
-                child: Text(title, overflow: TextOverflow.ellipsis),
-              ),
-              if (_hasUnsavedChanges)
-                const Padding(
-                  padding: EdgeInsets.only(left: 8),
-                  child: Chip(
-                    label: Text(
-                      '未保存',
-                      style: TextStyle(fontSize: 11),
+      child: AnimatedOpacity(
+        opacity: _showUIElements ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        child: DragToMoveArea(
+          child: AppBar(
+            backgroundColor: const Color(0xFF5BA570),
+            elevation: 2,
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text(title, overflow: TextOverflow.ellipsis),
+                ),
+                if (_hasUnsavedChanges)
+                  const Padding(
+                    padding: EdgeInsets.only(left: 8),
+                    child: Chip(
+                      label: Text(
+                        '未保存',
+                        style: TextStyle(fontSize: 11),
+                      ),
+                      padding: EdgeInsets.symmetric(horizontal: 4),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
-                    padding: EdgeInsets.symmetric(horizontal: 4),
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+              ],
+            ),
+            actions: [
+              IconButton(
+                tooltip: 'フォントサイズを小さく',
+                onPressed: _handleZoomOut,
+                icon: const Icon(Icons.zoom_out),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Center(
+                  child: Text(
+                    '${_fontSize.toInt()}',
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.bold),
                   ),
                 ),
-            ],
-          ),
-          actions: [
-            IconButton(
-              tooltip: 'フォントサイズを小さく',
-              onPressed: _handleZoomOut,
-              icon: const Icon(Icons.zoom_out),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Center(
-                child: Text(
-                  '${_fontSize.toInt()}',
-                  style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+              IconButton(
+                tooltip: 'フォントサイズを大きく',
+                onPressed: _handleZoomIn,
+                icon: const Icon(Icons.zoom_in),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: '保存 (Ctrl+S)',
+                onPressed: _hasUnsavedChanges ? _handleSave : null,
+                icon: const Icon(Icons.save),
+              ),
+              IconButton(
+                tooltip: _isAlwaysOnTop
+                    ? '最前面表示を解除 (Ctrl+Shift+F)'
+                    : '最前面表示 (Ctrl+Shift+F)',
+                onPressed: _toggleAlwaysOnTop,
+                style: IconButton.styleFrom(
+                  backgroundColor: _isAlwaysOnTop
+                      ? Theme.of(context).colorScheme.primary.withOpacity(0.2)
+                      : null,
+                ),
+                icon: Icon(
+                  Icons.push_pin,
+                  color: _isAlwaysOnTop
+                      ? Theme.of(context).colorScheme.primary
+                      : Colors.grey.shade600,
                 ),
               ),
-            ),
-            IconButton(
-              tooltip: 'フォントサイズを大きく',
-              onPressed: _handleZoomIn,
-              icon: const Icon(Icons.zoom_in),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              tooltip: '保存 (Ctrl+S)',
-              onPressed: _hasUnsavedChanges ? _handleSave : null,
-              icon: const Icon(Icons.save),
-            ),
-            IconButton(
-              tooltip: _isAlwaysOnTop
-                  ? '最前面表示を解除 (Ctrl+Shift+F)'
-                  : '最前面表示 (Ctrl+Shift+F)',
-              onPressed: _toggleAlwaysOnTop,
-              style: IconButton.styleFrom(
-                backgroundColor: _isAlwaysOnTop
-                    ? Theme.of(context).colorScheme.primary.withOpacity(0.2)
-                    : null,
+              IconButton(
+                tooltip: '閉じる (Esc)',
+                onPressed: _handleClose,
+                icon: const Icon(Icons.close),
               ),
-              icon: Icon(
-                Icons.push_pin,
-                color: _isAlwaysOnTop
-                    ? Theme.of(context).colorScheme.primary
-                    : Colors.grey.shade600,
-              ),
-            ),
-            IconButton(
-              tooltip: '閉じる (Esc)',
-              onPressed: _handleClose,
-              icon: const Icon(Icons.close),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -364,7 +429,21 @@ class _TextPreviewWindowState extends State<TextPreviewWindow> {
             ),
           ),
         ),
-        Container(
+        _buildFooter(),
+      ],
+    );
+  }
+
+  Widget _buildFooter() {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeInOut,
+      height: _showUIElements ? 48 : 0,
+      child: AnimatedOpacity(
+        opacity: _showUIElements ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: const BoxDecoration(
             color: Color(0xFF72CC82),
@@ -392,7 +471,7 @@ class _TextPreviewWindowState extends State<TextPreviewWindow> {
             ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -407,4 +486,8 @@ class _ToggleAlwaysOnTopIntent extends Intent {
 
 class _SaveIntent extends Intent {
   const _SaveIntent();
+}
+
+class _ToggleUIElementsIntent extends Intent {
+  const _ToggleUIElementsIntent();
 }
