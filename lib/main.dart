@@ -9,6 +9,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:logging/logging.dart';
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'data/file_info_manager.dart';
 import 'data/grid_card_preferences_repository.dart';
@@ -277,6 +278,25 @@ Future<void> _launchTextPreviewMode(String payload) async {
   );
 
   final initialTop = data['alwaysOnTop'] as bool? ?? false;
+
+  // Initialize window_manager for frameless window
+  await windowManager.ensureInitialized();
+
+  const windowOptions = WindowOptions(
+    size: Size(900, 700),
+    minimumSize: Size(400, 300),
+    center: true,
+    backgroundColor: Colors.transparent,
+    skipTaskbar: false,
+    titleBarStyle: TitleBarStyle.hidden,
+  );
+
+  await windowManager.waitUntilReadyToShow(windowOptions, () async {
+    await windowManager.setAsFrameless();
+    await windowManager.setResizable(true);
+    await windowManager.show();
+    await windowManager.focus();
+  });
 
   runApp(
     _TextPreviewApp(

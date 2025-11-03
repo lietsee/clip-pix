@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
 import 'package:win32/win32.dart';
+import 'package:window_manager/window_manager.dart';
 
 import '../../data/models/text_content_item.dart';
 
@@ -213,37 +214,33 @@ class _TextPreviewWindowState extends State<TextPreviewWindow> {
           const _SaveIntent(),
     };
 
-    return Shortcuts(
-      shortcuts: shortcuts,
-      child: Actions(
-        actions: <Type, Action<Intent>>{
-          _CloseIntent: CallbackAction<_CloseIntent>(onInvoke: (_) {
-            _handleClose();
-            return null;
-          }),
-          _ToggleAlwaysOnTopIntent:
-              CallbackAction<_ToggleAlwaysOnTopIntent>(onInvoke: (_) {
-            _toggleAlwaysOnTop();
-            return null;
-          }),
-          _SaveIntent: CallbackAction<_SaveIntent>(onInvoke: (_) {
-            _handleSave();
-            return null;
-          }),
-        },
-        child: Focus(
-          autofocus: true,
-          child: Scaffold(
-            appBar: _buildAppBar(context),
-            body: Stack(
-              children: [
-                Positioned.fill(child: _buildTextEditor()),
-                Positioned(
-                  right: 16,
-                  bottom: 16,
-                  child: _buildOverlayControls(context),
-                ),
-              ],
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Shortcuts(
+        shortcuts: shortcuts,
+        child: Actions(
+          actions: <Type, Action<Intent>>{
+            _CloseIntent: CallbackAction<_CloseIntent>(onInvoke: (_) {
+              _handleClose();
+              return null;
+            }),
+            _ToggleAlwaysOnTopIntent:
+                CallbackAction<_ToggleAlwaysOnTopIntent>(onInvoke: (_) {
+              _toggleAlwaysOnTop();
+              return null;
+            }),
+            _SaveIntent: CallbackAction<_SaveIntent>(onInvoke: (_) {
+              _handleSave();
+              return null;
+            }),
+          },
+          child: Focus(
+            autofocus: true,
+            child: Scaffold(
+              appBar: _buildAppBar(context),
+              body: Positioned.fill(
+                child: _buildTextEditor(),
+              ),
             ),
           ),
         ),
@@ -253,70 +250,78 @@ class _TextPreviewWindowState extends State<TextPreviewWindow> {
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {
     final title = p.basename(widget.item.filePath);
-    return AppBar(
-      title: Row(
-        children: [
-          Expanded(
-            child: Text(title, overflow: TextOverflow.ellipsis),
-          ),
-          if (_hasUnsavedChanges)
-            const Padding(
-              padding: EdgeInsets.only(left: 8),
-              child: Chip(
-                label: Text(
-                  '未保存',
-                  style: TextStyle(fontSize: 11),
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(kToolbarHeight),
+      child: DragToMoveArea(
+        child: AppBar(
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(title, overflow: TextOverflow.ellipsis),
+              ),
+              if (_hasUnsavedChanges)
+                const Padding(
+                  padding: EdgeInsets.only(left: 8),
+                  child: Chip(
+                    label: Text(
+                      '未保存',
+                      style: TextStyle(fontSize: 11),
+                    ),
+                    padding: EdgeInsets.symmetric(horizontal: 4),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                 ),
-                padding: EdgeInsets.symmetric(horizontal: 4),
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ],
+          ),
+          actions: [
+            IconButton(
+              tooltip: 'フォントサイズを小さく',
+              onPressed: _handleZoomOut,
+              icon: const Icon(Icons.zoom_out),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Center(
+                child: Text(
+                  '${_fontSize.toInt()}',
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.bold),
+                ),
               ),
             ),
-        ],
-      ),
-      actions: [
-        IconButton(
-          tooltip: 'フォントサイズを小さく',
-          onPressed: _handleZoomOut,
-          icon: const Icon(Icons.zoom_out),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Center(
-            child: Text(
-              '${_fontSize.toInt()}',
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+            IconButton(
+              tooltip: 'フォントサイズを大きく',
+              onPressed: _handleZoomIn,
+              icon: const Icon(Icons.zoom_in),
             ),
-          ),
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: '保存 (Ctrl+S)',
+              onPressed: _hasUnsavedChanges ? _handleSave : null,
+              icon: const Icon(Icons.save),
+            ),
+            IconButton(
+              tooltip: _isAlwaysOnTop
+                  ? '最前面表示を解除 (Ctrl+Shift+F)'
+                  : '最前面表示 (Ctrl+Shift+F)',
+              onPressed: _toggleAlwaysOnTop,
+              icon: Icon(
+                _isAlwaysOnTop ? Icons.push_pin : Icons.push_pin_outlined,
+                color: _isAlwaysOnTop
+                    ? Theme.of(context).colorScheme.onPrimary
+                    : null,
+              ),
+              color:
+                  _isAlwaysOnTop ? Theme.of(context).colorScheme.primary : null,
+            ),
+            IconButton(
+              tooltip: '閉じる (Esc)',
+              onPressed: _handleClose,
+              icon: const Icon(Icons.close),
+            ),
+          ],
         ),
-        IconButton(
-          tooltip: 'フォントサイズを大きく',
-          onPressed: _handleZoomIn,
-          icon: const Icon(Icons.zoom_in),
-        ),
-        const SizedBox(width: 8),
-        IconButton(
-          tooltip: '保存 (Ctrl+S)',
-          onPressed: _hasUnsavedChanges ? _handleSave : null,
-          icon: const Icon(Icons.save),
-        ),
-        IconButton(
-          tooltip: _isAlwaysOnTop
-              ? '最前面表示を解除 (Ctrl+Shift+F)'
-              : '最前面表示 (Ctrl+Shift+F)',
-          onPressed: _toggleAlwaysOnTop,
-          icon: Icon(
-            _isAlwaysOnTop ? Icons.push_pin : Icons.push_pin_outlined,
-            color:
-                _isAlwaysOnTop ? Theme.of(context).colorScheme.onPrimary : null,
-          ),
-          color: _isAlwaysOnTop ? Theme.of(context).colorScheme.primary : null,
-        ),
-        IconButton(
-          tooltip: '閉じる (Esc)',
-          onPressed: _handleClose,
-          icon: const Icon(Icons.close),
-        ),
-      ],
+      ),
     );
   }
 
@@ -372,20 +377,6 @@ class _TextPreviewWindowState extends State<TextPreviewWindow> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildOverlayControls(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return FloatingActionButton.small(
-      heroTag: null,
-      backgroundColor:
-          _isAlwaysOnTop ? colorScheme.primary : colorScheme.surfaceVariant,
-      foregroundColor:
-          _isAlwaysOnTop ? colorScheme.onPrimary : colorScheme.onSurface,
-      tooltip: _isAlwaysOnTop ? '最前面表示を解除' : '最前面表示',
-      onPressed: _toggleAlwaysOnTop,
-      child: Icon(_isAlwaysOnTop ? Icons.push_pin : Icons.push_pin_outlined),
     );
   }
 }
