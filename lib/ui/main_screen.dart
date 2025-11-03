@@ -10,6 +10,7 @@ import '../data/models/image_source_type.dart';
 import '../system/clipboard_monitor.dart';
 import '../system/file_watcher.dart';
 import '../system/folder_picker_service.dart';
+import '../system/image_preview_process_manager.dart';
 import '../system/text_preview_process_manager.dart';
 import '../system/state/grid_layout_store.dart';
 import '../system/state/image_history_state.dart';
@@ -81,13 +82,24 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
 
     // Kill all text preview processes BEFORE window closes
     try {
-      final processManager = context.read<TextPreviewProcessManager>();
-      await processManager.killAll();
+      final textProcessManager = context.read<TextPreviewProcessManager>();
+      await textProcessManager.killAll();
       debugPrint(
           '[MainScreen] Killed all text preview processes in onWindowClose');
     } catch (e) {
       debugPrint(
-          '[MainScreen] Error killing preview processes in onWindowClose: $e');
+          '[MainScreen] Error killing text preview processes in onWindowClose: $e');
+    }
+
+    // Kill all image preview processes BEFORE window closes
+    try {
+      final imageProcessManager = context.read<ImagePreviewProcessManager>();
+      await imageProcessManager.killAll();
+      debugPrint(
+          '[MainScreen] Killed all image preview processes in onWindowClose');
+    } catch (e) {
+      debugPrint(
+          '[MainScreen] Error killing image preview processes in onWindowClose: $e');
     }
 
     // Allow window to close
