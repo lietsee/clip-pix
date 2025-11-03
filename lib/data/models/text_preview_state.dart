@@ -40,7 +40,7 @@ class TextPreviewState extends HiveObject {
   final DateTime lastOpened;
 
   /// 最前面表示状態
-  @HiveField(6)
+  @HiveField(6, defaultValue: false)
   final bool alwaysOnTop;
 
   TextPreviewState copyWith({

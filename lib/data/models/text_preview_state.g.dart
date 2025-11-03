@@ -23,7 +23,7 @@ class TextPreviewStateAdapter extends TypeAdapter<TextPreviewState> {
       x: fields[3] as double?,
       y: fields[4] as double?,
       lastOpened: fields[5] as DateTime,
-      alwaysOnTop: fields[6] as bool,
+      alwaysOnTop: fields[6] == null ? false : fields[6] as bool,
     );
   }
 
