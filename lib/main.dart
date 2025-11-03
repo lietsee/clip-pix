@@ -26,6 +26,7 @@ import 'data/models/image_source_type.dart';
 import 'data/models/open_preview_item.dart';
 import 'data/models/text_content_item.dart';
 import 'data/models/text_preview_state.dart';
+import 'data/open_previews_repository.dart';
 import 'data/text_preview_state_repository.dart';
 import 'system/app_lifecycle_service.dart';
 import 'system/clipboard_copy_service.dart';
