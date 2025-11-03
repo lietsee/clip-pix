@@ -292,8 +292,6 @@ Future<void> _launchTextPreviewMode(String payload) async {
   );
 
   await windowManager.waitUntilReadyToShow(windowOptions, () async {
-    await windowManager.setAsFrameless();
-    await windowManager.setResizable(true);
     await windowManager.show();
     await windowManager.focus();
   });
