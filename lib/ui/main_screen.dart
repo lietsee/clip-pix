@@ -80,30 +80,39 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   Future<void> onWindowClose() async {
     debugPrint('[MainScreen] onWindowClose called');
 
-    // Kill all text preview processes BEFORE window closes
+    // Kill all preview processes in parallel with timeout
     try {
-      final textProcessManager = context.read<TextPreviewProcessManager>();
-      await textProcessManager.killAll();
-      debugPrint(
-          '[MainScreen] Killed all text preview processes in onWindowClose');
+      await Future.wait([
+        _killTextPreviews(),
+        _killImagePreviews(),
+      ]).timeout(const Duration(milliseconds: 800));
+      debugPrint('[MainScreen] All preview processes killed successfully');
     } catch (e) {
-      debugPrint(
-          '[MainScreen] Error killing text preview processes in onWindowClose: $e');
-    }
-
-    // Kill all image preview processes BEFORE window closes
-    try {
-      final imageProcessManager = context.read<ImagePreviewProcessManager>();
-      await imageProcessManager.killAll();
-      debugPrint(
-          '[MainScreen] Killed all image preview processes in onWindowClose');
-    } catch (e) {
-      debugPrint(
-          '[MainScreen] Error killing image preview processes in onWindowClose: $e');
+      debugPrint('[MainScreen] Timeout or error during process cleanup: $e');
     }
 
     // Allow window to close
     await windowManager.destroy();
+  }
+
+  Future<void> _killTextPreviews() async {
+    try {
+      final manager = context.read<TextPreviewProcessManager>();
+      await manager.killAll(gracePeriod: const Duration(milliseconds: 300));
+      debugPrint('[MainScreen] Killed all text preview processes');
+    } catch (e) {
+      debugPrint('[MainScreen] Error killing text preview processes: $e');
+    }
+  }
+
+  Future<void> _killImagePreviews() async {
+    try {
+      final manager = context.read<ImagePreviewProcessManager>();
+      await manager.killAll(gracePeriod: const Duration(milliseconds: 300));
+      debugPrint('[MainScreen] Killed all image preview processes');
+    } catch (e) {
+      debugPrint('[MainScreen] Error killing image preview processes: $e');
+    }
   }
 
   @override
