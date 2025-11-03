@@ -564,12 +564,33 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   Future<void> _showTextPreviewDialog(TextContentItem item) async {
-    // 既に起動中または開いている場合は何もしない
-    if (_launchingTextPreviews.contains(item.id) ||
-        _openTextPreviews.containsKey(item.id)) {
+    // 起動中の場合は何もしない
+    if (_launchingTextPreviews.contains(item.id)) {
+      debugPrint(
+          '[GridViewModule] Text preview already launching for ${item.id}');
       return;
     }
 
+    // 既にウィンドウが開いている場合はアクティブ化
+    final existingProcess = _openTextPreviews[item.id];
+    if (existingProcess != null) {
+      debugPrint(
+          '[GridViewModule] Existing process found for ${item.id}, checking window...');
+      // ウィンドウが実際に存在するか確認
+      if (_isTextPreviewWindowOpen(item.id)) {
+        debugPrint(
+            '[GridViewModule] Activating existing text preview for ${item.id}');
+        _activateTextPreviewWindow(item.id);
+        return;
+      } else {
+        // ウィンドウが閉じられている場合、プロセス参照をクリーンアップ
+        debugPrint(
+            '[GridViewModule] Removing dead process reference for ${item.id}');
+        _openTextPreviews.remove(item.id);
+      }
+    }
+
+    // 新しいウィンドウを起動
     if (await _launchTextPreviewWindowProcess(item)) {
       return;
     }
@@ -958,22 +979,6 @@ class _GridViewModuleState extends State<GridViewModule> {
       return true;
     }
 
-    // Check if already open
-    final existingProcess = _openTextPreviews[item.id];
-    if (existingProcess != null) {
-      // Use FindWindow instead of exitCode (detached processes can't access exitCode)
-      if (_isTextPreviewWindowOpen(item.id)) {
-        _activateTextPreviewWindow(item.id);
-        debugPrint(
-            '[GridViewModule] Activated existing text preview for ${item.id}');
-        return true;
-      } else {
-        // Window closed, clean up process reference
-        _openTextPreviews.remove(item.id);
-        debugPrint('[GridViewModule] Removed dead process for ${item.id}');
-      }
-    }
-
     final exePath = _resolveExecutablePath();
     if (exePath == null) {
       debugPrint('[GridViewModule] preview exe not found');
@@ -1032,10 +1037,17 @@ class _GridViewModuleState extends State<GridViewModule> {
       final hwnd = FindWindow(TEXT(''), titlePtr);
       calloc.free(titlePtr);
 
-      if (hwnd == 0) return false;
+      debugPrint(
+          '[GridViewModule] _isTextPreviewWindowOpen: $titleHash, hwnd=$hwnd');
+
+      if (hwnd == 0) {
+        debugPrint('[GridViewModule] Window not found: $titleHash');
+        return false;
+      }
 
       // Verify the window handle is still valid
       final isValid = IsWindow(hwnd) != 0;
+      debugPrint('[GridViewModule] IsWindow result: $isValid for hwnd=$hwnd');
 
       if (!isValid) {
         // Window was closed, clean up dead process reference
@@ -1068,14 +1080,17 @@ class _GridViewModuleState extends State<GridViewModule> {
 
       // Verify window is still valid
       if (IsWindow(hwnd) == 0) {
-        debugPrint('[GridViewModule] Window handle is invalid: $titleHash');
+        debugPrint(
+            '[GridViewModule] IsWindow returned invalid: $titleHash (hwnd=$hwnd)');
         _openTextPreviews.remove(textId);
         return;
       }
 
       // Restore if minimized
       if (IsIconic(hwnd) != 0) {
-        ShowWindow(hwnd, SW_RESTORE);
+        final restoreResult = ShowWindow(hwnd, SW_RESTORE);
+        debugPrint(
+            '[GridViewModule] ShowWindow(SW_RESTORE) result: $restoreResult');
       }
 
       // Get thread IDs for input attachment
@@ -1085,20 +1100,34 @@ class _GridViewModuleState extends State<GridViewModule> {
       final targetThreadId =
           GetWindowThreadProcessId(hwnd, Pointer<Uint32>.fromAddress(0));
 
+      debugPrint(
+          '[GridViewModule] Thread IDs: foreground=$foregroundThreadId, target=$targetThreadId');
+
       // Attach input if different threads
+      int attachResult = 0;
       if (foregroundThreadId != targetThreadId && foregroundThreadId != 0) {
-        AttachThreadInput(foregroundThreadId, targetThreadId, 1);
+        attachResult =
+            AttachThreadInput(foregroundThreadId, targetThreadId, 1);
+        debugPrint(
+            '[GridViewModule] AttachThreadInput result: $attachResult');
       }
 
       // Multiple activation attempts for reliability
-      BringWindowToTop(hwnd);
-      ShowWindow(hwnd, SW_SHOW);
-      SetForegroundWindow(hwnd);
-      SetFocus(hwnd);
+      final bringToTopResult = BringWindowToTop(hwnd);
+      final showResult = ShowWindow(hwnd, SW_SHOW);
+      final setForegroundResult = SetForegroundWindow(hwnd);
+      final setFocusResult = SetFocus(hwnd);
+
+      debugPrint('[GridViewModule] Activation results: '
+          'BringWindowToTop=$bringToTopResult, ShowWindow=$showResult, '
+          'SetForegroundWindow=$setForegroundResult, SetFocus=$setFocusResult');
 
       // Detach input
       if (foregroundThreadId != targetThreadId && foregroundThreadId != 0) {
-        AttachThreadInput(foregroundThreadId, targetThreadId, 0);
+        final detachResult =
+            AttachThreadInput(foregroundThreadId, targetThreadId, 0);
+        debugPrint(
+            '[GridViewModule] DetachThreadInput result: $detachResult');
       }
 
       debugPrint('[GridViewModule] Activated window: $titleHash (hwnd=$hwnd)');
