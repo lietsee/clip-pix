@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ffi' hide Size;
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -1031,10 +1032,21 @@ class _GridViewModuleState extends State<GridViewModule> {
       final hwnd = FindWindow(TEXT(''), titlePtr);
       calloc.free(titlePtr);
 
-      return hwnd != 0;
+      if (hwnd == 0) return false;
+
+      // Verify the window handle is still valid
+      final isValid = IsWindow(hwnd) != 0;
+
+      if (!isValid) {
+        // Window was closed, clean up dead process reference
+        _openTextPreviews.remove(textId);
+        debugPrint(
+            '[GridViewModule] Removed dead window reference for $textId');
+      }
+
+      return isValid;
     } catch (e) {
-      debugPrint(
-          '[GridViewModule] Error checking window existence: $e');
+      debugPrint('[GridViewModule] Error checking window existence: $e');
       return false;
     }
   }
@@ -1049,18 +1061,47 @@ class _GridViewModuleState extends State<GridViewModule> {
       final hwnd = FindWindow(TEXT(''), titlePtr);
       calloc.free(titlePtr);
 
-      if (hwnd != 0) {
-        // Restore if minimized
-        if (IsIconic(hwnd) != 0) {
-          ShowWindow(hwnd, SW_RESTORE);
-        }
-        // Bring to foreground
-        SetForegroundWindow(hwnd);
-        debugPrint(
-            '[GridViewModule] Activated window: $titleHash (hwnd=$hwnd)');
-      } else {
+      if (hwnd == 0) {
         debugPrint('[GridViewModule] Window not found: $titleHash');
+        return;
       }
+
+      // Verify window is still valid
+      if (IsWindow(hwnd) == 0) {
+        debugPrint('[GridViewModule] Window handle is invalid: $titleHash');
+        _openTextPreviews.remove(textId);
+        return;
+      }
+
+      // Restore if minimized
+      if (IsIconic(hwnd) != 0) {
+        ShowWindow(hwnd, SW_RESTORE);
+      }
+
+      // Get thread IDs for input attachment
+      final foregroundHwnd = GetForegroundWindow();
+      final foregroundThreadId = GetWindowThreadProcessId(
+          foregroundHwnd, Pointer<Uint32>.fromAddress(0));
+      final targetThreadId =
+          GetWindowThreadProcessId(hwnd, Pointer<Uint32>.fromAddress(0));
+
+      // Attach input if different threads
+      if (foregroundThreadId != targetThreadId && foregroundThreadId != 0) {
+        AttachThreadInput(foregroundThreadId, targetThreadId, 1);
+      }
+
+      // Multiple activation attempts for reliability
+      BringWindowToTop(hwnd);
+      ShowWindow(hwnd, SW_SHOW);
+      SetForegroundWindow(hwnd);
+      SetFocus(hwnd);
+
+      // Detach input
+      if (foregroundThreadId != targetThreadId && foregroundThreadId != 0) {
+        AttachThreadInput(foregroundThreadId, targetThreadId, 0);
+      }
+
+      debugPrint('[GridViewModule] Activated window: $titleHash (hwnd=$hwnd)');
     } catch (e, stackTrace) {
       Logger('GridViewModule').warning(
         'Failed to activate text preview window',
