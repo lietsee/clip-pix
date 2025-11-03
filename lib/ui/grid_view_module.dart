@@ -960,28 +960,16 @@ class _GridViewModuleState extends State<GridViewModule> {
     // Check if already open
     final existingProcess = _openTextPreviews[item.id];
     if (existingProcess != null) {
-      // Check if process is still alive (Windows-compatible check)
-      try {
-        // Check if exitCode future completes immediately (process already exited)
-        await existingProcess.exitCode
-            .timeout(const Duration(milliseconds: 1), onTimeout: () {
-          // Timeout means process is still running
-          return -1;
-        });
-        // If we reach here without timeout, process has exited
-        _openTextPreviews.remove(item.id);
-        debugPrint('[GridViewModule] Removed dead process for ${item.id}');
-      } on TimeoutException {
-        // Process is alive, activate the window
+      // Use FindWindow instead of exitCode (detached processes can't access exitCode)
+      if (_isTextPreviewWindowOpen(item.id)) {
         _activateTextPreviewWindow(item.id);
         debugPrint(
             '[GridViewModule] Activated existing text preview for ${item.id}');
         return true;
-      } catch (e) {
-        // Process doesn't exist anymore, remove from tracking
+      } else {
+        // Window closed, clean up process reference
         _openTextPreviews.remove(item.id);
-        debugPrint(
-            '[GridViewModule] Removed dead process for ${item.id}: $e');
+        debugPrint('[GridViewModule] Removed dead process for ${item.id}');
       }
     }
 
@@ -1018,12 +1006,6 @@ class _GridViewModuleState extends State<GridViewModule> {
       // Track the process immediately (before any await)
       _openTextPreviews[item.id] = process;
 
-      // Clean up tracking when process exits
-      unawaited(process.exitCode.then((_) {
-        _openTextPreviews.remove(item.id);
-        debugPrint('[GridViewModule] Text preview closed for ${item.id}');
-      }));
-
       debugPrint('[GridViewModule] Launched text preview for ${item.id}');
       return true;
     } catch (error, stackTrace) {
@@ -1037,6 +1019,23 @@ class _GridViewModuleState extends State<GridViewModule> {
     } finally {
       // Always remove launching flag
       _launchingTextPreviews.remove(item.id);
+    }
+  }
+
+  bool _isTextPreviewWindowOpen(String textId) {
+    if (!Platform.isWindows) return false;
+
+    try {
+      final titleHash = 'clip_pix_text_${textId.hashCode}';
+      final titlePtr = TEXT(titleHash);
+      final hwnd = FindWindow(TEXT(''), titlePtr);
+      calloc.free(titlePtr);
+
+      return hwnd != 0;
+    } catch (e) {
+      debugPrint(
+          '[GridViewModule] Error checking window existence: $e');
+      return false;
     }
   }
 
