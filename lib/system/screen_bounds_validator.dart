@@ -1,8 +1,6 @@
-import 'dart:ffi';
 import 'dart:io';
 import 'dart:ui';
 
-import 'package:ffi/ffi.dart';
 import 'package:logging/logging.dart';
 import 'package:win32/win32.dart';
 
@@ -17,37 +15,36 @@ class ScreenBoundsValidator {
   final Logger _logger = Logger('ScreenBoundsValidator');
 
   /// すべてのモニタの境界を取得
-  /// 簡略化：プライマリモニタの作業領域のみを返す
+  /// マルチモニタサポート：仮想画面全体の境界を返す
   List<Rect> getAllMonitorBounds() {
     if (!Platform.isWindows) {
       return [Rect.fromLTWH(0, 0, 1920, 1080)]; // デフォルト
     }
 
     try {
-      // プライマリモニタの作業領域を取得
-      final rect = calloc<RECT>();
-      final success = SystemParametersInfo(
-        SPI_GETWORKAREA,
-        0,
-        rect,
-        0,
+      // 仮想画面の境界を取得（すべてのモニタを含む）
+      final xVirtual = GetSystemMetrics(SM_XVIRTUALSCREEN);
+      final yVirtual = GetSystemMetrics(SM_YVIRTUALSCREEN);
+      final cxVirtual = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+      final cyVirtual = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+
+      _logger.fine(
+        'Virtual screen: x=$xVirtual, y=$yVirtual, width=$cxVirtual, height=$cyVirtual',
       );
 
-      if (success != 0) {
-        final workArea = Rect.fromLTRB(
-          rect.ref.left.toDouble(),
-          rect.ref.top.toDouble(),
-          rect.ref.right.toDouble(),
-          rect.ref.bottom.toDouble(),
-        );
-        calloc.free(rect);
-        return [workArea];
-      }
-
-      calloc.free(rect);
+      // 仮想画面全体を1つの領域として返す
+      // これにより、どのモニタ上の座標も有効と判定される
+      return [
+        Rect.fromLTWH(
+          xVirtual.toDouble(),
+          yVirtual.toDouble(),
+          cxVirtual.toDouble(),
+          cyVirtual.toDouble(),
+        ),
+      ];
     } catch (e, stackTrace) {
       _logger.warning(
-        'Failed to get monitor bounds, using fallback',
+        'Failed to get virtual screen bounds, using fallback',
         e,
         stackTrace,
       );

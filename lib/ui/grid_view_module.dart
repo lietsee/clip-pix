@@ -3,10 +3,13 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:logging/logging.dart';
 import 'package:provider/provider.dart';
+import 'package:win32/win32.dart';
 
 import '../data/grid_layout_settings_repository.dart';
 import '../data/grid_order_repository.dart';
@@ -57,6 +60,7 @@ class _GridViewModuleState extends State<GridViewModule> {
   final Map<String, ScrollController> _directoryControllers = {};
   final Map<String, ScrollController> _stagingControllers = {};
   final Map<String, GlobalKey> _cardKeys = {};
+  final Map<String, Process> _openTextPreviews = {};
   GridLayoutSettingsRepository? _layoutSettingsRepository;
   GridOrderRepository? _orderRepository;
   late GridLayoutStore _layoutStore;
@@ -557,8 +561,8 @@ class _GridViewModuleState extends State<GridViewModule> {
     }
   }
 
-  void _showTextPreviewDialog(TextContentItem item) {
-    if (_launchTextPreviewWindowProcess(item)) {
+  Future<void> _showTextPreviewDialog(TextContentItem item) async {
+    if (await _launchTextPreviewWindowProcess(item)) {
       return;
     }
     _showFallbackTextPreview(item);
@@ -938,7 +942,27 @@ class _GridViewModuleState extends State<GridViewModule> {
     }
   }
 
-  bool _launchTextPreviewWindowProcess(TextContentItem item) {
+  Future<bool> _launchTextPreviewWindowProcess(TextContentItem item) async {
+    // Check if already open
+    final existingProcess = _openTextPreviews[item.id];
+    if (existingProcess != null) {
+      // Check if process is still alive
+      try {
+        // Sending signal 0 doesn't kill but checks existence (Unix-like)
+        // On Windows, we'll rely on the exitCode future
+        existingProcess.kill(ProcessSignal.sigusr1);
+        // Process exists, activate the window
+        _activateTextPreviewWindow(item.id);
+        debugPrint(
+            '[GridViewModule] Activated existing text preview for ${item.id}');
+        return true;
+      } catch (e) {
+        // Process doesn't exist anymore, remove from tracking
+        _openTextPreviews.remove(item.id);
+        debugPrint('[GridViewModule] Removed dead process for ${item.id}');
+      }
+    }
+
     final exePath = _resolveExecutablePath();
     if (exePath == null) {
       debugPrint('[GridViewModule] preview exe not found');
@@ -958,13 +982,21 @@ class _GridViewModuleState extends State<GridViewModule> {
       'alwaysOnTop': false,
     });
     try {
-      unawaited(
-        Process.start(
-          exePath,
-          ['--preview-text', payload],
-          mode: ProcessStartMode.detached,
-        ),
+      final process = await Process.start(
+        exePath,
+        ['--preview-text', payload],
+        mode: ProcessStartMode.detached,
       );
+
+      // Track the process
+      _openTextPreviews[item.id] = process;
+
+      // Clean up tracking when process exits
+      unawaited(process.exitCode.then((_) {
+        _openTextPreviews.remove(item.id);
+        debugPrint('[GridViewModule] Text preview closed for ${item.id}');
+      }));
+
       return true;
     } catch (error, stackTrace) {
       debugPrint('[GridViewModule] failed to launch text preview: $error');
@@ -974,6 +1006,37 @@ class _GridViewModuleState extends State<GridViewModule> {
         stackTrace,
       );
       return false;
+    }
+  }
+
+  void _activateTextPreviewWindow(String textId) {
+    if (!Platform.isWindows) return;
+
+    try {
+      // Window title hash used for FindWindow
+      final titleHash = 'clip_pix_text_${textId.hashCode}';
+      final titlePtr = TEXT(titleHash);
+      final hwnd = FindWindow(TEXT(''), titlePtr);
+      calloc.free(titlePtr);
+
+      if (hwnd != 0) {
+        // Restore if minimized
+        if (IsIconic(hwnd) != 0) {
+          ShowWindow(hwnd, SW_RESTORE);
+        }
+        // Bring to foreground
+        SetForegroundWindow(hwnd);
+        debugPrint(
+            '[GridViewModule] Activated window: $titleHash (hwnd=$hwnd)');
+      } else {
+        debugPrint('[GridViewModule] Window not found: $titleHash');
+      }
+    } catch (e, stackTrace) {
+      Logger('GridViewModule').warning(
+        'Failed to activate text preview window',
+        e,
+        stackTrace,
+      );
     }
   }
 

@@ -341,6 +341,8 @@ Future<void> _launchTextPreviewMode(String payload) async {
   );
 
   await windowManager.waitUntilReadyToShow(windowOptions, () async {
+    // Set unique window title for window activation (FindWindow)
+    await windowManager.setTitle('clip_pix_text_${item.id.hashCode}');
     await windowManager.show();
 
     // Restore saved position if available
