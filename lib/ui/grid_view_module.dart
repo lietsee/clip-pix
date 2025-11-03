@@ -64,6 +64,7 @@ class _GridViewModuleState extends State<GridViewModule> {
   final Map<String, GlobalKey> _cardKeys = {};
   final Map<String, Process> _openTextPreviews = {};
   final Set<String> _launchingTextPreviews = {};
+  bool _needsRestorationRetry = false;
   GridLayoutSettingsRepository? _layoutSettingsRepository;
   GridOrderRepository? _orderRepository;
   OpenPreviewsRepository? _openPreviewsRepo;
@@ -196,6 +197,15 @@ class _GridViewModuleState extends State<GridViewModule> {
         _updateEntriesProperties(orderedImages);
       }
     }
+
+    // Retry text preview restoration if it was deferred due to empty images
+    if (_needsRestorationRetry && widget.state.images.isNotEmpty) {
+      debugPrint(
+          '[GridViewModule] Retrying text preview restoration with ${widget.state.images.length} images loaded');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _restoreTextPreviewWindows();
+      });
+    }
   }
 
   /// Check if image list changed based on IDs or properties (order-independent)
@@ -230,10 +240,14 @@ class _GridViewModuleState extends State<GridViewModule> {
 
   @override
   void dispose() {
-    // Kill all running text preview processes
+    // Kill all running text preview processes and clean repository
     for (final entry in _openTextPreviews.entries) {
       debugPrint('[GridViewModule] Killing text preview process ${entry.key}');
       entry.value.kill();
+      // Synchronously remove from repository (don't wait for async exitCode callback)
+      _openPreviewsRepo?.remove(entry.key);
+      debugPrint(
+          '[GridViewModule] Removed ${entry.key} from open previews repository');
     }
     _openTextPreviews.clear();
 
@@ -1180,10 +1194,8 @@ class _GridViewModuleState extends State<GridViewModule> {
       // Attach input if different threads
       int attachResult = 0;
       if (foregroundThreadId != targetThreadId && foregroundThreadId != 0) {
-        attachResult =
-            AttachThreadInput(foregroundThreadId, targetThreadId, 1);
-        debugPrint(
-            '[GridViewModule] AttachThreadInput result: $attachResult');
+        attachResult = AttachThreadInput(foregroundThreadId, targetThreadId, 1);
+        debugPrint('[GridViewModule] AttachThreadInput result: $attachResult');
       }
 
       // Multiple activation attempts for reliability
@@ -1200,8 +1212,7 @@ class _GridViewModuleState extends State<GridViewModule> {
       if (foregroundThreadId != targetThreadId && foregroundThreadId != 0) {
         final detachResult =
             AttachThreadInput(foregroundThreadId, targetThreadId, 0);
-        debugPrint(
-            '[GridViewModule] DetachThreadInput result: $detachResult');
+        debugPrint('[GridViewModule] DetachThreadInput result: $detachResult');
       }
 
       debugPrint('[GridViewModule] Activated window: $titleHash (hwnd=$hwnd)');
@@ -1758,15 +1769,26 @@ class _GridViewModuleState extends State<GridViewModule> {
   /// Restore text preview windows from previous session
   Future<void> _restoreTextPreviewWindows() async {
     if (_openPreviewsRepo == null) {
-      debugPrint('[GridViewModule] OpenPreviewsRepo is null, skipping restoration');
+      debugPrint(
+          '[GridViewModule] OpenPreviewsRepo is null, skipping restoration');
+      return;
+    }
+
+    // Skip restoration if image library is not yet loaded
+    if (widget.state.images.isEmpty) {
+      debugPrint(
+          '[GridViewModule] Image library is empty, deferring restoration');
+      _needsRestorationRetry = true;
       return;
     }
 
     try {
       final openPreviews = _openPreviewsRepo!.getAll();
-      debugPrint('[GridViewModule] Restoring ${openPreviews.length} text preview windows');
+      debugPrint(
+          '[GridViewModule] Restoring ${openPreviews.length} text preview windows from ${widget.state.images.length} loaded images');
 
       if (openPreviews.isEmpty) {
+        _needsRestorationRetry = false;
         return;
       }
 
@@ -1786,7 +1808,8 @@ class _GridViewModuleState extends State<GridViewModule> {
           );
 
           if (item is! TextContentItem) {
-            debugPrint('[GridViewModule] Item ${preview.itemId} is not a TextContentItem, skipping');
+            debugPrint(
+                '[GridViewModule] Item ${preview.itemId} is not a TextContentItem, skipping');
             await _openPreviewsRepo!.remove(preview.itemId);
             continue;
           }
@@ -1797,10 +1820,12 @@ class _GridViewModuleState extends State<GridViewModule> {
 
           if (success) {
             restoredCount++;
-            debugPrint('[GridViewModule] Successfully restored preview for ${item.id}');
+            debugPrint(
+                '[GridViewModule] Successfully restored preview for ${item.id}');
           } else {
             failedCount++;
-            debugPrint('[GridViewModule] Failed to restore preview for ${item.id}');
+            debugPrint(
+                '[GridViewModule] Failed to restore preview for ${item.id}');
             // Remove from repository if restoration failed
             await _openPreviewsRepo!.remove(preview.itemId);
           }
@@ -1811,19 +1836,23 @@ class _GridViewModuleState extends State<GridViewModule> {
           }
         } catch (error) {
           failedCount++;
-          debugPrint('[GridViewModule] Error restoring preview ${preview.itemId}: $error');
+          debugPrint(
+              '[GridViewModule] Error restoring preview ${preview.itemId}: $error');
           // Remove from repository if item no longer exists
           await _openPreviewsRepo!.remove(preview.itemId);
         }
       }
 
-      debugPrint('[GridViewModule] Preview restoration complete: $restoredCount restored, $failedCount failed');
+      debugPrint(
+          '[GridViewModule] Preview restoration complete: $restoredCount restored, $failedCount failed');
+      _needsRestorationRetry = false;
     } catch (error, stackTrace) {
       Logger('GridViewModule').warning(
         'Failed to restore text preview windows',
         error,
         stackTrace,
       );
+      _needsRestorationRetry = false;
     }
   }
 
