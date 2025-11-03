@@ -258,17 +258,22 @@ class _PreviewApp extends StatelessWidget {
 
 Future<void> _launchTextPreviewMode(String payload) async {
   _configureLogging();
+  debugPrint('[TextPreviewMode] Starting with payload length: ${payload.length}');
+
   Map<String, dynamic> data;
   try {
     data = jsonDecode(payload) as Map<String, dynamic>;
+    debugPrint('[TextPreviewMode] Payload parsed successfully');
   } catch (error) {
     Logger('TextPreviewWindow').severe('Invalid preview payload', error);
+    debugPrint('[TextPreviewMode] ERROR: Failed to parse payload');
     return;
   }
 
   final itemMap = (data['item'] as Map<String, dynamic>?);
   if (itemMap == null) {
     Logger('TextPreviewWindow').warning('Preview payload missing item');
+    debugPrint('[TextPreviewMode] ERROR: Payload missing item');
     return;
   }
 
@@ -289,19 +294,25 @@ Future<void> _launchTextPreviewMode(String payload) async {
     favorite: itemMap['favorite'] as int? ?? 0,
   );
 
+  debugPrint('[TextPreviewMode] Item created: id=${item.id}, hashCode=${item.id.hashCode}');
+
   final initialTop = data['alwaysOnTop'] as bool? ?? false;
 
   // Initialize window_manager for frameless window
+  debugPrint('[TextPreviewMode] Initializing window manager...');
   await windowManager.ensureInitialized();
+  debugPrint('[TextPreviewMode] Window manager initialized');
 
   // Initialize Hive with SEPARATE path for this preview process
   TextPreviewStateRepository? repository;
   Rect? restoredBounds;
 
   try {
+    debugPrint('[TextPreviewMode] Initializing Hive...');
     await Hive.initFlutter('text_preview_hive'); // Unique subdirectory
     _registerHiveAdapters();
     await Hive.openBox<TextPreviewState>('text_preview_state');
+    debugPrint('[TextPreviewMode] Hive initialized successfully');
 
     // Load saved window bounds
     repository = TextPreviewStateRepository();
@@ -320,6 +331,7 @@ Future<void> _launchTextPreviewMode(String payload) async {
         savedState.height!,
       );
       restoredBounds = validator.adjustIfOffScreen(bounds);
+      debugPrint('[TextPreviewMode] Loaded saved bounds: $restoredBounds');
     }
   } catch (error, stackTrace) {
     Logger('TextPreviewWindow').warning(
@@ -327,6 +339,7 @@ Future<void> _launchTextPreviewMode(String payload) async {
       error,
       stackTrace,
     );
+    debugPrint('[TextPreviewMode] ERROR: Hive initialization failed: $error');
     // Continue without persistence - repository remains null
   }
 
@@ -340,20 +353,31 @@ Future<void> _launchTextPreviewMode(String payload) async {
     titleBarStyle: TitleBarStyle.hidden,
   );
 
+  debugPrint('[TextPreviewMode] Window options created');
+
   await windowManager.waitUntilReadyToShow(windowOptions, () async {
     // Set unique window title for window activation (FindWindow)
-    await windowManager.setTitle('clip_pix_text_${item.id.hashCode}');
+    final windowTitle = 'clip_pix_text_${item.id.hashCode}';
+    debugPrint('[TextPreviewMode] Setting window title: $windowTitle');
+    await windowManager.setTitle(windowTitle);
+    debugPrint('[TextPreviewMode] Window title set successfully');
+
     await windowManager.show();
+    debugPrint('[TextPreviewMode] Window shown');
 
     // Restore saved position if available
     if (restoredBounds != null) {
       await windowManager.setPosition(
         Offset(restoredBounds.left, restoredBounds.top),
       );
+      debugPrint('[TextPreviewMode] Position restored');
     }
 
     await windowManager.focus();
+    debugPrint('[TextPreviewMode] Window focused');
   });
+
+  debugPrint('[TextPreviewMode] waitUntilReadyToShow completed');
 
   runApp(
     _TextPreviewApp(

@@ -20,7 +20,6 @@ import '../data/models/grid_layout_settings.dart';
 import '../data/models/image_item.dart';
 import '../data/models/text_content_item.dart';
 import '../system/clipboard_copy_service.dart';
-import 'package:logging/logging.dart';
 import '../system/state/folder_view_mode.dart';
 import '../system/state/grid_layout_mutation_controller.dart';
 import '../system/state/grid_layout_store.dart';
@@ -1003,17 +1002,40 @@ class _GridViewModuleState extends State<GridViewModule> {
     });
 
     try {
+      debugPrint(
+          '[GridViewModule] Starting process for ${item.id} (hashCode=${item.id.hashCode})');
       final process = await Process.start(
         exePath,
         ['--preview-text', payload],
         mode: ProcessStartMode.detached,
       );
 
-      // Track the process immediately (before any await)
-      _openTextPreviews[item.id] = process;
+      debugPrint(
+          '[GridViewModule] Process started, waiting for window to appear...');
 
-      debugPrint('[GridViewModule] Launched text preview for ${item.id}');
-      return true;
+      // Wait for window to appear (poll for 3 seconds)
+      bool windowAppeared = false;
+      for (int i = 0; i < 30; i++) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        if (_isTextPreviewWindowOpen(item.id)) {
+          windowAppeared = true;
+          debugPrint(
+              '[GridViewModule] Window appeared after ${(i + 1) * 100}ms');
+          break;
+        }
+      }
+
+      if (windowAppeared) {
+        // Track the process only if window appeared
+        _openTextPreviews[item.id] = process;
+        debugPrint('[GridViewModule] Launched text preview for ${item.id}');
+        return true;
+      } else {
+        debugPrint(
+            '[GridViewModule] ERROR: Window did not appear after 3s, killing process');
+        process.kill();
+        return false;
+      }
     } catch (error, stackTrace) {
       debugPrint('[GridViewModule] failed to launch text preview: $error');
       Logger('GridViewModule').warning(
@@ -1038,10 +1060,9 @@ class _GridViewModuleState extends State<GridViewModule> {
       calloc.free(titlePtr);
 
       debugPrint(
-          '[GridViewModule] _isTextPreviewWindowOpen: $titleHash, hwnd=$hwnd');
+          '[GridViewModule] _isTextPreviewWindowOpen: textId="$textId", hashCode=${textId.hashCode}, titleHash="$titleHash", hwnd=$hwnd');
 
       if (hwnd == 0) {
-        debugPrint('[GridViewModule] Window not found: $titleHash');
         return false;
       }
 
