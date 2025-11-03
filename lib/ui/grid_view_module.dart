@@ -230,6 +230,14 @@ class _GridViewModuleState extends State<GridViewModule> {
 
   @override
   void dispose() {
+    // Kill all running text preview processes
+    for (final entry in _openTextPreviews.entries) {
+      debugPrint('[GridViewModule] Killing text preview process ${entry.key}');
+      entry.value.kill();
+    }
+    _openTextPreviews.clear();
+
+    // Dispose other resources
     for (final entry in _entries) {
       entry.removalTimer?.cancel();
     }
@@ -243,6 +251,8 @@ class _GridViewModuleState extends State<GridViewModule> {
     for (final timer in _scaleDebounceTimers.values) {
       timer.cancel();
     }
+    _dragOverlay?.remove();
+    _dragOverlay = null;
     super.dispose();
   }
 
@@ -1016,15 +1026,45 @@ class _GridViewModuleState extends State<GridViewModule> {
       final process = await Process.start(
         exePath,
         ['--preview-text', payload],
-        mode: ProcessStartMode.detachedWithStdio,
+        mode: ProcessStartMode.normal,
       );
+
+      debugPrint('[GridViewModule] Process started, PID: ${process.pid}');
+
+      // Capture stdout and stderr from preview process
+      process.stdout.transform(utf8.decoder).listen((data) {
+        for (final line in data.split('\n')) {
+          if (line.trim().isNotEmpty) {
+            debugPrint('[TextPreview:${item.id.hashCode}] $line');
+          }
+        }
+      });
+
+      process.stderr.transform(utf8.decoder).listen((data) {
+        for (final line in data.split('\n')) {
+          if (line.trim().isNotEmpty) {
+            debugPrint('[TextPreview:${item.id.hashCode} ERROR] $line');
+          }
+        }
+      });
+
+      // Monitor process exit
+      process.exitCode.then((exitCode) {
+        debugPrint(
+            '[GridViewModule] Text preview process ${item.id} exited with code $exitCode');
+        if (exitCode != 0) {
+          debugPrint(
+              '[GridViewModule] ERROR: Text preview process crashed (exit code $exitCode)');
+        }
+        _handleTextPreviewClosed(item.id);
+      });
 
       debugPrint(
           '[GridViewModule] Process started, waiting for window to appear...');
 
-      // Wait for window to appear (poll for 5 seconds)
+      // Wait for window to appear (poll for 10 seconds)
       bool windowAppeared = false;
-      for (int i = 0; i < 50; i++) {
+      for (int i = 0; i < 100; i++) {
         await Future.delayed(const Duration(milliseconds: 100));
         if (_isTextPreviewWindowOpen(item.id)) {
           windowAppeared = true;
@@ -1043,7 +1083,7 @@ class _GridViewModuleState extends State<GridViewModule> {
         return true;
       } else {
         debugPrint(
-            '[GridViewModule] ERROR: Window did not appear after 5s, killing process');
+            '[GridViewModule] ERROR: Window did not appear after 10s, killing process');
         process.kill();
         return false;
       }
