@@ -1107,7 +1107,8 @@ class _GridViewModuleState extends State<GridViewModule> {
     try {
       final titleHash = 'clip_pix_text_${textId.hashCode}';
       final titlePtr = TEXT(titleHash);
-      final hwnd = FindWindow(TEXT(''), titlePtr);
+      // Search by window title only (class name = nullptr)
+      final hwnd = FindWindow(Pointer.fromAddress(0), titlePtr);
       calloc.free(titlePtr);
 
       debugPrint(
@@ -1142,7 +1143,8 @@ class _GridViewModuleState extends State<GridViewModule> {
       // Window title hash used for FindWindow
       final titleHash = 'clip_pix_text_${textId.hashCode}';
       final titlePtr = TEXT(titleHash);
-      final hwnd = FindWindow(TEXT(''), titlePtr);
+      // Search by window title only (class name = nullptr)
+      final hwnd = FindWindow(Pointer.fromAddress(0), titlePtr);
       calloc.free(titlePtr);
 
       if (hwnd == 0) {
