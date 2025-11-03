@@ -237,6 +237,7 @@ class _TextPreviewWindowState extends State<TextPreviewWindow> {
           child: Focus(
             autofocus: true,
             child: Scaffold(
+              backgroundColor: const Color(0xFF72CC82),
               appBar: _buildAppBar(context),
               body: Positioned.fill(
                 child: _buildTextEditor(),
@@ -305,14 +306,17 @@ class _TextPreviewWindowState extends State<TextPreviewWindow> {
                   ? '最前面表示を解除 (Ctrl+Shift+F)'
                   : '最前面表示 (Ctrl+Shift+F)',
               onPressed: _toggleAlwaysOnTop,
-              icon: Icon(
-                _isAlwaysOnTop ? Icons.push_pin : Icons.push_pin_outlined,
-                color: _isAlwaysOnTop
-                    ? Theme.of(context).colorScheme.onPrimary
+              style: IconButton.styleFrom(
+                backgroundColor: _isAlwaysOnTop
+                    ? Theme.of(context).colorScheme.primary.withOpacity(0.2)
                     : null,
               ),
-              color:
-                  _isAlwaysOnTop ? Theme.of(context).colorScheme.primary : null,
+              icon: Icon(
+                Icons.push_pin,
+                color: _isAlwaysOnTop
+                    ? Theme.of(context).colorScheme.primary
+                    : Colors.grey.shade600,
+              ),
             ),
             IconButton(
               tooltip: '閉じる (Esc)',
@@ -344,6 +348,8 @@ class _TextPreviewWindowState extends State<TextPreviewWindow> {
               decoration: const InputDecoration(
                 border: OutlineInputBorder(),
                 hintText: 'テキストを入力してください...',
+                filled: true,
+                fillColor: Colors.white,
               ),
               style: TextStyle(
                 fontSize: _fontSize,
