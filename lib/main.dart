@@ -24,12 +24,15 @@ import 'data/models/image_entry.dart';
 import 'data/models/image_item.dart';
 import 'data/models/image_source_type.dart';
 import 'data/models/text_content_item.dart';
+import 'data/models/text_preview_state.dart';
+import 'data/text_preview_state_repository.dart';
 import 'system/app_lifecycle_service.dart';
 import 'system/clipboard_copy_service.dart';
 import 'system/clipboard_monitor.dart';
 import 'system/folder_picker_service.dart';
 import 'system/file_watcher.dart';
 import 'system/image_saver.dart';
+import 'system/screen_bounds_validator.dart';
 import 'system/text_saver.dart';
 import 'system/state/app_state_provider.dart';
 import 'system/state/grid_layout_store.dart';
@@ -148,6 +151,10 @@ void _registerHiveAdapters() {
   if (!Hive.isAdapterRegistered(7)) {
     Hive.registerAdapter(TextContentItemAdapter());
   }
+  // 新規追加: TextPreviewState (typeId: 8)
+  if (!Hive.isAdapterRegistered(8)) {
+    Hive.registerAdapter(TextPreviewStateAdapter());
+  }
 }
 
 Future<
@@ -157,6 +164,7 @@ Future<
       Box<GridCardPreference> gridCardPrefBox,
       Box<dynamic> gridLayoutBox,
       Box<dynamic> gridOrderBox,
+      Box<TextPreviewState> textPreviewStateBox,
     })> _openCoreBoxes() async {
   final appStateBox = await Hive.openBox<dynamic>('app_state');
   final imageHistoryBox = await Hive.openBox<dynamic>('image_history');
@@ -165,12 +173,16 @@ Future<
   );
   final gridLayoutBox = await Hive.openBox<dynamic>('grid_layout');
   final gridOrderBox = await Hive.openBox<dynamic>('grid_order');
+  final textPreviewStateBox = await Hive.openBox<TextPreviewState>(
+    'text_preview_state',
+  );
   return (
     appStateBox: appStateBox,
     imageHistoryBox: imageHistoryBox,
     gridCardPrefBox: gridCardPrefBox,
     gridLayoutBox: gridLayoutBox,
     gridOrderBox: gridOrderBox,
+    textPreviewStateBox: textPreviewStateBox,
   );
 }
 
@@ -282,10 +294,36 @@ Future<void> _launchTextPreviewMode(String payload) async {
   // Initialize window_manager for frameless window
   await windowManager.ensureInitialized();
 
-  const windowOptions = WindowOptions(
-    size: Size(900, 700),
-    minimumSize: Size(400, 300),
-    center: true,
+  // Initialize Hive for text preview state persistence
+  await Hive.initFlutter();
+  _registerHiveAdapters();
+  await Hive.openBox<TextPreviewState>('text_preview_state');
+
+  // Load saved window bounds
+  final repository = TextPreviewStateRepository();
+  final validator = ScreenBoundsValidator();
+  final savedState = repository.get(item.id);
+  Rect? restoredBounds;
+
+  if (savedState != null &&
+      savedState.x != null &&
+      savedState.y != null &&
+      savedState.width != null &&
+      savedState.height != null) {
+    final bounds = Rect.fromLTWH(
+      savedState.x!,
+      savedState.y!,
+      savedState.width!,
+      savedState.height!,
+    );
+    restoredBounds = validator.adjustIfOffScreen(bounds);
+  }
+
+  // Window options with saved or default bounds
+  final windowOptions = WindowOptions(
+    size: restoredBounds?.size ?? const Size(900, 700),
+    minimumSize: const Size(400, 300),
+    center: restoredBounds == null, // Only center if no saved position
     backgroundColor: Colors.transparent,
     skipTaskbar: false,
     titleBarStyle: TitleBarStyle.hidden,
@@ -293,6 +331,14 @@ Future<void> _launchTextPreviewMode(String payload) async {
 
   await windowManager.waitUntilReadyToShow(windowOptions, () async {
     await windowManager.show();
+
+    // Restore saved position if available
+    if (restoredBounds != null) {
+      await windowManager.setPosition(
+        Offset(restoredBounds.left, restoredBounds.top),
+      );
+    }
+
     await windowManager.focus();
   });
 
@@ -300,6 +346,7 @@ Future<void> _launchTextPreviewMode(String payload) async {
     _TextPreviewApp(
       item: item,
       initialAlwaysOnTop: initialTop,
+      repository: repository,
     ),
   );
 }
@@ -308,10 +355,12 @@ class _TextPreviewApp extends StatelessWidget {
   const _TextPreviewApp({
     required this.item,
     required this.initialAlwaysOnTop,
+    required this.repository,
   });
 
   final TextContentItem item;
   final bool initialAlwaysOnTop;
+  final TextPreviewStateRepository repository;
 
   @override
   Widget build(BuildContext context) {
@@ -321,6 +370,7 @@ class _TextPreviewApp extends StatelessWidget {
       home: TextPreviewWindow(
         item: item,
         initialAlwaysOnTop: initialAlwaysOnTop,
+        repository: repository,
         onClose: () => exit(0),
         onToggleAlwaysOnTop: (_) {},
       ),

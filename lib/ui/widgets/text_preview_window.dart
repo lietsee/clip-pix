@@ -9,6 +9,7 @@ import 'package:win32/win32.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../../data/models/text_content_item.dart';
+import '../../data/text_preview_state_repository.dart';
 
 /// テキストコンテンツを別ウィンドウで表示・編集する
 class TextPreviewWindow extends StatefulWidget {
@@ -16,6 +17,7 @@ class TextPreviewWindow extends StatefulWidget {
     super.key,
     required this.item,
     this.initialAlwaysOnTop = false,
+    this.repository,
     this.onClose,
     this.onToggleAlwaysOnTop,
     this.onSave,
@@ -23,6 +25,7 @@ class TextPreviewWindow extends StatefulWidget {
 
   final TextContentItem item;
   final bool initialAlwaysOnTop;
+  final TextPreviewStateRepository? repository;
   final VoidCallback? onClose;
   final ValueChanged<bool>? onToggleAlwaysOnTop;
   final void Function(String id, String text)? onSave;
@@ -138,12 +141,24 @@ class _TextPreviewWindowState extends State<TextPreviewWindow> {
     }
   }
 
-  void _handleClose() {
+  Future<void> _handleClose() async {
     if (_isClosing) return;
     _isClosing = true;
     if (_hasUnsavedChanges) {
       _handleSave();
     }
+
+    // Save window bounds before closing
+    if (widget.repository != null) {
+      try {
+        final bounds = await windowManager.getBounds();
+        await widget.repository!.save(widget.item.id, bounds);
+        _logger.fine('Saved window bounds: $bounds');
+      } catch (e, stackTrace) {
+        _logger.warning('Failed to save window bounds', e, stackTrace);
+      }
+    }
+
     widget.onClose?.call();
   }
 
