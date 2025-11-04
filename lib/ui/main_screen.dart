@@ -262,6 +262,12 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     // MainScreen rebuild on favorite changes (only _buildBody rebuilds)
     final libraryState = context.watch<ImageLibraryState>();
 
+    // GridLayoutSettingsを取得してコンテンツエリアの色を決定
+    final settingsRepo = context.watch<GridLayoutSettingsRepository>();
+    final settings = settingsRepo.value;
+    final contentBgColor = _backgroundForTone(settings.background);
+    final contentFgColor = _foregroundForBackground(contentBgColor);
+
     // Handle scroll to top request from bulk size adjustment
     if (folderState.scrollToTopRequested &&
         folderState.viewMode == FolderViewMode.root) {
@@ -284,16 +290,25 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           onSelectFolder: () => _requestFolderSelection(context));
     }
 
-    final tabs = _buildTabs(context, folderState);
+    final tabs = _buildTabs(context, folderState, contentFgColor);
     _prepareRootScrollRestoreIfNeeded(folderState);
     _maybeRestoreRootScroll(folderState);
 
     final columnWidget = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _TabBar(tabs: tabs, controller: _subfolderScrollController),
+        _TabBar(
+          tabs: tabs,
+          controller: _subfolderScrollController,
+          backgroundColor: contentBgColor,
+          foregroundColor: contentFgColor,
+        ),
         if (historyState.entries.isNotEmpty)
-          _HistoryStrip(entries: historyState.entries.toList()),
+          _HistoryStrip(
+            entries: historyState.entries.toList(),
+            backgroundColor: contentBgColor,
+            foregroundColor: contentFgColor,
+          ),
         Expanded(
           child: NotificationListener<ScrollNotification>(
             onNotification: (notification) {
@@ -343,6 +358,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   List<_FolderTab> _buildTabs(
     BuildContext context,
     SelectedFolderState state,
+    Color foregroundColor,
   ) {
     final directory = state.current;
     if (directory == null) {
@@ -355,6 +371,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
       _FolderTab(
         label: 'ルート',
         isActive: state.viewMode == FolderViewMode.root,
+        foregroundColor: foregroundColor,
         onTap: () async {
           await context.read<SelectedFolderNotifier>().switchToRoot();
           final rootDir = state.current;
@@ -378,6 +395,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           label: name,
           isActive: state.viewMode == FolderViewMode.subfolder &&
               state.currentTab == name,
+          foregroundColor: foregroundColor,
           onTap: () async {
             await context
                 .read<SelectedFolderNotifier>()
@@ -732,14 +750,22 @@ class _Breadcrumb extends StatelessWidget {
 }
 
 class _TabBar extends StatelessWidget {
-  const _TabBar({required this.tabs, required this.controller});
+  const _TabBar({
+    required this.tabs,
+    required this.controller,
+    required this.backgroundColor,
+    required this.foregroundColor,
+  });
 
   final List<_FolderTab> tabs;
   final ScrollController controller;
+  final Color backgroundColor;
+  final Color foregroundColor;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    return Container(
+      color: backgroundColor,
       height: 48,
       child: ListView.builder(
         controller: controller,
@@ -756,11 +782,13 @@ class _FolderTab extends StatelessWidget {
     required this.label,
     required this.isActive,
     required this.onTap,
+    required this.foregroundColor,
   });
 
   final String label;
   final bool isActive;
   final VoidCallback onTap;
+  final Color foregroundColor;
 
   @override
   Widget build(BuildContext context) {
@@ -768,7 +796,10 @@ class _FolderTab extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
       child: ChoiceChip(
-        label: Text(label),
+        label: Text(
+          label,
+          style: TextStyle(color: foregroundColor),
+        ),
         selected: isActive,
         onSelected: (_) => onTap(),
         selectedColor: theme.colorScheme.primaryContainer,
@@ -828,13 +859,20 @@ class _ErrorBanner extends StatelessWidget {
 }
 
 class _HistoryStrip extends StatelessWidget {
-  const _HistoryStrip({required this.entries});
+  const _HistoryStrip({
+    required this.entries,
+    required this.backgroundColor,
+    required this.foregroundColor,
+  });
 
   final List<ImageEntry> entries;
+  final Color backgroundColor;
+  final Color foregroundColor;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    return Container(
+      color: backgroundColor,
       height: 80,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
@@ -844,11 +882,13 @@ class _HistoryStrip extends StatelessWidget {
         itemBuilder: (context, index) {
           final entry = entries[index];
           return Chip(
+            backgroundColor: backgroundColor,
             label: Text(
               File(entry.filePath).uri.pathSegments.last,
               overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: foregroundColor),
             ),
-            avatar: const Icon(Icons.image, size: 18),
+            avatar: Icon(Icons.image, size: 18, color: foregroundColor),
           );
         },
       ),
