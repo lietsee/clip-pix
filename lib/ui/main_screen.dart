@@ -810,6 +810,7 @@ class _FolderTab extends StatelessWidget {
         selectedColor: backgroundColor,
         backgroundColor: backgroundColor,
         checkmarkColor: foregroundColor,
+        elevation: 0,
         side: BorderSide(color: foregroundColor, width: 1),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
@@ -901,6 +902,7 @@ class _HistoryStrip extends StatelessWidget {
               style: TextStyle(color: foregroundColor),
             ),
             avatar: Icon(Icons.image, size: 18, color: foregroundColor),
+            elevation: 0,
             side: BorderSide(color: foregroundColor, width: 1),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
