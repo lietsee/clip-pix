@@ -45,7 +45,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   String? _restoringForPath;
   final Set<String> _restoredRootScrollPaths = <String>{};
   bool _controllerLogScheduled = false;
-  bool _clipboardMonitorEnabled = true;
+  bool _clipboardMonitorEnabled = false;
 
   // Minimap overlay service
   MinimapOverlayService? _minimapService;
