@@ -809,6 +809,12 @@ class _FolderTab extends StatelessWidget {
         onSelected: (_) => onTap(),
         selectedColor: backgroundColor,
         backgroundColor: backgroundColor,
+        checkmarkColor: foregroundColor,
+        side: BorderSide(color: foregroundColor, width: 1),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(color: foregroundColor, width: 1),
+        ),
       ),
     );
   }
@@ -895,6 +901,11 @@ class _HistoryStrip extends StatelessWidget {
               style: TextStyle(color: foregroundColor),
             ),
             avatar: Icon(Icons.image, size: 18, color: foregroundColor),
+            side: BorderSide(color: foregroundColor, width: 1),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+              side: BorderSide(color: foregroundColor, width: 1),
+            ),
           );
         },
       ),
