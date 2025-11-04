@@ -290,7 +290,8 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           onSelectFolder: () => _requestFolderSelection(context));
     }
 
-    final tabs = _buildTabs(context, folderState, contentFgColor);
+    final tabs =
+        _buildTabs(context, folderState, contentFgColor, contentBgColor);
     _prepareRootScrollRestoreIfNeeded(folderState);
     _maybeRestoreRootScroll(folderState);
 
@@ -359,6 +360,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     BuildContext context,
     SelectedFolderState state,
     Color foregroundColor,
+    Color backgroundColor,
   ) {
     final directory = state.current;
     if (directory == null) {
@@ -372,6 +374,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
         label: 'ルート',
         isActive: state.viewMode == FolderViewMode.root,
         foregroundColor: foregroundColor,
+        backgroundColor: backgroundColor,
         onTap: () async {
           await context.read<SelectedFolderNotifier>().switchToRoot();
           final rootDir = state.current;
@@ -396,6 +399,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           isActive: state.viewMode == FolderViewMode.subfolder &&
               state.currentTab == name,
           foregroundColor: foregroundColor,
+          backgroundColor: backgroundColor,
           onTap: () async {
             await context
                 .read<SelectedFolderNotifier>()
@@ -783,16 +787,17 @@ class _FolderTab extends StatelessWidget {
     required this.isActive,
     required this.onTap,
     required this.foregroundColor,
+    required this.backgroundColor,
   });
 
   final String label;
   final bool isActive;
   final VoidCallback onTap;
   final Color foregroundColor;
+  final Color backgroundColor;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
       child: ChoiceChip(
@@ -802,7 +807,8 @@ class _FolderTab extends StatelessWidget {
         ),
         selected: isActive,
         onSelected: (_) => onTap(),
-        selectedColor: theme.colorScheme.primaryContainer,
+        selectedColor: backgroundColor,
+        backgroundColor: backgroundColor,
       ),
     );
   }
