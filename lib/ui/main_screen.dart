@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../data/grid_layout_settings_repository.dart';
+import '../data/models/grid_layout_settings.dart';
 import '../data/models/image_entry.dart';
 import '../data/models/image_source_type.dart';
 import '../system/clipboard_monitor.dart';
@@ -115,11 +117,39 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     }
   }
 
+  /// GridBackgroundToneから背景色を取得（GridViewModuleと同じロジック）
+  Color _backgroundForTone(GridBackgroundTone tone) {
+    switch (tone) {
+      case GridBackgroundTone.white:
+        return Colors.white;
+      case GridBackgroundTone.lightGray:
+        return const Color(0xFFC0C0C0);
+      case GridBackgroundTone.darkGray:
+        return const Color(0xFF2E2E2E);
+      case GridBackgroundTone.black:
+        return Colors.black;
+    }
+  }
+
+  /// 背景色の明度に応じて前景色（テキスト・アイコン）を決定
+  Color _foregroundForBackground(Color backgroundColor) {
+    final hsl = HSLColor.fromColor(backgroundColor);
+    // Lightness < 0.5 → 暗い背景 → 白文字/アイコン
+    // Lightness >= 0.5 → 明るい背景 → 黒文字/アイコン
+    return hsl.lightness < 0.5 ? Colors.white : Colors.black;
+  }
+
   @override
   Widget build(BuildContext context) {
     final selectedState = context.watch<SelectedFolderState>();
     final watcherStatus = context.watch<WatcherStatusState>();
     final historyState = context.watch<ImageHistoryState>();
+
+    // GridLayoutSettingsを取得してAppBarの色を決定
+    final settingsRepo = context.watch<GridLayoutSettingsRepository>();
+    final settings = settingsRepo.value;
+    final appBarBgColor = _backgroundForTone(settings.background);
+    final appBarFgColor = _foregroundForBackground(appBarBgColor);
 
     // Use Selector to avoid rebuilding MainScreen on favorite changes
     // Only watch activeDirectory and images.isEmpty, not the entire state
@@ -159,6 +189,9 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
       },
       child: Scaffold(
         appBar: AppBar(
+          backgroundColor: appBarBgColor,
+          foregroundColor: appBarFgColor,
+          iconTheme: IconThemeData(color: appBarFgColor),
           title: _Breadcrumb(selectedState: selectedState),
           actions: [
             Padding(
