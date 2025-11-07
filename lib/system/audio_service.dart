@@ -36,7 +36,7 @@ class AudioService {
 
     try {
       _logger.fine('Playing save success sound...');
-      await _player.play(AssetSource('sounds/save_success.mp3'));
+      await _player.play(AssetSource('sounds/save_success.wav'));
       _logger.fine('Played save success sound');
     } catch (error, stackTrace) {
       // Silent failure - audio errors should not break functionality

@@ -1,6 +1,6 @@
 # Sound Effects
 
-## save_success.mp3
+## save_success.wav
 
 This sound effect plays when ClipPix successfully saves an image from the clipboard.
 
@@ -8,13 +8,13 @@ This sound effect plays when ClipPix successfully saves an image from the clipbo
 
 1. Visit [Mixkit Free Sound Effects - Notification](https://mixkit.co/free-sound-effects/notification/)
 2. Search for **"Confirmation Tone"** (duration: 0:01)
-3. Download the MP3 file
-4. Rename it to `save_success.mp3`
-5. Place it in this directory (`assets/sounds/save_success.mp3`)
+3. Download the WAV file (or MP3 and convert to WAV)
+4. Rename it to `save_success.wav`
+5. Place it in this directory (`assets/sounds/save_success.wav`)
 
 ### Alternative sound effects:
 
-You can use any short notification sound (0.2-1.0 seconds) in MP3 format. Good alternatives from Mixkit:
+You can use any short notification sound (0.2-1.0 seconds) in WAV format. Good alternatives from Mixkit:
 - "Correct Answer Tone"
 - "Access Allowed Tone"
 
