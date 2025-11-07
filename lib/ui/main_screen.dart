@@ -633,7 +633,9 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
 
     await imageLibrary.loadForDirectory(directory);
     await fileWatcher.start(directory);
-    await monitor.onFolderChanged(directory);
+    if (_clipboardMonitorEnabled) {
+      await monitor.onFolderChanged(directory);
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('フォルダを選択しました: ${directory.path}')),
@@ -674,7 +676,9 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
       context.read<SelectedFolderNotifier>().switchToRoot();
       await imageLibrary.loadForDirectory(directory);
       await context.read<FileWatcherService>().start(directory);
-      await context.read<ClipboardMonitor>().onFolderChanged(directory);
+      if (_clipboardMonitorEnabled) {
+        await context.read<ClipboardMonitor>().onFolderChanged(directory);
+      }
     });
   }
 
