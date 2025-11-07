@@ -78,11 +78,20 @@ Future<void> main(List<String> args) async {
   _configureLogging();
 
   // Initialize Hive in AppData\Roaming\Clip-pix
-  final appSupportDir = await getApplicationSupportDirectory();
-  final hiveDir = p.join(appSupportDir.path, 'Clip-pix');
-  await Directory(hiveDir).create(recursive: true);
-  await Hive.initFlutter(hiveDir);
-  debugPrint('[Hive] Initialized at: $hiveDir');
+  final Directory hiveDir;
+  if (Platform.isWindows) {
+    final appData = Platform.environment['APPDATA'];
+    if (appData == null) {
+      throw Exception('APPDATA environment variable not found');
+    }
+    hiveDir = Directory(p.join(appData, 'Clip-pix'));
+  } else {
+    final appSupportDir = await getApplicationSupportDirectory();
+    hiveDir = Directory(p.join(appSupportDir.path, 'Clip-pix'));
+  }
+  await hiveDir.create(recursive: true);
+  await Hive.initFlutter(hiveDir.path);
+  debugPrint('[Hive] Initialized at: ${hiveDir.path}');
   _registerHiveAdapters();
   final boxes = await _openCoreBoxes();
 
@@ -279,8 +288,17 @@ Future<void> _launchPreviewMode(String payload) async {
       }
 
       try {
-        final appSupportDir = await getApplicationSupportDirectory();
-        final baseHiveDir = p.join(appSupportDir.path, 'Clip-pix');
+        final String baseHiveDir;
+        if (Platform.isWindows) {
+          final appData = Platform.environment['APPDATA'];
+          if (appData == null) {
+            throw Exception('APPDATA environment variable not found');
+          }
+          baseHiveDir = p.join(appData, 'Clip-pix');
+        } else {
+          final appSupportDir = await getApplicationSupportDirectory();
+          baseHiveDir = p.join(appSupportDir.path, 'Clip-pix');
+        }
         final hiveDir = p.join(baseHiveDir, getHiveDirectoryName(item.id));
         debugPrint(
             '[ImagePreviewMode] Initializing Hive with directory: $hiveDir');
@@ -479,8 +497,17 @@ Future<void> _launchTextPreviewMode(String payload) async {
       }
 
       try {
-        final appSupportDir = await getApplicationSupportDirectory();
-        final baseHiveDir = p.join(appSupportDir.path, 'Clip-pix');
+        final String baseHiveDir;
+        if (Platform.isWindows) {
+          final appData = Platform.environment['APPDATA'];
+          if (appData == null) {
+            throw Exception('APPDATA environment variable not found');
+          }
+          baseHiveDir = p.join(appData, 'Clip-pix');
+        } else {
+          final appSupportDir = await getApplicationSupportDirectory();
+          baseHiveDir = p.join(appSupportDir.path, 'Clip-pix');
+        }
         final hiveDir = p.join(baseHiveDir, getHiveDirectoryName(item.id));
         debugPrint(
             '[TextPreviewMode] Initializing Hive with directory: $hiveDir');
