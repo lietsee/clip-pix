@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../data/grid_layout_settings_repository.dart';
 import '../../data/models/grid_layout_settings.dart';
+import '../../system/audio_service.dart';
 import '../../system/state/grid_resize_controller.dart';
 import '../../system/state/selected_folder_notifier.dart';
 
@@ -18,6 +19,7 @@ class _GridSettingsDialogState extends State<GridSettingsDialog> {
   late int _maxColumns;
   late GridBackgroundTone _backgroundTone;
   late int _bulkSpan;
+  late bool _soundEnabled;
   bool _isSaving = false;
   bool _isBulkApplying = false;
 
@@ -29,6 +31,7 @@ class _GridSettingsDialogState extends State<GridSettingsDialog> {
     _maxColumns = settings.maxColumns;
     _backgroundTone = settings.background;
     _bulkSpan = settings.bulkSpan.clamp(1, settings.maxColumns);
+    _soundEnabled = settings.soundEnabled;
   }
 
   @override
@@ -45,6 +48,8 @@ class _GridSettingsDialogState extends State<GridSettingsDialog> {
             _buildColumnsSection(),
             const SizedBox(height: 16),
             _buildBackgroundSection(),
+            const SizedBox(height: 16),
+            _buildSoundSection(),
             const SizedBox(height: 16),
             _buildBulkResizeSection(resizeController),
             const SizedBox(height: 16),
@@ -164,6 +169,26 @@ class _GridSettingsDialogState extends State<GridSettingsDialog> {
     );
   }
 
+  Widget _buildSoundSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('通知音', style: TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        SwitchListTile(
+          title: const Text('保存時に効果音を鳴らす'),
+          value: _soundEnabled,
+          onChanged: (value) {
+            setState(() {
+              _soundEnabled = value;
+            });
+          },
+          contentPadding: EdgeInsets.zero,
+        ),
+      ],
+    );
+  }
+
   Widget _buildBulkResizeSection(GridResizeController controller) {
     final spanOptions = List<int>.generate(_maxColumns, (index) => index + 1);
 
@@ -263,8 +288,10 @@ class _GridSettingsDialogState extends State<GridSettingsDialog> {
       maxColumns: _maxColumns,
       background: _backgroundTone,
       bulkSpan: _bulkSpan,
+      soundEnabled: _soundEnabled,
     );
     await repo.update(next);
+    context.read<AudioService>().setSoundEnabled(_soundEnabled);
     if (mounted) {
       setState(() {
         _isSaving = false;

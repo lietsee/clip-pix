@@ -32,6 +32,7 @@ import 'data/image_preview_state_repository.dart';
 import 'data/open_previews_repository.dart';
 import 'data/text_preview_state_repository.dart';
 import 'system/app_lifecycle_service.dart';
+import 'system/audio_service.dart';
 import 'system/clipboard_copy_service.dart';
 import 'system/clipboard_monitor.dart';
 import 'system/folder_picker_service.dart';
@@ -697,6 +698,10 @@ class ClipPixApp extends StatelessWidget {
         dispose: (_, service) => service.dispose(),
       ),
       Provider<ClipboardCopyService>(create: (_) => ClipboardCopyService()),
+      Provider<AudioService>(
+        create: (_) => AudioService(),
+        dispose: (_, service) => service.dispose(),
+      ),
       Provider<ImageSaver>(
         create: (context) => ImageSaver(
           getSelectedFolder: () {
@@ -738,6 +743,12 @@ class ClipPixApp extends StatelessWidget {
           previous,
         ) {
           previous?.dispose();
+
+          // Initialize AudioService with current sound settings
+          final audioService = context.read<AudioService>();
+          final layoutSettings = context.read<GridLayoutSettingsRepository>().value;
+          audioService.setSoundEnabled(layoutSettings.soundEnabled);
+
           late final ClipboardMonitor monitor;
           monitor = ClipboardMonitor(
             getSelectedFolder: () =>
@@ -761,6 +772,7 @@ class ClipPixApp extends StatelessWidget {
                 result = SaveResult.failed(error: error);
               }
               if (result.isSuccess) {
+                context.read<AudioService>().playSaveSuccess();
                 final historyNotifier = context.read<ImageHistoryNotifier>();
                 historyNotifier.addEntry(
                   ImageEntry(
@@ -805,6 +817,7 @@ class ClipPixApp extends StatelessWidget {
                 saveResult = SaveResult.failed(error: error);
               }
               if (saveResult.isSuccess) {
+                context.read<AudioService>().playSaveSuccess();
                 historyNotifier.addEntry(
                   ImageEntry(
                     filePath: saveResult.filePath!,
@@ -833,6 +846,7 @@ class ClipPixApp extends StatelessWidget {
                 saveResult = SaveResult.failed(error: error);
               }
               if (saveResult.isSuccess) {
+                context.read<AudioService>().playSaveSuccess();
                 final historyNotifier = context.read<ImageHistoryNotifier>();
                 historyNotifier.addEntry(
                   ImageEntry(
