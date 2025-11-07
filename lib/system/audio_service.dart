@@ -30,15 +30,17 @@ class AudioService {
   /// Logs errors silently without interrupting app flow.
   Future<void> playSaveSuccess() async {
     if (!_soundEnabled) {
+      _logger.fine('Sound disabled, skipping save success sound');
       return;
     }
 
     try {
+      _logger.fine('Playing save success sound...');
       await _player.play(AssetSource('sounds/save_success.mp3'));
-      _logger.finest('Played save success sound');
+      _logger.fine('Played save success sound');
     } catch (error, stackTrace) {
       // Silent failure - audio errors should not break functionality
-      _logger.fine('Failed to play save sound', error, stackTrace);
+      _logger.warning('Failed to play save sound', error, stackTrace);
     }
   }
 
