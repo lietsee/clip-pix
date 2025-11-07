@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_state_notifier/flutter_state_notifier.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:logging/logging.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 import 'package:window_manager/window_manager.dart';
@@ -76,7 +77,12 @@ Future<void> main(List<String> args) async {
   debugPrint('main start; Platform.isWindows=${Platform.isWindows}');
   _configureLogging();
 
-  await Hive.initFlutter();
+  // Initialize Hive in AppData\Roaming\Clip-pix
+  final appSupportDir = await getApplicationSupportDirectory();
+  final hiveDir = p.join(appSupportDir.path, 'Clip-pix');
+  await Directory(hiveDir).create(recursive: true);
+  await Hive.initFlutter(hiveDir);
+  debugPrint('[Hive] Initialized at: $hiveDir');
   _registerHiveAdapters();
   final boxes = await _openCoreBoxes();
 
@@ -273,9 +279,12 @@ Future<void> _launchPreviewMode(String payload) async {
       }
 
       try {
-        final hiveDir = getHiveDirectoryName(item.id);
+        final appSupportDir = await getApplicationSupportDirectory();
+        final baseHiveDir = p.join(appSupportDir.path, 'Clip-pix');
+        final hiveDir = p.join(baseHiveDir, getHiveDirectoryName(item.id));
         debugPrint(
             '[ImagePreviewMode] Initializing Hive with directory: $hiveDir');
+        await Directory(hiveDir).create(recursive: true);
         await Hive.initFlutter(hiveDir); // Unique subdirectory per item
         _registerHiveAdapters();
         await Hive.openBox<ImagePreviewState>('image_preview_state');
@@ -470,9 +479,12 @@ Future<void> _launchTextPreviewMode(String payload) async {
       }
 
       try {
-        final hiveDir = getHiveDirectoryName(item.id);
+        final appSupportDir = await getApplicationSupportDirectory();
+        final baseHiveDir = p.join(appSupportDir.path, 'Clip-pix');
+        final hiveDir = p.join(baseHiveDir, getHiveDirectoryName(item.id));
         debugPrint(
             '[TextPreviewMode] Initializing Hive with directory: $hiveDir');
+        await Directory(hiveDir).create(recursive: true);
         await Hive.initFlutter(hiveDir); // Unique subdirectory per item
         _registerHiveAdapters();
         await Hive.openBox<TextPreviewState>('text_preview_state');
