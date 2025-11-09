@@ -170,7 +170,12 @@ class _ImageCardState extends State<ImageCard> {
           'item=${widget.item.id.split('/').last}, '
           'oldFavorite=${oldWidget.item.favorite}, '
           'newFavorite=${widget.item.favorite}');
-      setState(() {});
+      // Defer setState to avoid calling it during build phase
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {});
+        }
+      });
     }
     if (oldWidget.columnWidth != widget.columnWidth ||
         oldWidget.columnGap != widget.columnGap ||
