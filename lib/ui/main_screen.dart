@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
@@ -836,9 +837,12 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
       final result = await deleteService.deleteItems(itemPaths);
 
       // Remove successfully deleted items from ImageLibrary
-      for (final path in result.successfulPaths) {
-        libraryNotifier.remove(path);
-      }
+      // Defer state updates to avoid setState during build
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        for (final path in result.successfulPaths) {
+          libraryNotifier.remove(path);
+        }
+      });
 
       // Show result message
       if (!mounted) return;
