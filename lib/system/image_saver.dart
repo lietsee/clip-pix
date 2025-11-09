@@ -110,6 +110,7 @@ class ImageSaver {
     final metadataFile = await _metadataWriter.writeForImage(
       imageFile: imageFile,
       record: metadataRecord,
+      skipIndividualJson: true, // Use consolidated .fileInfo.json only
     );
 
     _logger.info(
