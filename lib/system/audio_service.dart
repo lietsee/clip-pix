@@ -8,8 +8,7 @@ import 'package:logging/logging.dart';
 ///
 /// Error handling: Audio errors are logged but do not interrupt app functionality.
 class AudioService {
-  AudioService({Logger? logger})
-      : _logger = logger ?? Logger('AudioService');
+  AudioService({Logger? logger}) : _logger = logger ?? Logger('AudioService');
 
   final Logger _logger;
   final AudioPlayer _player = AudioPlayer();

@@ -12,6 +12,8 @@ import 'package:logging/logging.dart';
 import 'package:provider/provider.dart';
 import 'package:win32/win32.dart';
 
+import '../data/file_info_manager.dart';
+import '../data/grid_card_preferences_repository.dart';
 import '../data/grid_layout_settings_repository.dart';
 import '../data/grid_order_repository.dart';
 import '../data/models/content_item.dart';
@@ -20,8 +22,11 @@ import '../data/models/grid_layout_settings.dart';
 import '../data/models/image_item.dart';
 import '../data/models/text_content_item.dart';
 import '../system/clipboard_copy_service.dart';
+import '../system/delete_service.dart' as clip_pix_delete;
 import '../system/image_preview_process_manager.dart';
 import '../system/text_preview_process_manager.dart';
+import '../system/state/deletion_mode_notifier.dart';
+import '../system/state/deletion_mode_state.dart';
 import '../system/state/folder_view_mode.dart';
 import '../system/state/grid_layout_mutation_controller.dart';
 import '../system/state/grid_layout_store.dart';
@@ -510,6 +515,12 @@ class _GridViewModuleState extends State<GridViewModule> {
     final cardKey = usePersistentKey
         ? _cardKeys.putIfAbsent(item.id, () => GlobalKey())
         : null;
+
+    // Get deletion mode state
+    final deletionMode = context.watch<DeletionModeState>();
+    final isDeletionMode = deletionMode.isActive;
+    final isSelected = deletionMode.isSelected(item.id);
+
     return SizedBox(
       key: cardKey,
       child: AnimatedOpacity(
@@ -531,6 +542,10 @@ class _GridViewModuleState extends State<GridViewModule> {
                 columnCount: columnCount,
                 columnGap: _gridGap,
                 backgroundColor: const Color(0xFF72CC82),
+                isDeletionMode: isDeletionMode,
+                isSelected: isSelected,
+                onDelete: _handleDeleteText,
+                onSelectionToggle: _handleSelectionToggle,
                 onReorderPointerDown: _handleReorderPointerDown,
                 onStartReorder: _startReorder,
                 onReorderUpdate: _updateReorder,
@@ -551,6 +566,10 @@ class _GridViewModuleState extends State<GridViewModule> {
                 columnWidth: columnWidth,
                 columnCount: columnCount,
                 columnGap: _gridGap,
+                isDeletionMode: isDeletionMode,
+                isSelected: isSelected,
+                onDelete: _handleDeleteImage,
+                onSelectionToggle: _handleSelectionToggle,
                 onReorderPointerDown: _handleReorderPointerDown,
                 onStartReorder: _startReorder,
                 onReorderUpdate: _updateReorder,
@@ -591,6 +610,103 @@ class _GridViewModuleState extends State<GridViewModule> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('コピー失敗: $error')));
+    }
+  }
+
+  void _handleDeleteImage(ImageItem item) {
+    _showDeleteConfirmationAndExecute([item.id], itemName: p.basename(item.id));
+  }
+
+  void _handleDeleteText(TextContentItem item) {
+    _showDeleteConfirmationAndExecute([item.id], itemName: p.basename(item.id));
+  }
+
+  void _handleSelectionToggle(String cardId) {
+    context.read<DeletionModeNotifier>().toggleSelection(cardId);
+  }
+
+  Future<void> _showDeleteConfirmationAndExecute(
+    List<String> itemPaths, {
+    String? itemName,
+  }) async {
+    final count = itemPaths.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('削除確認'),
+        content: Text(
+          itemName != null
+              ? '$itemNameをゴミ箱に移動しますか？'
+              : '選択した${count}件のアイテムをゴミ箱に移動しますか？',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('キャンセル'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    await _executeDelete(itemPaths);
+  }
+
+  Future<void> _executeDelete(List<String> itemPaths) async {
+    final deletionNotifier = context.read<DeletionModeNotifier>();
+    final libraryNotifier = context.read<ImageLibraryNotifier>();
+
+    // Set deleting flag
+    deletionNotifier.setDeleting(true);
+
+    try {
+      // Import DeleteService at the top of the file
+      final fileInfoManager = context.read<FileInfoManager>();
+      final preferencesRepo = context.read<GridCardPreferencesRepository>();
+
+      // Create DeleteService with dependencies
+      final deleteService = clip_pix_delete.DeleteService(
+        fileInfoManager: fileInfoManager,
+        preferencesRepository: preferencesRepo,
+      );
+
+      // Execute deletion
+      final result = await deleteService.deleteItems(itemPaths);
+
+      // Remove successfully deleted items from ImageLibrary
+      for (final path in result.successfulPaths) {
+        libraryNotifier.remove(path);
+      }
+
+      // Show result message
+      if (mounted) {
+        final message = result.hasFailures
+            ? '${result.successCount}件削除しました（${result.failureCount}件失敗）'
+            : '${result.successCount}件削除しました';
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('削除に失敗しました: $error'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      deletionNotifier.setDeleting(false);
     }
   }
 

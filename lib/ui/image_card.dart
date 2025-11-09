@@ -32,6 +32,10 @@ class ImageCard extends StatefulWidget {
     required this.columnCount,
     required this.columnGap,
     required this.backgroundColor,
+    this.isDeletionMode = false,
+    this.isSelected = false,
+    this.onDelete,
+    this.onSelectionToggle,
     this.onReorderPointerDown,
     this.onStartReorder,
     this.onReorderUpdate,
@@ -53,6 +57,10 @@ class ImageCard extends StatefulWidget {
   final int columnCount;
   final double columnGap;
   final Color backgroundColor;
+  final bool isDeletionMode;
+  final bool isSelected;
+  final void Function(ImageItem item)? onDelete;
+  final void Function(String id)? onSelectionToggle;
   final void Function(String id, int pointer)? onReorderPointerDown;
   final void Function(String id, Offset globalPosition)? onStartReorder;
   final void Function(String id, Offset globalPosition)? onReorderUpdate;
@@ -411,23 +419,14 @@ class _ImageCardState extends State<ImageCard> {
             ),
           ),
         ),
-        // コピーボタン（右上）
+        // 削除ボタンまたはチェックボックス（右上）
         Positioned(
           top: 12,
           right: 12,
           child: _fadeChild(
-            child: Tooltip(
-              message: 'コピー',
-              child: ElevatedButton(
-                onPressed: () => widget.onCopyImage(widget.item),
-                style: ElevatedButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  shape: const CircleBorder(),
-                  minimumSize: const Size(32, 32),
-                ),
-                child: const Icon(Icons.copy, size: 18),
-              ),
-            ),
+            child: widget.isDeletionMode
+                ? _buildSelectionCheckbox()
+                : _buildDeleteButton(),
           ),
         ),
         Positioned(
@@ -1091,6 +1090,64 @@ class _ImageCardState extends State<ImageCard> {
       context: context,
       cardRect: cardRect,
       memo: widget.item.memo,
+    );
+  }
+
+  Widget _buildDeleteButton() {
+    return Tooltip(
+      message: '削除',
+      child: ElevatedButton(
+        onPressed: widget.onDelete != null
+            ? () => widget.onDelete!(widget.item)
+            : null,
+        style: ElevatedButton.styleFrom(
+          padding: EdgeInsets.zero,
+          shape: const CircleBorder(),
+          minimumSize: const Size(32, 32),
+        ),
+        child: const Icon(Icons.delete_outline, size: 18),
+      ),
+    );
+  }
+
+  Widget _buildSelectionCheckbox() {
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: widget.isSelected
+            ? Theme.of(context).colorScheme.primary
+            : Theme.of(context).colorScheme.surface,
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary,
+          width: 2,
+        ),
+      ),
+      child: widget.isSelected
+          ? Icon(
+              Icons.check,
+              size: 18,
+              color: Theme.of(context).colorScheme.onPrimary,
+            )
+          : null,
+    ).withInkWell(
+      onTap: widget.onSelectionToggle != null
+          ? () => widget.onSelectionToggle!(widget.item.id)
+          : null,
+    );
+  }
+}
+
+extension on Widget {
+  Widget withInkWell({VoidCallback? onTap}) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: this,
+      ),
     );
   }
 }

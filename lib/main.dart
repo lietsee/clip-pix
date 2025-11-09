@@ -785,8 +785,10 @@ class ClipPixApp extends StatelessWidget {
 
           // Initialize AudioService with current sound settings
           final audioService = context.read<AudioService>();
-          final layoutSettings = context.read<GridLayoutSettingsRepository>().value;
-          debugPrint('[AudioService] Initializing with soundEnabled=${layoutSettings.soundEnabled}');
+          final layoutSettings =
+              context.read<GridLayoutSettingsRepository>().value;
+          debugPrint(
+              '[AudioService] Initializing with soundEnabled=${layoutSettings.soundEnabled}');
           audioService.setSoundEnabled(layoutSettings.soundEnabled);
 
           late final ClipboardMonitor monitor;

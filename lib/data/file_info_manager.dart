@@ -152,6 +152,27 @@ class FileInfoManager {
     _scheduleFlush(folderPath);
   }
 
+  /// 指定ファイルのメタデータを削除
+  Future<void> removeMetadata(String imageFilePath) async {
+    final folderPath = p.dirname(imageFilePath);
+    final fileName = p.basename(imageFilePath);
+
+    // キャッシュにない場合は読み込み
+    if (!_cache.containsKey(folderPath)) {
+      await _loadFromFile(folderPath);
+    }
+
+    // キャッシュから削除
+    final removed = _cache[folderPath]?.remove(fileName);
+    if (removed != null) {
+      _logger.info('Metadata removed: $fileName from $folderPath');
+      // デバウンス保存をスケジュール
+      _scheduleFlush(folderPath);
+    } else {
+      _logger.fine('Metadata not found for removal: $fileName in $folderPath');
+    }
+  }
+
   /// 指定フォルダの全メタデータを読み込み
   Future<Map<String, ImageMetadataEntry>> loadMetadata(
       String folderPath) async {

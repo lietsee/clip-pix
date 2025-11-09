@@ -5,15 +5,20 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../data/file_info_manager.dart';
+import '../data/grid_card_preferences_repository.dart';
 import '../data/grid_layout_settings_repository.dart';
 import '../data/models/grid_layout_settings.dart';
 import '../data/models/image_entry.dart';
 import '../data/models/image_source_type.dart';
 import '../system/clipboard_monitor.dart';
+import '../system/delete_service.dart';
 import '../system/file_watcher.dart';
 import '../system/folder_picker_service.dart';
 import '../system/image_preview_process_manager.dart';
 import '../system/text_preview_process_manager.dart';
+import '../system/state/deletion_mode_notifier.dart';
+import '../system/state/deletion_mode_state.dart';
 import '../system/state/grid_layout_store.dart';
 import '../system/state/image_history_state.dart';
 import '../system/state/image_library_notifier.dart';
@@ -144,6 +149,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     final selectedState = context.watch<SelectedFolderState>();
     final watcherStatus = context.watch<WatcherStatusState>();
     final historyState = context.watch<ImageHistoryState>();
+    final deletionMode = context.watch<DeletionModeState>();
 
     // GridLayoutSettingsを取得してAppBarの色を決定
     final settingsRepo = context.watch<GridLayoutSettingsRepository>();
@@ -233,6 +239,38 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
               tooltip: 'フォルダを選択',
               onPressed: () => _requestFolderSelection(context),
             ),
+            // 一括削除ボタン
+            if (deletionMode.isActive) ...[
+              if (deletionMode.hasSelection)
+                Badge(
+                  label: Text('${deletionMode.selectedCount}'),
+                  child: IconButton(
+                    icon: const Icon(Icons.delete),
+                    tooltip: '削除',
+                    onPressed: () => _handleBulkDelete(context),
+                  ),
+                )
+              else
+                IconButton(
+                  icon: const Icon(Icons.delete),
+                  tooltip: '削除',
+                  onPressed: null, // Disabled when no selection
+                ),
+              IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: 'キャンセル',
+                onPressed: () =>
+                    context.read<DeletionModeNotifier>().exitDeletionMode(),
+              ),
+            ] else
+              IconButton(
+                icon: const Icon(Icons.delete_outline),
+                tooltip: '一括削除モード',
+                onPressed: libraryInfo.hasImages
+                    ? () =>
+                        context.read<DeletionModeNotifier>().enterDeletionMode()
+                    : null,
+              ),
             IconButton(
               icon: const Icon(Icons.settings),
               tooltip: 'グリッド設定',
@@ -754,6 +792,115 @@ class _Breadcrumb extends StatelessWidget {
       return;
     }
     Process.run('explorer.exe', ['/select,', path]);
+  }
+
+  /// Handle bulk deletion
+  Future<void> _handleBulkDelete(BuildContext context) async {
+    final deletionNotifier = context.read<DeletionModeNotifier>();
+    final selectedIds = deletionNotifier.state.selectedCardIds.toList();
+
+    if (selectedIds.isEmpty) {
+      return;
+    }
+
+    final confirmed = await _showDeleteConfirmationDialog(
+      context,
+      count: selectedIds.length,
+    );
+
+    if (!confirmed) return;
+
+    await _executeDelete(context, selectedIds);
+
+    // Exit deletion mode after successful delete
+    deletionNotifier.exitDeletionMode();
+  }
+
+  /// Show delete confirmation dialog
+  Future<bool> _showDeleteConfirmationDialog(
+    BuildContext context, {
+    required int count,
+    String? itemName,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('削除確認'),
+        content: Text(
+          itemName != null
+              ? '$itemNameをゴミ箱に移動しますか？'
+              : '選択した${count}件のアイテムをゴミ箱に移動しますか？',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('キャンセル'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+
+    return result ?? false;
+  }
+
+  /// Execute deletion using DeleteService
+  Future<void> _executeDelete(
+      BuildContext context, List<String> itemPaths) async {
+    final deletionNotifier = context.read<DeletionModeNotifier>();
+    final libraryNotifier = context.read<ImageLibraryNotifier>();
+
+    // Set deleting flag
+    deletionNotifier.setDeleting(true);
+
+    try {
+      // Create DeleteService with dependencies
+      final fileInfoManager =
+          Provider.of<FileInfoManager>(context, listen: false);
+      final preferencesRepo =
+          Provider.of<GridCardPreferencesRepository>(context, listen: false);
+
+      final deleteService = DeleteService(
+        fileInfoManager: fileInfoManager,
+        preferencesRepository: preferencesRepo,
+      );
+
+      // Execute deletion
+      final result = await deleteService.deleteItems(itemPaths);
+
+      // Remove successfully deleted items from ImageLibrary
+      for (final path in result.successfulPaths) {
+        libraryNotifier.remove(path);
+      }
+
+      // Show result message
+      if (!mounted) return;
+
+      final message = result.hasFailures
+          ? '${result.successCount}件削除しました（${result.failureCount}件失敗）'
+          : '${result.successCount}件削除しました';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('削除に失敗しました: $error'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      deletionNotifier.setDeleting(false);
+    }
   }
 }
 

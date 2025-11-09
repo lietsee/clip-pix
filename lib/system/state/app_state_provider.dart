@@ -6,6 +6,8 @@ import 'package:flutter_state_notifier/flutter_state_notifier.dart';
 import '../../data/open_previews_repository.dart';
 import '../image_preview_process_manager.dart';
 import '../text_preview_process_manager.dart';
+import 'deletion_mode_notifier.dart';
+import 'deletion_mode_state.dart';
 import 'image_history_notifier.dart';
 import 'image_history_state.dart';
 import 'selected_folder_notifier.dart';
@@ -28,6 +30,9 @@ class AppStateProvider {
       ),
       StateNotifierProvider<ImageHistoryNotifier, ImageHistoryState>(
         create: (_) => ImageHistoryNotifier(imageHistoryBox),
+      ),
+      StateNotifierProvider<DeletionModeNotifier, DeletionModeState>(
+        create: (_) => DeletionModeNotifier(),
       ),
       ChangeNotifierProvider<TextPreviewProcessManager>(
         create: (_) => TextPreviewProcessManager(repository: openPreviewsRepo),
