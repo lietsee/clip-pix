@@ -209,6 +209,57 @@ class _TextCardState extends State<TextCard> {
                       left: 8,
                       child: _buildSelectionCheckbox(),
                     ),
+                  // お気に入りボタン（左下）
+                  // 一括削除モード時: favorite > 0 の場合のみ常時表示、通常時: ホバー時のみ表示
+                  if (widget.isDeletionMode && widget.item.favorite > 0)
+                    Positioned(
+                      bottom: 8,
+                      left: 8,
+                      child: ElevatedButton(
+                        onPressed: _handleFavoriteToggle,
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(36, 36),
+                          padding: EdgeInsets.zero,
+                          backgroundColor:
+                              _backgroundColorForFavorite(widget.item.favorite)
+                                      ?.withOpacity(0.9) ??
+                                  Colors.white.withOpacity(0.9),
+                        ),
+                        child: Icon(
+                          Icons.favorite,
+                          size: 20,
+                          color: Colors.white,
+                        ),
+                      ),
+                    )
+                  else if (!widget.isDeletionMode &&
+                      _showControls &&
+                      !_isResizing &&
+                      !_isEditing)
+                    Positioned(
+                      bottom: 8,
+                      left: 8,
+                      child: ElevatedButton(
+                        onPressed: _handleFavoriteToggle,
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(36, 36),
+                          padding: EdgeInsets.zero,
+                          backgroundColor:
+                              _backgroundColorForFavorite(widget.item.favorite)
+                                      ?.withOpacity(0.9) ??
+                                  Colors.white.withOpacity(0.9),
+                        ),
+                        child: Icon(
+                          widget.item.favorite > 0
+                              ? Icons.favorite
+                              : Icons.favorite_border,
+                          size: 20,
+                          color: widget.item.favorite > 0
+                              ? Colors.white
+                              : Colors.grey,
+                        ),
+                      ),
+                    ),
                   // リサイズハンドル
                   if (_showControls || _isResizing) _buildResizeHandle(),
                 ],
@@ -248,28 +299,6 @@ class _TextCardState extends State<TextCard> {
             top: 8,
             right: 8,
             child: _buildDeleteButton(),
-          ),
-        // お気に入りボタン（左下）
-        // 一括削除モード時: favorite > 0 の場合のみ表示、通常時: 常時表示
-        if (!widget.isDeletionMode || widget.item.favorite > 0)
-          Positioned(
-            bottom: 8,
-            left: 8,
-            child: ElevatedButton(
-              onPressed: _handleFavoriteToggle,
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size(36, 36),
-                padding: EdgeInsets.zero,
-                backgroundColor: _backgroundColorForFavorite(widget.item.favorite)
-                        ?.withOpacity(0.9) ??
-                    Colors.white.withOpacity(0.9),
-              ),
-              child: Icon(
-                widget.item.favorite > 0 ? Icons.favorite : Icons.favorite_border,
-                size: 20,
-                color: widget.item.favorite > 0 ? Colors.white : Colors.grey,
-              ),
-            ),
           ),
         // 並べ替えアイコン（下部中央）- 一括削除モード時は非表示
         if (!widget.isDeletionMode)
