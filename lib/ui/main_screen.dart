@@ -757,42 +757,6 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
       _hideMinimap();
     }
   }
-}
-
-class _Breadcrumb extends StatelessWidget {
-  const _Breadcrumb({required this.selectedState});
-
-  final SelectedFolderState selectedState;
-
-  @override
-  Widget build(BuildContext context) {
-    final directory = selectedState.viewDirectory ?? selectedState.current;
-    if (directory == null) {
-      return const Text('ClipPix');
-    }
-    final segments = directory.path.split(Platform.pathSeparator);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 0; i < segments.length; i++)
-          if (segments[i].isNotEmpty) ...[
-            InkWell(
-              onTap: () => _openInExplorer(directory.path),
-              child: Text(segments[i]),
-            ),
-            if (i < segments.length - 1)
-              const Icon(Icons.chevron_right, size: 16),
-          ],
-      ],
-    );
-  }
-
-  void _openInExplorer(String path) {
-    if (!Platform.isWindows) {
-      return;
-    }
-    Process.run('explorer.exe', ['/select,', path]);
-  }
 
   /// Handle bulk deletion
   Future<void> _handleBulkDelete(BuildContext context) async {
@@ -901,6 +865,42 @@ class _Breadcrumb extends StatelessWidget {
     } finally {
       deletionNotifier.setDeleting(false);
     }
+  }
+}
+
+class _Breadcrumb extends StatelessWidget {
+  const _Breadcrumb({required this.selectedState});
+
+  final SelectedFolderState selectedState;
+
+  @override
+  Widget build(BuildContext context) {
+    final directory = selectedState.viewDirectory ?? selectedState.current;
+    if (directory == null) {
+      return const Text('ClipPix');
+    }
+    final segments = directory.path.split(Platform.pathSeparator);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < segments.length; i++)
+          if (segments[i].isNotEmpty) ...[
+            InkWell(
+              onTap: () => _openInExplorer(directory.path),
+              child: Text(segments[i]),
+            ),
+            if (i < segments.length - 1)
+              const Icon(Icons.chevron_right, size: 16),
+          ],
+      ],
+    );
+  }
+
+  void _openInExplorer(String path) {
+    if (!Platform.isWindows) {
+      return;
+    }
+    Process.run('explorer.exe', ['/select,', path]);
   }
 }
 
