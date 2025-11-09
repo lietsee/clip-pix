@@ -394,76 +394,85 @@ class _ImageCardState extends State<ImageCard> {
   Widget _buildHoverControls() {
     return Stack(
       children: [
-        // メモボタン（左上）
-        Positioned(
-          top: 12,
-          left: 12,
-          child: _fadeChild(
-            child: Tooltip(
-              message: widget.item.memo.isEmpty ? 'メモを追加' : 'メモを編集',
-              child: ElevatedButton(
-                onPressed: _handleEditMemo,
-                style: ElevatedButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  shape: const CircleBorder(),
-                  minimumSize: const Size(32, 32),
-                  backgroundColor: widget.item.memo.isEmpty
-                      ? null
-                      : Theme.of(context).colorScheme.primaryContainer,
-                ),
-                child: Icon(
-                  widget.item.memo.isEmpty ? Icons.note_add : Icons.edit_note,
-                  size: 18,
+        // メモボタン（左上）- 一括削除モード時は非表示
+        if (!widget.isDeletionMode)
+          Positioned(
+            top: 12,
+            left: 12,
+            child: _fadeChild(
+              child: Tooltip(
+                message: widget.item.memo.isEmpty ? 'メモを追加' : 'メモを編集',
+                child: ElevatedButton(
+                  onPressed: _handleEditMemo,
+                  style: ElevatedButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    shape: const CircleBorder(),
+                    minimumSize: const Size(32, 32),
+                    backgroundColor: widget.item.memo.isEmpty
+                        ? null
+                        : Theme.of(context).colorScheme.primaryContainer,
+                  ),
+                  child: Icon(
+                    widget.item.memo.isEmpty ? Icons.note_add : Icons.edit_note,
+                    size: 18,
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-        // 削除ボタンまたはチェックボックス（右上）
-        Positioned(
-          top: 12,
-          right: 12,
-          child: widget.isDeletionMode
-              ? _buildSelectionCheckbox() // 一括削除モード時は常時表示
-              : _fadeChild(child: _buildDeleteButton()), // 通常時はホバーで表示
-        ),
-        Positioned(
-          right: 0,
-          bottom: 0,
-          child: _fadeChild(
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onPanStart: _onResizeStart,
-              onPanUpdate: _onResizeUpdate,
-              onPanEnd: _onResizeEnd,
-              child: Semantics(
-                label: 'サイズ変更ハンドル',
-                button: true,
-                child: Container(
-                  width: 24,
-                  height: 24,
-                  decoration: const BoxDecoration(
-                    color: Color(0x44000000),
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(12),
+        // チェックボックス（左上、一括削除モード時のみ）または削除ボタン（右上）
+        if (widget.isDeletionMode)
+          Positioned(
+            top: 12,
+            left: 12,
+            child: _buildSelectionCheckbox(), // 一括削除モード時は常時表示
+          )
+        else
+          Positioned(
+            top: 12,
+            right: 12,
+            child: _fadeChild(child: _buildDeleteButton()), // 通常時はホバーで表示
+          ),
+        // リサイズハンドル（右下）- 一括削除モード時は非表示
+        if (!widget.isDeletionMode)
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: _fadeChild(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onPanStart: _onResizeStart,
+                onPanUpdate: _onResizeUpdate,
+                onPanEnd: _onResizeEnd,
+                child: Semantics(
+                  label: 'サイズ変更ハンドル',
+                  button: true,
+                  child: Container(
+                    width: 24,
+                    height: 24,
+                    decoration: const BoxDecoration(
+                      color: Color(0x44000000),
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(12),
+                      ),
+                    ),
+                    alignment: Alignment.bottomRight,
+                    child: const Icon(
+                      Icons.open_in_full,
+                      size: 16,
+                      color: Colors.white,
                     ),
                   ),
-                  alignment: Alignment.bottomRight,
-                  child: const Icon(
-                    Icons.open_in_full,
-                    size: 16,
-                    color: Colors.white,
-                  ),
                 ),
               ),
             ),
           ),
-        ),
         // お気に入りボタン（左下）
-        Positioned(
-          bottom: 12,
-          left: 12,
-          child: _fadeChild(
+        // 一括削除モード時: favorite > 0 の場合のみ常時表示、通常時: ホバー時のみ表示
+        if (widget.isDeletionMode && widget.item.favorite > 0)
+          Positioned(
+            bottom: 12,
+            left: 12,
             child: Tooltip(
               message: 'お気に入り',
               child: ElevatedButton(
@@ -476,75 +485,101 @@ class _ImageCardState extends State<ImageCard> {
                       _backgroundColorForFavorite(widget.item.favorite),
                 ),
                 child: Icon(
-                  widget.item.favorite > 0
-                      ? Icons.favorite
-                      : Icons.favorite_border,
+                  Icons.favorite,
                   size: 18,
-                  color: widget.item.favorite > 0 ? Colors.white : null,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          )
+        else if (!widget.isDeletionMode)
+          Positioned(
+            bottom: 12,
+            left: 12,
+            child: _fadeChild(
+              child: Tooltip(
+                message: 'お気に入り',
+                child: ElevatedButton(
+                  onPressed: _handleFavoriteToggle,
+                  style: ElevatedButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    shape: const CircleBorder(),
+                    minimumSize: const Size(32, 32),
+                    backgroundColor:
+                        _backgroundColorForFavorite(widget.item.favorite),
+                  ),
+                  child: Icon(
+                    widget.item.favorite > 0
+                        ? Icons.favorite
+                        : Icons.favorite_border,
+                    size: 18,
+                    color: widget.item.favorite > 0 ? Colors.white : null,
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 8,
-          child: Center(
-            child: _fadeChild(
-              child: Listener(
-                onPointerDown: (event) {
-                  widget.onReorderPointerDown
-                      ?.call(widget.item.id, event.pointer);
-                },
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onPanStart: (details) {
-                    debugPrint(
-                      '[ImageCard] reorder_pan_start id=${widget.item.id} global=${details.globalPosition}',
-                    );
-                    widget.onStartReorder?.call(
-                      widget.item.id,
-                      details.globalPosition,
-                    );
+        // 並べ替えアイコン（下部中央）- 一括削除モード時は非表示
+        if (!widget.isDeletionMode)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 8,
+            child: Center(
+              child: _fadeChild(
+                child: Listener(
+                  onPointerDown: (event) {
+                    widget.onReorderPointerDown
+                        ?.call(widget.item.id, event.pointer);
                   },
-                  onPanUpdate: (details) {
-                    debugPrint(
-                      '[ImageCard] reorder_pan_update id=${widget.item.id} global=${details.globalPosition}',
-                    );
-                    widget.onReorderUpdate?.call(
-                      widget.item.id,
-                      details.globalPosition,
-                    );
-                  },
-                  onPanEnd: (_) {
-                    debugPrint(
-                        '[ImageCard] reorder_pan_end id=${widget.item.id}');
-                    widget.onReorderEnd?.call(widget.item.id);
-                  },
-                  onPanCancel: () {
-                    debugPrint(
-                        '[ImageCard] reorder_pan_cancel id=${widget.item.id}');
-                    widget.onReorderCancel?.call(widget.item.id);
-                  },
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: const Color(0x33000000),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.drag_indicator,
-                      size: 18,
-                      color: Colors.white,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onPanStart: (details) {
+                      debugPrint(
+                        '[ImageCard] reorder_pan_start id=${widget.item.id} global=${details.globalPosition}',
+                      );
+                      widget.onStartReorder?.call(
+                        widget.item.id,
+                        details.globalPosition,
+                      );
+                    },
+                    onPanUpdate: (details) {
+                      debugPrint(
+                        '[ImageCard] reorder_pan_update id=${widget.item.id} global=${details.globalPosition}',
+                      );
+                      widget.onReorderUpdate?.call(
+                        widget.item.id,
+                        details.globalPosition,
+                      );
+                    },
+                    onPanEnd: (_) {
+                      debugPrint(
+                          '[ImageCard] reorder_pan_end id=${widget.item.id}');
+                      widget.onReorderEnd?.call(widget.item.id);
+                    },
+                    onPanCancel: () {
+                      debugPrint(
+                          '[ImageCard] reorder_pan_cancel id=${widget.item.id}');
+                      widget.onReorderCancel?.call(widget.item.id);
+                    },
+                    child: Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0x33000000),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.drag_indicator,
+                        size: 18,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
       ],
     );
   }

@@ -157,8 +157,8 @@ class _TextCardState extends State<TextCard> {
       onEnter: (_) => setState(() => _showControls = true),
       onExit: (_) => setState(() => _showControls = false),
       child: GestureDetector(
-        onTap: _isEditing ? null : _handleSingleTap,
-        onDoubleTap: _isEditing ? null : _handleDoubleTap,
+        onTap: (_isEditing || widget.isDeletionMode) ? null : _handleSingleTap,
+        onDoubleTap: (_isEditing || widget.isDeletionMode) ? null : _handleDoubleTap,
         child: ValueListenableBuilder<Size>(
           valueListenable: _sizeNotifier,
           builder: (context, size, child) {
@@ -202,11 +202,11 @@ class _TextCardState extends State<TextCard> {
                   // ホバーコントロール
                   if (_showControls && !_isResizing && !_isEditing)
                     _buildHoverControls(),
-                  // 削除モード時のチェックボックス（常時表示）
+                  // 削除モード時のチェックボックス（左上、常時表示）
                   if (widget.isDeletionMode && !_isEditing)
                     Positioned(
                       top: 8,
-                      right: 8,
+                      left: 8,
                       child: _buildSelectionCheckbox(),
                     ),
                   // リサイズハンドル
@@ -223,24 +223,25 @@ class _TextCardState extends State<TextCard> {
   Widget _buildHoverControls() {
     return Stack(
       children: [
-        // メモボタン（左上）
-        Positioned(
-          top: 8,
-          left: 8,
-          child: ElevatedButton(
-            onPressed: _handleEditMemo,
-            style: ElevatedButton.styleFrom(
-              minimumSize: const Size(36, 36),
-              padding: EdgeInsets.zero,
-              backgroundColor: Colors.white.withOpacity(0.9),
-            ),
-            child: Icon(
-              widget.item.memo.isEmpty ? Icons.note_add : Icons.edit_note,
-              size: 20,
-              color: Colors.blue.shade700,
+        // メモボタン（左上）- 一括削除モード時は非表示
+        if (!widget.isDeletionMode)
+          Positioned(
+            top: 8,
+            left: 8,
+            child: ElevatedButton(
+              onPressed: _handleEditMemo,
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(36, 36),
+                padding: EdgeInsets.zero,
+                backgroundColor: Colors.white.withOpacity(0.9),
+              ),
+              child: Icon(
+                widget.item.memo.isEmpty ? Icons.note_add : Icons.edit_note,
+                size: 20,
+                color: Colors.blue.shade700,
+              ),
             ),
           ),
-        ),
         // 削除ボタン（右上）- 削除モード時は常時表示のチェックボックスが代わりに表示される
         if (!widget.isDeletionMode)
           Positioned(
@@ -249,73 +250,76 @@ class _TextCardState extends State<TextCard> {
             child: _buildDeleteButton(),
           ),
         // お気に入りボタン（左下）
-        Positioned(
-          bottom: 8,
-          left: 8,
-          child: ElevatedButton(
-            onPressed: _handleFavoriteToggle,
-            style: ElevatedButton.styleFrom(
-              minimumSize: const Size(36, 36),
-              padding: EdgeInsets.zero,
-              backgroundColor: _backgroundColorForFavorite(widget.item.favorite)
-                      ?.withOpacity(0.9) ??
-                  Colors.white.withOpacity(0.9),
-            ),
-            child: Icon(
-              widget.item.favorite > 0 ? Icons.favorite : Icons.favorite_border,
-              size: 20,
-              color: widget.item.favorite > 0 ? Colors.white : Colors.grey,
+        // 一括削除モード時: favorite > 0 の場合のみ表示、通常時: 常時表示
+        if (!widget.isDeletionMode || widget.item.favorite > 0)
+          Positioned(
+            bottom: 8,
+            left: 8,
+            child: ElevatedButton(
+              onPressed: _handleFavoriteToggle,
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(36, 36),
+                padding: EdgeInsets.zero,
+                backgroundColor: _backgroundColorForFavorite(widget.item.favorite)
+                        ?.withOpacity(0.9) ??
+                    Colors.white.withOpacity(0.9),
+              ),
+              child: Icon(
+                widget.item.favorite > 0 ? Icons.favorite : Icons.favorite_border,
+                size: 20,
+                color: widget.item.favorite > 0 ? Colors.white : Colors.grey,
+              ),
             ),
           ),
-        ),
-        // 並べ替えアイコン（下部中央）
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 8,
-          child: Center(
-            child: Listener(
-              onPointerDown: (event) {
-                widget.onReorderPointerDown
-                    ?.call(widget.item.id, event.pointer);
-              },
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onPanStart: (details) {
-                  widget.onStartReorder?.call(
-                    widget.item.id,
-                    details.globalPosition,
-                  );
+        // 並べ替えアイコン（下部中央）- 一括削除モード時は非表示
+        if (!widget.isDeletionMode)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 8,
+            child: Center(
+              child: Listener(
+                onPointerDown: (event) {
+                  widget.onReorderPointerDown
+                      ?.call(widget.item.id, event.pointer);
                 },
-                onPanUpdate: (details) {
-                  widget.onReorderUpdate?.call(
-                    widget.item.id,
-                    details.globalPosition,
-                  );
-                },
-                onPanEnd: (_) {
-                  widget.onReorderEnd?.call(widget.item.id);
-                },
-                onPanCancel: () {
-                  widget.onReorderCancel?.call(widget.item.id);
-                },
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0x33000000),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.drag_indicator,
-                    size: 18,
-                    color: Colors.white,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onPanStart: (details) {
+                    widget.onStartReorder?.call(
+                      widget.item.id,
+                      details.globalPosition,
+                    );
+                  },
+                  onPanUpdate: (details) {
+                    widget.onReorderUpdate?.call(
+                      widget.item.id,
+                      details.globalPosition,
+                    );
+                  },
+                  onPanEnd: (_) {
+                    widget.onReorderEnd?.call(widget.item.id);
+                  },
+                  onPanCancel: () {
+                    widget.onReorderCancel?.call(widget.item.id);
+                  },
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0x33000000),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.drag_indicator,
+                      size: 18,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
       ],
     );
   }
