@@ -202,6 +202,13 @@ class _TextCardState extends State<TextCard> {
                   // ホバーコントロール
                   if (_showControls && !_isResizing && !_isEditing)
                     _buildHoverControls(),
+                  // 削除モード時のチェックボックス（常時表示）
+                  if (widget.isDeletionMode && !_isEditing)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: _buildSelectionCheckbox(),
+                    ),
                   // リサイズハンドル
                   if (_showControls || _isResizing) _buildResizeHandle(),
                 ],
@@ -234,14 +241,13 @@ class _TextCardState extends State<TextCard> {
             ),
           ),
         ),
-        // 削除ボタンまたはチェックボックス（右上）
-        Positioned(
-          top: 8,
-          right: 8,
-          child: widget.isDeletionMode
-              ? _buildSelectionCheckbox()
-              : _buildDeleteButton(),
-        ),
+        // 削除ボタン（右上）- 削除モード時は常時表示のチェックボックスが代わりに表示される
+        if (!widget.isDeletionMode)
+          Positioned(
+            top: 8,
+            right: 8,
+            child: _buildDeleteButton(),
+          ),
         // お気に入りボタン（左下）
         Positioned(
           bottom: 8,

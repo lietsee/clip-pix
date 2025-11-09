@@ -423,11 +423,9 @@ class _ImageCardState extends State<ImageCard> {
         Positioned(
           top: 12,
           right: 12,
-          child: _fadeChild(
-            child: widget.isDeletionMode
-                ? _buildSelectionCheckbox()
-                : _buildDeleteButton(),
-          ),
+          child: widget.isDeletionMode
+              ? _buildSelectionCheckbox() // 一括削除モード時は常時表示
+              : _fadeChild(child: _buildDeleteButton()), // 通常時はホバーで表示
         ),
         Positioned(
           right: 0,
