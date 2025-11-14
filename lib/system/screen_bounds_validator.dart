@@ -1,6 +1,8 @@
+import 'dart:ffi';
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:ffi/ffi.dart';
 import 'package:logging/logging.dart';
 import 'package:win32/win32.dart';
 
@@ -15,7 +17,11 @@ class ScreenBoundsValidator {
   final Logger _logger = Logger('ScreenBoundsValidator');
 
   /// すべてのモニタの境界を取得
-  /// マルチモニタサポート：仮想画面全体の境界を返す
+  /// マルチモニタサポート：仮想画面の境界を返す
+  ///
+  /// Note: 個別のモニター列挙は EnumDisplayMonitors で可能だが、
+  /// ここではシンプルに仮想スクリーン全体を返す。
+  /// 実際の検証は isValidPosition で MonitorFromPoint を使って行う。
   List<Rect> getAllMonitorBounds() {
     if (!Platform.isWindows) {
       return [Rect.fromLTWH(0, 0, 1920, 1080)]; // デフォルト
@@ -32,8 +38,6 @@ class ScreenBoundsValidator {
         'Virtual screen: x=$xVirtual, y=$yVirtual, width=$cxVirtual, height=$cyVirtual',
       );
 
-      // 仮想画面全体を1つの領域として返す
-      // これにより、どのモニタ上の座標も有効と判定される
       return [
         Rect.fromLTWH(
           xVirtual.toDouble(),
@@ -44,51 +48,79 @@ class ScreenBoundsValidator {
       ];
     } catch (e, stackTrace) {
       _logger.warning(
-        'Failed to get virtual screen bounds, using fallback',
+        'Failed to get virtual screen bounds, using default fallback',
         e,
         stackTrace,
       );
     }
 
-    // フォールバック
+    // 最終フォールバック
     return [Rect.fromLTWH(0, 0, 1920, 1080)];
   }
 
   /// ウィンドウが画面内の有効な位置にあるかチェック
-  /// 最低50%が表示されていればtrueを返す
+  /// MonitorFromPoint を使って、ウィンドウの中心点と四隅がモニター上にあるかを確認
   bool isValidPosition(Rect windowBounds) {
-    final monitors = getAllMonitorBounds();
-
-    if (monitors.isEmpty) {
-      _logger.warning('No monitors detected, assuming valid');
-      return true;
+    if (!Platform.isWindows) {
+      return true; // 非Windows環境では常に有効とする
     }
 
-    final windowArea = windowBounds.width * windowBounds.height;
-    if (windowArea == 0) {
+    if (windowBounds.width <= 0 || windowBounds.height <= 0) {
+      _logger.warning('Window bounds have invalid dimensions: $windowBounds');
       return false;
     }
 
-    for (final monitor in monitors) {
-      final intersection = monitor.intersect(windowBounds);
-      if (intersection.isEmpty) {
-        continue;
-      }
+    try {
+      // ウィンドウの中心点を計算
+      final centerX = (windowBounds.left + windowBounds.right) ~/ 2;
+      final centerY = (windowBounds.top + windowBounds.bottom) ~/ 2;
 
-      final visibleArea = intersection.width * intersection.height;
-      final visibleRatio = visibleArea / windowArea;
+      // MonitorFromPoint を使って中心点がモニター上にあるかチェック
+      final point = calloc<POINT>();
+      try {
+        point.ref.x = centerX;
+        point.ref.y = centerY;
 
-      _logger.fine(
-        'Monitor: ${monitor}, Window: ${windowBounds}, Visible: ${(visibleRatio * 100).toStringAsFixed(1)}%',
-      );
+        // MONITOR_DEFAULTTONULL: モニターが見つからない場合は NULL を返す
+        final hMonitor = MonitorFromPoint(point.ref, MONITOR_DEFAULTTONULL);
 
-      if (visibleRatio >= 0.5) {
+        if (hMonitor == 0) {
+          _logger.info(
+            'Window center point ($centerX, $centerY) is not on any monitor',
+          );
+          return false;
+        }
+
+        // 追加チェック: ウィンドウの四隅のうち、少なくとも1つが
+        // 仮想スクリーン内にあることを確認（より厳格な検証）
+        final virtualBounds = getAllMonitorBounds().first;
+
+        // ウィンドウの左上、右上、左下、右下のいずれかが仮想スクリーン内にあるか
+        final topLeft = virtualBounds.contains(windowBounds.topLeft);
+        final topRight = virtualBounds.contains(windowBounds.topRight);
+        final bottomLeft = virtualBounds.contains(windowBounds.bottomLeft);
+        final bottomRight = virtualBounds.contains(windowBounds.bottomRight);
+
+        if (!topLeft && !topRight && !bottomLeft && !bottomRight) {
+          _logger.info(
+            'Window $windowBounds has no corners within virtual screen bounds $virtualBounds',
+          );
+          return false;
+        }
+
+        _logger.fine('Window $windowBounds is valid on monitor 0x${hMonitor.toRadixString(16)}');
         return true;
+      } finally {
+        calloc.free(point);
       }
+    } catch (e, stackTrace) {
+      _logger.warning(
+        'Failed to validate window position, assuming invalid',
+        e,
+        stackTrace,
+      );
+      return false;
     }
-
-    _logger.info('Window ${windowBounds} is off-screen or <50% visible');
-    return false;
   }
 
   /// ウィンドウが画面外の場合、プライマリモニタ中央に補正

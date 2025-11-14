@@ -9,10 +9,13 @@ import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
 import 'package:win32/win32.dart';
 
+import 'screen_bounds_validator.dart';
+
 class WindowBoundsService with WidgetsBindingObserver {
   WindowBoundsService() : _logger = Logger('WindowBoundsService');
 
   final Logger _logger;
+  final ScreenBoundsValidator _validator = ScreenBoundsValidator();
   Timer? _debounce;
   Rect? _restoredBounds;
   late final String _configPath;
@@ -97,6 +100,18 @@ class WindowBoundsService with WidgetsBindingObserver {
       }
       final desired = Rect.fromLTWH(left, top, width, height);
       _logger.info('Attempting to restore window bounds: $desired');
+
+      // Validate that the stored position is visible on current monitor setup
+      if (!_validator.isValidPosition(desired)) {
+        _logger.warning(
+          'Stored window position $desired is off-screen or <50% visible on current monitor configuration. '
+          'Window will use default centered position instead.',
+        );
+        debugPrint(
+            '[WindowBoundsService] stored position off-screen, using default');
+        return;
+      }
+
       for (var attempt = 0; attempt < 5; attempt++) {
         debugPrint(
             '[WindowBoundsService] apply attempt ${attempt + 1} -> $desired');
