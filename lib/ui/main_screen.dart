@@ -77,7 +77,9 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
 
     // Call _ensureDirectorySync() here instead of in build() to prevent infinite rebuild loop
     final selectedState = context.watch<SelectedFolderState>();
-    final currentPath = selectedState.current?.path;
+    // Track viewDirectory (actual displayed directory) instead of current (root folder)
+    // This ensures sync runs when switching between root and subfolders like .trash
+    final currentPath = selectedState.viewDirectory?.path;
 
     // Only sync if folder has changed
     if (_lastSyncedFolder != currentPath) {
