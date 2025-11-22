@@ -81,8 +81,16 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     // This ensures sync runs when switching between root and subfolders like .trash
     final currentPath = selectedState.viewDirectory?.path;
 
+    debugPrint('[MainScreen] didChangeDependencies: '
+        'viewDirectory=$currentPath, '
+        'viewMode=${selectedState.viewMode}, '
+        'currentTab=${selectedState.currentTab}, '
+        '_lastSyncedFolder=$_lastSyncedFolder');
+
     // Only sync if folder has changed
     if (_lastSyncedFolder != currentPath) {
+      debugPrint('[MainScreen] didChangeDependencies triggering sync: '
+          'old=$_lastSyncedFolder → new=$currentPath');
       _lastSyncedFolder = currentPath;
       _ensureDirectorySync(context, selectedState);
     }
@@ -460,10 +468,14 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           foregroundColor: foregroundColor,
           backgroundColor: backgroundColor,
           onTap: () async {
+            debugPrint('[MainScreen] Tab clicked: $name');
             await context
                 .read<SelectedFolderNotifier>()
                 .switchToSubfolder(name);
+            debugPrint('[MainScreen] switchToSubfolder complete for: $name');
             await imageLibrary.loadForDirectory(dir);
+            debugPrint(
+                '[MainScreen] loadForDirectory complete for: ${dir.path}');
           },
         ),
       );
@@ -705,13 +717,24 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     BuildContext context,
     SelectedFolderState selectedState,
   ) {
+    debugPrint('[MainScreen] _ensureDirectorySync called: '
+        'viewDirectory=${selectedState.viewDirectory?.path}, '
+        'current=${selectedState.current?.path}, '
+        'viewMode=${selectedState.viewMode}, '
+        '_isSyncing=$_isSyncing, '
+        '_lastSyncedFolder=$_lastSyncedFolder, '
+        '_lastLoadedPath=$_lastLoadedPath');
+
     // Re-entry guard: prevent concurrent executions
     if (_isSyncing) {
       debugPrint('[MainScreen] _ensureDirectorySync skipped: already syncing');
       return;
     }
 
-    final directory = selectedState.current;
+    // FIX BUG 2: Use viewDirectory (actual displayed folder) instead of current (root folder)
+    // This ensures proper directory sync when switching between root and subfolders like .trash
+    final directory = selectedState.viewDirectory ?? selectedState.current;
+
     if (directory == null || !selectedState.isValid) {
       if (_lastLoadedPath != null) {
         context.read<ImageLibraryNotifier>().clear();
@@ -719,16 +742,23 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
         context.read<ClipboardMonitor>().stop();
         _lastLoadedPath = null;
       }
+      // FIX BUG 1: Clear flag before early return to prevent permanent blocking
+      _isSyncing = false;
+      debugPrint('[MainScreen] _ensureDirectorySync: directory invalid, cleared flag');
       return;
     }
 
     final path = directory.path;
     if (_lastLoadedPath == path) {
+      // FIX BUG 1: Clear flag before early return
+      _isSyncing = false;
+      debugPrint('[MainScreen] _ensureDirectorySync skipped: already loaded $path');
       return;
     }
 
     // Set syncing flag
     _isSyncing = true;
+    debugPrint('[MainScreen] _ensureDirectorySync executing for: $path');
 
     // Dispose and recreate scroll controller when folder changes
     // to prevent multiple ScrollPosition attachment errors
@@ -741,16 +771,27 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
+        debugPrint('[MainScreen] _ensureDirectorySync postFrameCallback start');
         final imageLibrary = context.read<ImageLibraryNotifier>();
-        context.read<SelectedFolderNotifier>().switchToRoot();
+
+        // FIX BUG 3: Don't call switchToRoot when viewing subfolder
+        // This prevents incorrect state transitions when user is in .trash tab
+        if (selectedState.viewMode == FolderViewMode.root) {
+          context.read<SelectedFolderNotifier>().switchToRoot();
+        }
+
         await imageLibrary.loadForDirectory(directory);
         await context.read<FileWatcherService>().start(directory);
         if (_clipboardMonitorEnabled) {
           await context.read<ClipboardMonitor>().onFolderChanged(directory);
         }
+        debugPrint('[MainScreen] _ensureDirectorySync postFrameCallback complete');
+      } catch (e, stack) {
+        debugPrint('[MainScreen] _ensureDirectorySync error: $e\n$stack');
       } finally {
         // Clear syncing flag after completion
         _isSyncing = false;
+        debugPrint('[MainScreen] _ensureDirectorySync flag cleared');
       }
     });
   }

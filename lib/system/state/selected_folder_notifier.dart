@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
@@ -73,12 +74,21 @@ class SelectedFolderNotifier extends StateNotifier<SelectedFolderState> {
       return;
     }
     final subfolder = Directory(p.join(base.path, name));
+
+    debugPrint('[SelectedFolderNotifier] switchToSubfolder: '
+        'name=$name, '
+        'subfolder=${subfolder.path}, '
+        'oldViewMode=${state.viewMode}, '
+        'newViewMode=subfolder');
+
     state = state.copyWith(
       viewMode: FolderViewMode.subfolder,
       currentTab: name,
       viewDirectory: subfolder,
     );
     await persist();
+
+    debugPrint('[SelectedFolderNotifier] switchToSubfolder persist complete');
   }
 
   Future<void> updateRootScroll(double offset) async {
