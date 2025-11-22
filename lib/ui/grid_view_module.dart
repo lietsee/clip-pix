@@ -134,13 +134,28 @@ class _GridViewModuleState extends State<GridViewModule> {
     if (!_isInitialized) {
       return;
     }
+
+    // Early return if directory path hasn't changed and images are the same
+    // This prevents unnecessary syncLibrary calls when switching between tabs
+    final oldPath = oldWidget.state.activeDirectory?.path;
+    final newPath = widget.state.activeDirectory?.path;
+    final directoryChanged = oldPath != newPath;
+
     // Use ID-based comparison instead of instance equality
     // to avoid unnecessary rebuilds when only item properties change
     final imagesChanged =
         _imagesChanged(oldWidget.state.images, widget.state.images);
     debugPrint(
         '[GridViewModule] didUpdateWidget: imagesChanged=$imagesChanged, '
+        'directoryChanged=$directoryChanged, oldPath=$oldPath, newPath=$newPath, '
         'oldCount=${oldWidget.state.images.length}, newCount=${widget.state.images.length}');
+
+    // Only proceed if directory changed or images changed
+    if (!directoryChanged && !imagesChanged) {
+      debugPrint('[GridViewModule] didUpdateWidget: no changes, skipping syncLibrary');
+      return;
+    }
+
     if (imagesChanged) {
       // [DIAGNOSTIC] Track specific image positions in state.images
       final stateImages = widget.state.images;

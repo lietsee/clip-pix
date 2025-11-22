@@ -46,6 +46,8 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   late ScrollController _rootScrollController;
   late final ScrollController _subfolderScrollController;
   String? _lastLoadedPath;
+  String? _lastSyncedFolder; // Track last synced folder to prevent re-entry
+  bool _isSyncing = false; // Re-entry guard for _ensureDirectorySync()
   bool _isRestoringRootScroll = false;
   bool _restoreScheduled = false;
   bool _needsRootScrollRestore = false;
@@ -67,6 +69,21 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     _rootScrollController = ScrollController();
     _subfolderScrollController = ScrollController();
     _keyboardFocusNode = FocusNode();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // Call _ensureDirectorySync() here instead of in build() to prevent infinite rebuild loop
+    final selectedState = context.watch<SelectedFolderState>();
+    final currentPath = selectedState.current?.path;
+
+    // Only sync if folder has changed
+    if (_lastSyncedFolder != currentPath) {
+      _lastSyncedFolder = currentPath;
+      _ensureDirectorySync(context, selectedState);
+    }
   }
 
   @override
@@ -168,7 +185,8 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
       ),
     );
 
-    _ensureDirectorySync(context, selectedState);
+    // NOTE: _ensureDirectorySync() is now called in didChangeDependencies() instead of build()
+    // to prevent infinite rebuild loop when switching tabs
 
     // Show minimap if always-visible mode is enabled
     if (selectedState.isMinimapAlwaysVisible &&
@@ -685,6 +703,12 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     BuildContext context,
     SelectedFolderState selectedState,
   ) {
+    // Re-entry guard: prevent concurrent executions
+    if (_isSyncing) {
+      debugPrint('[MainScreen] _ensureDirectorySync skipped: already syncing');
+      return;
+    }
+
     final directory = selectedState.current;
     if (directory == null || !selectedState.isValid) {
       if (_lastLoadedPath != null) {
@@ -701,6 +725,9 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
       return;
     }
 
+    // Set syncing flag
+    _isSyncing = true;
+
     // Dispose and recreate scroll controller when folder changes
     // to prevent multiple ScrollPosition attachment errors
     if (_rootScrollController.hasClients) {
@@ -711,12 +738,17 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     _lastLoadedPath = path;
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final imageLibrary = context.read<ImageLibraryNotifier>();
-      context.read<SelectedFolderNotifier>().switchToRoot();
-      await imageLibrary.loadForDirectory(directory);
-      await context.read<FileWatcherService>().start(directory);
-      if (_clipboardMonitorEnabled) {
-        await context.read<ClipboardMonitor>().onFolderChanged(directory);
+      try {
+        final imageLibrary = context.read<ImageLibraryNotifier>();
+        context.read<SelectedFolderNotifier>().switchToRoot();
+        await imageLibrary.loadForDirectory(directory);
+        await context.read<FileWatcherService>().start(directory);
+        if (_clipboardMonitorEnabled) {
+          await context.read<ClipboardMonitor>().onFolderChanged(directory);
+        }
+      } finally {
+        // Clear syncing flag after completion
+        _isSyncing = false;
       }
     });
   }
