@@ -33,6 +33,24 @@ class ImageRepository {
           .where((entity) => entity is File && _isSupportedFile(entity.path))
           .cast<File>()
           .toList();
+
+      // ファイルシステムと.fileInfo.jsonの整合性を取る
+      if (_fileInfoManager != null) {
+        try {
+          await _fileInfoManager!.syncWithFileSystem(
+            directory.path,
+            files.map((f) => f.path).toList(),
+          );
+        } catch (error, stackTrace) {
+          _logger.warning(
+            'Failed to sync filesystem for ${directory.path}',
+            error,
+            stackTrace,
+          );
+          // Continue - sync failure shouldn't block loading
+        }
+      }
+
       final items = <ContentItem>[];
       for (final file in files) {
         final item = await _buildImageItem(file);
@@ -68,7 +86,9 @@ class ImageRepository {
     try {
       final metadata = await _readMetadata(file);
       final stat = await file.stat();
-      final contentType = metadata?.contentType ?? ContentType.image;
+      // メタデータがない場合、拡張子から判定（フォールバック）
+      final contentType =
+          metadata?.contentType ?? _inferContentTypeFromExtension(file.path);
 
       _logger.fine(
           'build_image_item path=${file.path} savedAt=${metadata?.savedAt ?? stat.modified.toUtc()} metadata=${metadata?.metadataPath} contentType=$contentType');
@@ -102,6 +122,21 @@ class ImageRepository {
         stackTrace,
       );
       return null;
+    }
+  }
+
+  /// ファイル拡張子からContentTypeを推測
+  ContentType _inferContentTypeFromExtension(String filePath) {
+    final ext = p.extension(filePath).toLowerCase();
+    switch (ext) {
+      case '.txt':
+        return ContentType.text;
+      case '.jpg':
+      case '.jpeg':
+      case '.png':
+        return ContentType.image;
+      default:
+        return ContentType.image;
     }
   }
 

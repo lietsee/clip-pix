@@ -118,18 +118,21 @@ class DeleteService {
     await file.rename(trashFilePath);
     _logger.fine('Moved to trash: $itemPath -> $trashFilePath');
 
-    // Remove metadata from .fileInfo.json
+    // Move metadata to .trash folder's .fileInfo.json
     if (_fileInfoManager != null) {
       try {
-        await _fileInfoManager!.removeMetadata(itemPath);
-        _logger.fine('Removed metadata: $itemPath');
+        await _fileInfoManager!.moveMetadata(
+          fromPath: itemPath,
+          toPath: trashFilePath,
+        );
+        _logger.fine('Moved metadata: $itemPath -> $trashFilePath');
       } catch (error, stackTrace) {
         _logger.warning(
-          'Failed to remove metadata for $itemPath',
+          'Failed to move metadata for $itemPath',
           error,
           stackTrace,
         );
-        // Continue - metadata removal failure shouldn't block deletion
+        // Continue - metadata move failure shouldn't block deletion
       }
     }
 

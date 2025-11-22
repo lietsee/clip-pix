@@ -186,6 +186,129 @@ class FileInfoManager {
     return Map.unmodifiable(_cache[folderPath] ?? {});
   }
 
+  /// メタデータを別のフォルダに移動
+  ///
+  /// 例: ファイルを.trashフォルダに移動する際、メタデータも一緒に移動する
+  /// - fromPathからメタデータを取得して削除
+  /// - toPathのフォルダにメタデータを追加
+  Future<void> moveMetadata({
+    required String fromPath,
+    required String toPath,
+  }) async {
+    final fromFolderPath = p.dirname(fromPath);
+    final fromFileName = p.basename(fromPath);
+    final toFolderPath = p.dirname(toPath);
+    final toFileName = p.basename(toPath);
+
+    // fromPathのメタデータを取得
+    if (!_cache.containsKey(fromFolderPath)) {
+      await _loadFromFile(fromFolderPath);
+    }
+
+    final metadata = _cache[fromFolderPath]?[fromFileName];
+    if (metadata == null) {
+      _logger.fine(
+          'No metadata to move from $fromPath (file may have no metadata)');
+      return;
+    }
+
+    // toPathのフォルダにメタデータを追加
+    if (!_cache.containsKey(toFolderPath)) {
+      await _loadFromFile(toFolderPath);
+    }
+    _cache[toFolderPath] ??= {};
+
+    // ファイル名を更新してメタデータをコピー
+    _cache[toFolderPath]![toFileName] = metadata.copyWith(file: toFileName);
+
+    // fromPathのメタデータを削除
+    _cache[fromFolderPath]!.remove(fromFileName);
+
+    _logger.info('Metadata moved: $fromPath -> $toPath');
+
+    // 両方のフォルダを保存
+    _scheduleFlush(fromFolderPath);
+    _scheduleFlush(toFolderPath);
+  }
+
+  /// ファイルシステムと.fileInfo.jsonの整合性を取る
+  ///
+  /// - actualFiles: ディスク上に実際に存在するファイルのパスリスト
+  /// - ゴーストエントリ（ファイルが存在しないエントリ）を削除
+  /// - 新規ファイル（.fileInfo.jsonにないファイル）にデフォルトメタデータを追加
+  Future<void> syncWithFileSystem(
+    String folderPath,
+    List<String> actualFiles,
+  ) async {
+    // キャッシュにない場合は読み込み
+    if (!_cache.containsKey(folderPath)) {
+      await _loadFromFile(folderPath);
+    }
+
+    _cache[folderPath] ??= {};
+    final folderCache = _cache[folderPath]!;
+
+    // actualFilesをファイル名のSetに変換
+    final actualFileNames = actualFiles.map((path) => p.basename(path)).toSet();
+
+    // ゴーストエントリ削除: キャッシュにあるがディスクにないファイル
+    final ghostEntries = <String>[];
+    for (final fileName in folderCache.keys.toList()) {
+      if (!actualFileNames.contains(fileName)) {
+        ghostEntries.add(fileName);
+        folderCache.remove(fileName);
+      }
+    }
+
+    if (ghostEntries.isNotEmpty) {
+      _logger.info(
+          'Removed ${ghostEntries.length} ghost entries from $folderPath: ${ghostEntries.take(5).join(", ")}${ghostEntries.length > 5 ? "..." : ""}');
+    }
+
+    // 新規ファイル追加: ディスクにあるがキャッシュにないファイル
+    final now = DateTime.now().toUtc();
+    var newEntriesCount = 0;
+
+    for (final filePath in actualFiles) {
+      final fileName = p.basename(filePath);
+      if (!folderCache.containsKey(fileName)) {
+        // デフォルトメタデータを作成
+        folderCache[fileName] = ImageMetadataEntry(
+          file: fileName,
+          savedAt: now,
+          source: 'Unknown',
+          sourceType: ImageSourceType.unknown,
+          contentType: _inferContentTypeFromExtension(fileName),
+        );
+        newEntriesCount++;
+      }
+    }
+
+    if (newEntriesCount > 0) {
+      _logger.info('Added $newEntriesCount new entries to $folderPath');
+    }
+
+    // 変更があった場合のみ保存
+    if (ghostEntries.isNotEmpty || newEntriesCount > 0) {
+      _scheduleFlush(folderPath);
+    }
+  }
+
+  /// ファイル拡張子からContentTypeを推測
+  ContentType _inferContentTypeFromExtension(String fileName) {
+    final ext = p.extension(fileName).toLowerCase();
+    switch (ext) {
+      case '.txt':
+        return ContentType.text;
+      case '.jpg':
+      case '.jpeg':
+      case '.png':
+        return ContentType.image;
+      default:
+        return ContentType.image;
+    }
+  }
+
   /// 指定画像のメタデータを取得
   Future<ImageMetadataEntry?> getMetadata(String imageFilePath) async {
     final folderPath = p.dirname(imageFilePath);
