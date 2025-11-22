@@ -215,7 +215,11 @@ class _GridViewModuleState extends State<GridViewModule> {
 
       if (willReconcile) {
         // Initial load or order changed: reconcile entries to rebuild grid
-        _reconcileEntries(orderedImages);
+        // Defer to postFrameCallback to avoid "setState during build" error
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _reconcileEntries(orderedImages);
+        });
       } else {
         // Only properties changed: update entry items without setState
         _updateEntriesProperties(orderedImages);
