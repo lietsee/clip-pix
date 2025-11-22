@@ -443,11 +443,8 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
         foregroundColor: foregroundColor,
         backgroundColor: backgroundColor,
         onTap: () async {
+          debugPrint('[MainScreen] Root tab clicked');
           await context.read<SelectedFolderNotifier>().switchToRoot();
-          final rootDir = state.current;
-          if (rootDir != null) {
-            await imageLibrary.loadForDirectory(rootDir);
-          }
         },
       ),
     ];
@@ -473,9 +470,6 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
                 .read<SelectedFolderNotifier>()
                 .switchToSubfolder(name);
             debugPrint('[MainScreen] switchToSubfolder complete for: $name');
-            await imageLibrary.loadForDirectory(dir);
-            debugPrint(
-                '[MainScreen] loadForDirectory complete for: ${dir.path}');
           },
         ),
       );
