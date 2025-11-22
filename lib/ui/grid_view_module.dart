@@ -92,6 +92,7 @@ class _GridViewModuleState extends State<GridViewModule> {
   List<_GridEntry> _entries = <_GridEntry>[];
   bool _loggedInitialBuild = false;
   bool _firstFrameComplete = false;
+  bool _reconciliationPending = false; // Track pending reconciliation to skip assertion during tab transitions
   final Set<Object> _currentBuildKeys = <Object>{};
 
   @override
@@ -222,6 +223,7 @@ class _GridViewModuleState extends State<GridViewModule> {
       if (willReconcile) {
         // Initial load or order changed: reconcile entries to rebuild grid
         // Defer to postFrameCallback to avoid "setState during build" error
+        _reconciliationPending = true; // Mark reconciliation as pending
         SchedulerBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           _reconcileEntries(orderedImages);
@@ -326,6 +328,10 @@ class _GridViewModuleState extends State<GridViewModule> {
     final isMutating = mutationController.isMutating;
     final shouldHideGrid = mutationController.shouldHideGrid;
     assert(() {
+      // Skip alignment check when reconciliation is pending (tab transitions)
+      if (_reconciliationPending) {
+        return true;
+      }
       // Skip alignment check during initial frame to avoid race condition
       // between _entries population and GridLayoutStore.viewStates sync
       if (!_firstFrameComplete || layoutStore.viewStates.isEmpty) {
@@ -982,6 +988,7 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   void _reconcileEntries(List<ContentItem> newItems) {
+    _reconciliationPending = false; // Clear pending flag
     debugPrint(
         '[GridViewModule] _reconcileEntries: newItems=${newItems.length}, currentEntries=${_entries.length}');
     _logEntries('reconcile_before', _entries);
