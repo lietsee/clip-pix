@@ -311,6 +311,11 @@ class _GridViewModuleState extends State<GridViewModule> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    // Prevent rendering during reconciliation to avoid _entries/viewStates mismatch
+    if (_reconciliationPending) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     if (widget.state.isLoading && widget.state.images.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
