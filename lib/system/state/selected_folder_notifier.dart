@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -18,6 +19,7 @@ class SelectedFolderNotifier extends StateNotifier<SelectedFolderState> {
 
   final Box<dynamic> _box;
   final Logger _logger;
+  Timer? _scrollPersistTimer; // Debounce scroll position persistence
 
   static const _storageKey = 'selected_folder';
 
@@ -91,9 +93,15 @@ class SelectedFolderNotifier extends StateNotifier<SelectedFolderState> {
     debugPrint('[SelectedFolderNotifier] switchToSubfolder persist complete');
   }
 
-  Future<void> updateRootScroll(double offset) async {
+  void updateRootScroll(double offset) {
     state = state.copyWith(rootScrollOffset: offset);
-    await persist();
+
+    // Debounce persistence to avoid rebuild storm
+    // Only persist after 500ms of scroll inactivity
+    _scrollPersistTimer?.cancel();
+    _scrollPersistTimer = Timer(const Duration(milliseconds: 500), () {
+      persist(); // Persist in background after debounce
+    });
   }
 
   Future<void> toggleMinimapAlwaysVisible() async {
@@ -145,5 +153,11 @@ class SelectedFolderNotifier extends StateNotifier<SelectedFolderState> {
           'Directory validation failed: ${directory.path}', error, stackTrace);
       return false;
     }
+  }
+
+  @override
+  void dispose() {
+    _scrollPersistTimer?.cancel();
+    super.dispose();
   }
 }

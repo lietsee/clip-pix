@@ -115,6 +115,10 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   Future<void> onWindowClose() async {
     debugPrint('[MainScreen] onWindowClose called');
 
+    // Ensure scroll position is persisted before closing
+    final folderNotifier = context.read<SelectedFolderNotifier>();
+    await folderNotifier.persist();
+
     // Kill all preview processes in parallel with timeout
     try {
       await Future.wait([
