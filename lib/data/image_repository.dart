@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -34,21 +35,23 @@ class ImageRepository {
           .cast<File>()
           .toList();
 
-      // ファイルシステムと.fileInfo.jsonの整合性を取る
+      // ファイルシステムと.fileInfo.jsonの整合性を取る（非ブロッキング）
       if (_fileInfoManager != null) {
-        try {
-          await _fileInfoManager!.syncWithFileSystem(
+        // バックグラウンドで同期実行（UIをブロックしない）
+        unawaited(
+          _fileInfoManager!
+              .syncWithFileSystem(
             directory.path,
             files.map((f) => f.path).toList(),
-          );
-        } catch (error, stackTrace) {
-          _logger.warning(
-            'Failed to sync filesystem for ${directory.path}',
-            error,
-            stackTrace,
-          );
-          // Continue - sync failure shouldn't block loading
-        }
+          )
+              .catchError((error, stackTrace) {
+            _logger.warning(
+              'Failed to sync filesystem for ${directory.path}',
+              error,
+              stackTrace,
+            );
+          }),
+        );
       }
 
       final items = <ContentItem>[];

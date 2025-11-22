@@ -32,6 +32,9 @@ class FileInfoManager {
   // フォルダパスごとのデバウンスタイマー
   final Map<String, Timer> _timers = {};
 
+  // 実行中の同期タスク（重複防止用）
+  final Map<String, Future<void>> _syncTasks = {};
+
   /// 画像メタデータを追加または更新
   Future<void> upsertMetadata({
     required String imageFilePath,
@@ -236,7 +239,31 @@ class FileInfoManager {
   /// - actualFiles: ディスク上に実際に存在するファイルのパスリスト
   /// - ゴーストエントリ（ファイルが存在しないエントリ）を削除
   /// - 新規ファイル（.fileInfo.jsonにないファイル）にデフォルトメタデータを追加
+  ///
+  /// 重複した同期リクエストはスキップされます（同じフォルダへの並行実行を防止）
   Future<void> syncWithFileSystem(
+    String folderPath,
+    List<String> actualFiles,
+  ) async {
+    // 既に実行中の同期があればスキップ
+    if (_syncTasks.containsKey(folderPath)) {
+      _logger.fine('Sync already in progress for $folderPath, skipping');
+      return;
+    }
+
+    // 同期タスクを記録して実行
+    final task = _performSync(folderPath, actualFiles);
+    _syncTasks[folderPath] = task;
+
+    try {
+      await task;
+    } finally {
+      _syncTasks.remove(folderPath);
+    }
+  }
+
+  /// 実際の同期処理を実行
+  Future<void> _performSync(
     String folderPath,
     List<String> actualFiles,
   ) async {
