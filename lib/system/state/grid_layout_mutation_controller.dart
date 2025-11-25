@@ -30,12 +30,29 @@ class GridLayoutMutationController extends ChangeNotifier {
   /// 閾値を低く設定し、ディレクトリ切り替え時の不整合を早期にリセットする。
   void resetIfInconsistent() {
     if (_depth > 3 || _hideDepth > 2) {
-      if (_debugLoggingEnabled) {
-        debugPrint(
-          '[GridLayoutMutationController] INCONSISTENT STATE DETECTED: '
-          'depth=$_depth hideDepth=$_hideDepth beginCount=$debugBeginCount endCount=$debugEndCount; forcing reset',
-        );
-      }
+      // NOTE: debugPrintは呼ばれないことがあるのでprintを使用
+      print(
+        '[GridLayoutMutationController] INCONSISTENT STATE DETECTED: '
+        'depth=$_depth hideDepth=$_hideDepth beginCount=$debugBeginCount endCount=$debugEndCount; forcing reset',
+      );
+      _depth = 0;
+      _hideDepth = 0;
+      _hideStack.clear();
+      _activeFrameNumber = null;
+      _concurrentFrameBegins = 0;
+      notifyListeners();
+    }
+  }
+
+  /// ディレクトリ切り替え時などに呼ばれる強制リセット。
+  /// 不整合状態を即座にクリアして操作不能を防ぐ。
+  void forceReset() {
+    if (_depth > 0 || _hideDepth > 0) {
+      // NOTE: debugPrintは呼ばれないことがあるのでprintを使用
+      print(
+        '[GridLayoutMutationController] forceReset: '
+        'depth=$_depth hideDepth=$_hideDepth',
+      );
       _depth = 0;
       _hideDepth = 0;
       _hideStack.clear();
@@ -66,14 +83,13 @@ class GridLayoutMutationController extends ChangeNotifier {
       _activeFrameNumber = frameStamp;
       _concurrentFrameBegins = 1;
     }
-    if (_debugLoggingEnabled) {
-      debugPrint(
-        '[GridLayoutMutationController] begin depth=$_depth frameTime=$_activeFrameNumber concurrentBegins=$_concurrentFrameBegins '
-        'hide=$hideGrid hideDepth=$_hideDepth '
-        'phase=${SchedulerBinding.instance.schedulerPhase} transientCallbacks=${SchedulerBinding.instance.transientCallbackCount} '
-        'time=${DateTime.now().toIso8601String()}',
-      );
-    }
+    // NOTE: debugPrintは呼ばれないことがあるのでprintを使用
+    print(
+      '[GridLayoutMutationController] begin depth=$_depth frameTime=$_activeFrameNumber concurrentBegins=$_concurrentFrameBegins '
+      'hide=$hideGrid hideDepth=$_hideDepth '
+      'phase=${SchedulerBinding.instance.schedulerPhase} transientCallbacks=${SchedulerBinding.instance.transientCallbackCount} '
+      'time=${DateTime.now().toIso8601String()}',
+    );
     if (_depth == 1 || (hideGrid && _hideDepth == 1)) {
       notifyListeners();
     }
@@ -90,8 +106,9 @@ class GridLayoutMutationController extends ChangeNotifier {
     if (_hideStack.isNotEmpty) {
       hideFlag = _hideStack.removeLast();
     }
-    if (hideGrid != null && hideFlag != hideGrid && _debugLoggingEnabled) {
-      debugPrint(
+    if (hideGrid != null && hideFlag != hideGrid) {
+      // NOTE: debugPrintは呼ばれないことがあるのでprintを使用
+      print(
         '[GridLayoutMutationController] end mismatched hide flag detected provided=$hideGrid stack=$hideFlag',
       );
     }
@@ -105,14 +122,13 @@ class GridLayoutMutationController extends ChangeNotifier {
       frameStamp =
           SchedulerBinding.instance.currentFrameTimeStamp?.inMicroseconds;
     }
-    if (_debugLoggingEnabled) {
-      debugPrint(
-        '[GridLayoutMutationController] end depth=$_depth frameTime=$frameStamp '
-        'hide=$hideFlag hideDepth=$_hideDepth '
-        'phase=${SchedulerBinding.instance.schedulerPhase} transientCallbacks=${SchedulerBinding.instance.transientCallbackCount} '
-        'time=${DateTime.now().toIso8601String()}',
-      );
-    }
+    // NOTE: debugPrintは呼ばれないことがあるのでprintを使用
+    print(
+      '[GridLayoutMutationController] end depth=$_depth frameTime=$frameStamp '
+      'hide=$hideFlag hideDepth=$_hideDepth '
+      'phase=${SchedulerBinding.instance.schedulerPhase} transientCallbacks=${SchedulerBinding.instance.transientCallbackCount} '
+      'time=${DateTime.now().toIso8601String()}',
+    );
     if (_depth == 0 || (hideFlag && _hideDepth == 0)) {
       _activeFrameNumber = null;
       _concurrentFrameBegins = 0;

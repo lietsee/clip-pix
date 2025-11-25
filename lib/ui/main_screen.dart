@@ -20,6 +20,7 @@ import '../system/image_preview_process_manager.dart';
 import '../system/text_preview_process_manager.dart';
 import '../system/state/deletion_mode_notifier.dart';
 import '../system/state/deletion_mode_state.dart';
+import '../system/state/grid_layout_mutation_controller.dart';
 import '../system/state/grid_layout_store.dart';
 import '../system/state/image_history_state.dart';
 import '../system/state/image_library_notifier.dart';
@@ -204,8 +205,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     // to prevent infinite rebuild loop when switching tabs
 
     // Show minimap if always-visible mode is enabled
-    if (selectedState.isMinimapAlwaysVisible &&
-        libraryInfo.hasImages) {
+    if (selectedState.isMinimapAlwaysVisible && libraryInfo.hasImages) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         // Re-verify visibility on every build and re-show if invalidated
@@ -478,7 +478,8 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     final subdirs = directory
         .listSync(followLinks: false)
         .whereType<Directory>()
-        .where((dir) => !p.basename(dir.path).startsWith('.')) // Skip hidden folders
+        .where((dir) =>
+            !p.basename(dir.path).startsWith('.')) // Skip hidden folders
         .toList()
       ..sort((a, b) => a.path.compareTo(b.path));
 
@@ -779,6 +780,11 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     _isSyncing = true;
     debugPrint('[MainScreen] _ensureDirectorySync executing for: $path');
 
+    // FIX: Force reset mutation state to prevent unresponsive UI
+    // This ensures any stale mutation state is cleared when switching directories
+    final mutationController = context.read<GridLayoutMutationController>();
+    mutationController.forceReset();
+
     // Dispose and recreate scroll controller when folder changes
     // to prevent multiple ScrollPosition attachment errors
     if (_rootScrollController.hasClients) {
@@ -844,7 +850,8 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
         ? _rootScrollController
         : _gridSubfolderScrollController;
 
-    print('[MainScreen] _showMinimap: controller hasClients=${scrollController.hasClients}, snapshotEntries=${layoutStore.latestSnapshot?.entries.length ?? 0}');
+    print(
+        '[MainScreen] _showMinimap: controller hasClients=${scrollController.hasClients}, snapshotEntries=${layoutStore.latestSnapshot?.entries.length ?? 0}');
 
     _minimapService = MinimapOverlayService();
     _minimapService!.show(

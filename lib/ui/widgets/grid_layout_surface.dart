@@ -453,8 +453,11 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
       }
     }
 
-    widget.onMutateStart?.call(notify);
+    // FIX: Set flag BEFORE calling callback to prevent race condition
+    // If dispose() is called between these lines, _mutationInProgress must be true
+    // so dispose() will call onMutateEnd to decrement depth
     _mutationInProgress = true;
+    widget.onMutateStart?.call(notify);
     bool mutationEndScheduled = false;
 
     try {
