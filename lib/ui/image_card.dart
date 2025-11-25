@@ -707,6 +707,8 @@ class _ImageCardState extends State<ImageCard> {
   void _handlePointerDown(PointerDownEvent event) {
     if (event.kind == PointerDeviceKind.mouse) {
       _isRightButtonPressed = event.buttons & kSecondaryMouseButton != 0;
+      debugPrint('[ImageCard] pointerDown: id=${widget.item.id.split('/').last}, '
+          'rightButton=$_isRightButtonPressed, buttons=${event.buttons}');
       // 右クリックでパン操作を開始
       if (_isRightButtonPressed) {
         final box = context.findRenderObject() as RenderBox?;
@@ -715,6 +717,8 @@ class _ImageCardState extends State<ImageCard> {
           _isPanning = true;
           _panStartLocal = local;
           _panStartOffset = _imageOffset;
+          debugPrint('[ImageCard] pan_start: id=${widget.item.id.split('/').last}, '
+              'scale=$_currentScale, startOffset=$_panStartOffset');
         }
       }
     }
@@ -722,6 +726,8 @@ class _ImageCardState extends State<ImageCard> {
 
   void _handlePointerUp(PointerUpEvent event) {
     if (event.kind == PointerDeviceKind.mouse) {
+      debugPrint('[ImageCard] pointerUp: id=${widget.item.id.split('/').last}, '
+          'isPanning=$_isPanning');
       _isRightButtonPressed = false;
       if (_isPanning) {
         _isPanning = false;
