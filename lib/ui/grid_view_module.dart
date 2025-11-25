@@ -99,6 +99,10 @@ class _GridViewModuleState extends State<GridViewModule> {
   bool _preserveScrollOnReconcile = false;
   double? _scrollOffsetBeforeReconcile;
 
+  // Track if reconciliation is due to directory change (show loading indicator)
+  // vs same-folder card add/delete (keep existing grid to avoid flicker)
+  bool _isDirectoryChangeReconcile = false;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -229,6 +233,10 @@ class _GridViewModuleState extends State<GridViewModule> {
         // Defer to postFrameCallback to avoid "setState during build" error
         _reconciliationPending = true; // Mark reconciliation as pending
 
+        // Track if this is a directory change (show loading indicator)
+        // or same-folder change (keep existing grid to avoid flicker)
+        _isDirectoryChangeReconcile = directoryChanged;
+
         // Preserve scroll position when images change within the same folder
         // (e.g., clipboard save, file deletion)
         if (imagesChanged && !directoryChanged) {
@@ -324,7 +332,9 @@ class _GridViewModuleState extends State<GridViewModule> {
     }
 
     // Prevent rendering during reconciliation to avoid _entries/viewStates mismatch
-    if (_reconciliationPending) {
+    // Only show loading indicator for directory changes; for same-folder card add/delete,
+    // keep existing grid to avoid visual flicker
+    if (_reconciliationPending && _isDirectoryChangeReconcile) {
       return const Center(child: CircularProgressIndicator());
     }
 
@@ -1019,6 +1029,7 @@ class _GridViewModuleState extends State<GridViewModule> {
 
   void _reconcileEntries(List<ContentItem> newItems) {
     _reconciliationPending = false; // Clear pending flag
+    _isDirectoryChangeReconcile = false; // Clear directory change flag
     debugPrint(
         '[GridViewModule] _reconcileEntries: newItems=${newItems.length}, currentEntries=${_entries.length}');
     _logEntries('reconcile_before', _entries);
