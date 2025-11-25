@@ -5,7 +5,6 @@ import '../../data/grid_layout_settings_repository.dart';
 import '../../data/models/grid_layout_settings.dart';
 import '../../system/audio_service.dart';
 import '../../system/clipboard_monitor.dart';
-import '../../system/state/folder_view_mode.dart';
 import '../../system/state/grid_resize_controller.dart';
 import '../../system/state/selected_folder_notifier.dart';
 
@@ -211,7 +210,6 @@ class _GridSettingsDialogState extends State<GridSettingsDialog> {
 
   Widget _buildMinimapSection(
       BuildContext context, SelectedFolderNotifier notifier) {
-    final isEnabled = notifier.state.viewMode == FolderViewMode.root;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -219,20 +217,14 @@ class _GridSettingsDialogState extends State<GridSettingsDialog> {
         const SizedBox(height: 8),
         SwitchListTile(
           title: const Text('ミニマップを常に表示 (Ctrl+M)'),
-          subtitle: !isEnabled
-              ? const Text('ルートビューでのみ有効',
-                  style: TextStyle(color: Colors.orange))
-              : null,
           value: notifier.state.isMinimapAlwaysVisible,
-          onChanged: isEnabled
-              ? (value) {
-                  notifier.toggleMinimapAlwaysVisible();
-                  // Force UI update after state change
-                  if (mounted) {
-                    setState(() {});
-                  }
-                }
-              : null,
+          onChanged: (value) {
+            notifier.toggleMinimapAlwaysVisible();
+            // Force UI update after state change
+            if (mounted) {
+              setState(() {});
+            }
+          },
           contentPadding: EdgeInsets.zero,
         ),
       ],

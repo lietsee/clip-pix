@@ -202,7 +202,6 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
 
     // Show minimap if always-visible mode is enabled
     if (selectedState.isMinimapAlwaysVisible &&
-        selectedState.viewMode == FolderViewMode.root &&
         libraryInfo.hasImages) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -248,8 +247,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
               color: selectedState.isMinimapAlwaysVisible
                   ? appBarFgColor
                   : appBarFgColor.withOpacity(0.6),
-              onPressed: libraryInfo.hasImages &&
-                      selectedState.viewMode == FolderViewMode.root
+              onPressed: libraryInfo.hasImages
                   ? () => _toggleMinimapAlwaysVisible(context)
                   : null,
             ),
