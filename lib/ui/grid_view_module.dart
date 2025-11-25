@@ -95,6 +95,10 @@ class _GridViewModuleState extends State<GridViewModule> {
   bool _reconciliationPending = false; // Track pending reconciliation to skip assertion during tab transitions
   final Set<Object> _currentBuildKeys = <Object>{};
 
+  // Scroll position preservation for image add/delete within same folder
+  bool _preserveScrollOnReconcile = false;
+  double? _scrollOffsetBeforeReconcile;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -224,6 +228,14 @@ class _GridViewModuleState extends State<GridViewModule> {
         // Initial load or order changed: reconcile entries to rebuild grid
         // Defer to postFrameCallback to avoid "setState during build" error
         _reconciliationPending = true; // Mark reconciliation as pending
+
+        // Preserve scroll position when images change within the same folder
+        // (e.g., clipboard save, file deletion)
+        if (imagesChanged && !directoryChanged) {
+          _preserveScrollOnReconcile = true;
+          debugPrint('[GridViewModule] scroll_preserve: flagged for preservation');
+        }
+
         SchedulerBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           _reconcileEntries(orderedImages);
@@ -701,6 +713,14 @@ class _GridViewModuleState extends State<GridViewModule> {
     // Set deleting flag
     deletionNotifier.setDeleting(true);
 
+    // Save scroll position before deletion to preserve it after grid update
+    final controller = widget.controller;
+    double? scrollOffsetBeforeDelete;
+    if (controller != null && controller.hasClients) {
+      scrollOffsetBeforeDelete = controller.position.pixels;
+      debugPrint('[GridViewModule] delete: saved scroll offset=${scrollOffsetBeforeDelete.toStringAsFixed(1)}');
+    }
+
     try {
       // Import DeleteService at the top of the file
       final fileInfoManager = context.read<FileInfoManager>();
@@ -717,6 +737,11 @@ class _GridViewModuleState extends State<GridViewModule> {
 
       // Remove successfully deleted items from ImageLibrary
       // Defer state updates to avoid setState during build
+      // Set preservation flag before removing items to trigger scroll restoration
+      if (scrollOffsetBeforeDelete != null) {
+        _scrollOffsetBeforeReconcile = scrollOffsetBeforeDelete;
+        _preserveScrollOnReconcile = true;
+      }
       SchedulerBinding.instance.addPostFrameCallback((_) {
         for (final path in result.successfulPaths) {
           libraryNotifier.remove(path);
@@ -997,6 +1022,15 @@ class _GridViewModuleState extends State<GridViewModule> {
     debugPrint(
         '[GridViewModule] _reconcileEntries: newItems=${newItems.length}, currentEntries=${_entries.length}');
     _logEntries('reconcile_before', _entries);
+
+    // Save scroll position before reconcile if preservation is requested
+    if (_preserveScrollOnReconcile) {
+      final controller = widget.controller;
+      if (controller != null && controller.hasClients) {
+        _scrollOffsetBeforeReconcile = controller.position.pixels;
+        debugPrint('[GridViewModule] scroll_preserve: saved offset=${_scrollOffsetBeforeReconcile?.toStringAsFixed(1)}');
+      }
+    }
     final duplicateIncoming = _findDuplicateIds(
       newItems.map((item) => item.id),
     );
@@ -1074,6 +1108,16 @@ class _GridViewModuleState extends State<GridViewModule> {
     setState(() {
       _entries = reordered;
     });
+
+    // Schedule scroll position restoration after rebuild
+    if (_preserveScrollOnReconcile && _scrollOffsetBeforeReconcile != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _restoreScrollPosition();
+      });
+    }
+    _preserveScrollOnReconcile = false;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _logEntries('reconcile_after_post', _entries);
@@ -1090,6 +1134,45 @@ class _GridViewModuleState extends State<GridViewModule> {
     setState(() {
       entry.opacity = 1;
     });
+  }
+
+  /// Restore scroll position after grid reconciliation
+  void _restoreScrollPosition() {
+    final controller = widget.controller;
+    final targetOffset = _scrollOffsetBeforeReconcile;
+
+    if (controller == null || targetOffset == null) {
+      _scrollOffsetBeforeReconcile = null;
+      return;
+    }
+
+    if (!controller.hasClients) {
+      debugPrint('[GridViewModule] scroll_restore: no clients, retrying');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _restoreScrollPosition();
+      });
+      return;
+    }
+
+    final position = controller.position;
+    if (!position.hasContentDimensions) {
+      debugPrint('[GridViewModule] scroll_restore: no dimensions, retrying');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _restoreScrollPosition();
+      });
+      return;
+    }
+
+    final clamped = targetOffset.clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+
+    debugPrint('[GridViewModule] scroll_restore: jumping to ${clamped.toStringAsFixed(1)} '
+        '(target=${targetOffset.toStringAsFixed(1)}, max=${position.maxScrollExtent.toStringAsFixed(1)})');
+
+    controller.jumpTo(clamped);
+    _scrollOffsetBeforeReconcile = null;
   }
 
   void _disposeEntry(_GridEntry entry) {
