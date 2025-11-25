@@ -28,7 +28,6 @@ import '../system/image_preview_process_manager.dart';
 import '../system/text_preview_process_manager.dart';
 import '../system/state/deletion_mode_notifier.dart';
 import '../system/state/deletion_mode_state.dart';
-import '../system/state/folder_view_mode.dart';
 import '../system/state/grid_layout_mutation_controller.dart';
 import '../system/state/grid_layout_store.dart';
 import '../system/state/image_library_notifier.dart';
@@ -927,10 +926,11 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   ScrollController _resolveController(SelectedFolderState selectedState) {
-    if (selectedState.viewMode == FolderViewMode.root &&
-        widget.controller != null) {
+    // Use provided controller if available (for both root and subfolder)
+    if (widget.controller != null) {
       return widget.controller!;
     }
+    // Fallback to internal controller management
     final directory = widget.state.activeDirectory;
     final key = directory?.path ?? '_root';
     return _directoryControllers.putIfAbsent(key, () => ScrollController());
