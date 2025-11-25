@@ -770,8 +770,14 @@ class ClipPixApp extends StatelessWidget {
           },
           dispose: (_, service) => service.dispose(),
         ),
-      ProxyProvider5<ImageSaver, TextSaver, ClipboardCopyService,
+      ChangeNotifierProxyProvider5<ImageSaver, TextSaver, ClipboardCopyService,
           UrlDownloadService, ImageLibraryNotifier, ClipboardMonitor>(
+        create: (_) => ClipboardMonitor(
+          getSelectedFolder: () => null,
+          onImageCaptured: (_, {source, sourceType = ImageSourceType.local}) async {},
+          onUrlCaptured: (_) async {},
+          onTextCaptured: (_) async {},
+        ),
         update: (
           context,
           imageSaver,
@@ -781,7 +787,9 @@ class ClipPixApp extends StatelessWidget {
           imageLibrary,
           previous,
         ) {
-          previous?.dispose();
+          if (previous != null) {
+            previous.dispose();
+          }
 
           // Initialize AudioService with current sound settings
           final audioService = context.read<AudioService>();
