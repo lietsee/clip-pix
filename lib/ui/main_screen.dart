@@ -326,7 +326,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
               ),
             IconButton(
               icon: const Icon(Icons.settings),
-              tooltip: 'グリッド設定',
+              tooltip: 'アプリ設定',
               onPressed: () {
                 showDialog<void>(
                   context: context,
