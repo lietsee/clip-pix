@@ -198,6 +198,10 @@ class _GridSettingsDialogState extends State<GridSettingsDialog> {
             } else {
               await monitor.stop();
             }
+            // Force UI update after state change
+            if (mounted) {
+              setState(() {});
+            }
           },
           contentPadding: EdgeInsets.zero,
         ),
@@ -223,6 +227,10 @@ class _GridSettingsDialogState extends State<GridSettingsDialog> {
           onChanged: isEnabled
               ? (value) {
                   notifier.toggleMinimapAlwaysVisible();
+                  // Force UI update after state change
+                  if (mounted) {
+                    setState(() {});
+                  }
                 }
               : null,
           contentPadding: EdgeInsets.zero,
