@@ -26,6 +26,9 @@ import 'package:clip_pix/data/grid_layout_settings_repository.dart';
 import 'package:clip_pix/data/grid_order_repository.dart';
 import 'package:clip_pix/data/image_repository.dart';
 import 'package:clip_pix/system/state/folder_view_mode.dart';
+import 'package:clip_pix/system/text_preview_process_manager.dart';
+import 'package:clip_pix/system/image_preview_process_manager.dart';
+import 'package:clip_pix/system/state/deletion_mode_state.dart';
 
 class InMemoryGridCardPreferencesRepository
     implements GridCardPreferencesRepository {
@@ -284,6 +287,10 @@ void main() {
       scrollToTopRequested: false,
     );
 
+    final textPreviewManager = TextPreviewProcessManager();
+    final imagePreviewManager = ImagePreviewProcessManager();
+    const deletionModeState = DeletionModeState();
+
     await tester.pumpWidget(
       MaterialApp(
         home: MultiProvider(
@@ -308,6 +315,13 @@ void main() {
             Provider<GridResizeStoreBinding>.value(value: storeBinding),
             Provider<ImageLibraryNotifier>.value(value: imageNotifier),
             Provider<SelectedFolderState>.value(value: selectedState),
+            ChangeNotifierProvider<TextPreviewProcessManager>.value(
+              value: textPreviewManager,
+            ),
+            ChangeNotifierProvider<ImagePreviewProcessManager>.value(
+              value: imagePreviewManager,
+            ),
+            Provider<DeletionModeState>.value(value: deletionModeState),
           ],
           child: Scaffold(
             body: SizedBox(

@@ -105,6 +105,9 @@ void main() {
         ),
         notify: false,
       );
+      // Clear persistence records from updateGeometry call
+      persistence.recordedBatches.clear();
+
       var notifications = 0;
       store.addListener(() {
         notifications += 1;
@@ -194,19 +197,22 @@ void main() {
       expect(firstEntry.columnSpan, store.viewStateFor('a').columnSpan);
     });
 
-    test('カード更新後はスナップショットが無効化される', () async {
+    test('カード更新後もスナップショットは再生成される', () async {
       store.updateGeometry(
         const GridLayoutGeometry(columnCount: 3, columnWidth: 120, gap: 4),
         notify: true,
       );
       expect(store.latestSnapshot, isNotNull);
+      final firstSnapshot = store.latestSnapshot;
 
       await store.updateCard(
         id: 'b',
         customSize: const Size(320, 200),
       );
 
-      expect(store.latestSnapshot, isNull);
+      // Snapshot is regenerated after card update (for minimap updates)
+      expect(store.latestSnapshot, isNotNull);
+      expect(store.latestSnapshot, isNot(same(firstSnapshot)));
     });
   });
 }
