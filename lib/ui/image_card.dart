@@ -359,6 +359,7 @@ class _ImageCardState extends State<ImageCard> {
             ),
             Positioned.fill(
               child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
                 onTap: () => _focusNode.requestFocus(),
                 onDoubleTap: () => widget.onOpenPreview(widget.item),
               ),
