@@ -147,6 +147,8 @@ class _ImageCardState extends State<ImageCard> {
     _currentSpan = widget.viewState.columnSpan;
     _currentScale = widget.viewState.scale;
     _imageOffset = widget.viewState.offset;
+    debugPrint('[ImageCard] initState_restore: id=${widget.item.id.split('/').last}, '
+        'offset=$_imageOffset, scale=$_currentScale');
   }
 
   @override
@@ -726,6 +728,8 @@ class _ImageCardState extends State<ImageCard> {
         _panStartLocal = null;
         _panStartOffset = null;
         // パン終了時にオフセットを永続化
+        debugPrint('[ImageCard] pan_end: id=${widget.item.id.split('/').last}, '
+            'offset=$_imageOffset, scale=$_currentScale');
         widget.onPan(widget.item.id, _imageOffset);
       }
     }

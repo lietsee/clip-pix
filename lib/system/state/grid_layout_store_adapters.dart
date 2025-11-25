@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
+
 import '../../data/grid_card_preferences_repository.dart';
 import '../../data/models/content_item.dart';
 import '../../data/models/grid_card_pref.dart';
@@ -16,6 +18,10 @@ class GridLayoutHivePersistence implements GridLayoutPersistence {
   @override
   GridLayoutPreferenceRecord read(String id) {
     final pref = _repository.getOrCreate(id);
+    debugPrint('[HivePersistence] read: id=${id.split('/').last}, '
+        'offsetDx=${pref.offsetDx.toStringAsFixed(2)}, '
+        'offsetDy=${pref.offsetDy.toStringAsFixed(2)}, '
+        'scale=${pref.scale.toStringAsFixed(2)}');
     return GridLayoutPreferenceRecord(
       id: pref.id,
       width: pref.width,
@@ -32,6 +38,12 @@ class GridLayoutHivePersistence implements GridLayoutPersistence {
   Future<void> saveBatch(List<GridLayoutPreferenceRecord> mutations) async {
     if (mutations.isEmpty) {
       return;
+    }
+    for (final m in mutations) {
+      debugPrint('[HivePersistence] saveBatch: id=${m.id.split('/').last}, '
+          'offsetDx=${m.offsetDx.toStringAsFixed(2)}, '
+          'offsetDy=${m.offsetDy.toStringAsFixed(2)}, '
+          'scale=${m.scale.toStringAsFixed(2)}');
     }
     final prefs = mutations.map(
       (mutation) => GridCardPreference(

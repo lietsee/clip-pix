@@ -918,6 +918,7 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   void _handlePan(String id, Offset offset) {
+    debugPrint('[GridViewModule] _handlePan: id=${id.split('/').last}, offset=$offset');
     unawaited(_layoutStore.updateCard(id: id, offset: offset));
   }
 

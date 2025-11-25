@@ -533,9 +533,15 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     );
 
     if (_viewStateEquals(current, nextState)) {
+      debugPrint('[GridLayoutStore] updateCard_skip: id=${id.split('/').last}, '
+          'no change detected');
       return;
     }
 
+    debugPrint('[GridLayoutStore] updateCard_save: id=${id.split('/').last}, '
+        'offsetDx=${nextState.offsetDx.toStringAsFixed(2)}, '
+        'offsetDy=${nextState.offsetDy.toStringAsFixed(2)}, '
+        'scale=${nextState.scale.toStringAsFixed(2)}');
     _viewStates[id] = nextState;
     await _persistence.saveBatch([_recordFromState(nextState)]);
 
