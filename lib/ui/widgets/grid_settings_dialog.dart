@@ -198,6 +198,10 @@ class _GridSettingsDialogState extends State<GridSettingsDialog> {
             } else {
               await monitor.stop();
             }
+            // Force dialog rebuild to update toggle UI
+            if (mounted) {
+              setState(() {});
+            }
           },
           contentPadding: EdgeInsets.zero,
         ),
