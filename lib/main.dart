@@ -908,7 +908,6 @@ class ClipPixApp extends StatelessWidget {
           copyService.registerMonitor(monitor);
           return monitor;
         },
-        dispose: (_, monitor) => monitor.dispose(),
       ),
       ProxyProvider2<WatcherStatusNotifier, ImageLibraryNotifier,
           FileWatcherService>(
