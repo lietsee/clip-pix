@@ -772,12 +772,6 @@ class ClipPixApp extends StatelessWidget {
         ),
       ChangeNotifierProxyProvider5<ImageSaver, TextSaver, ClipboardCopyService,
           UrlDownloadService, ImageLibraryNotifier, ClipboardMonitor>(
-        create: (_) => ClipboardMonitor(
-          getSelectedFolder: () => null,
-          onImageCaptured: (_, {source, sourceType = ImageSourceType.local}) async {},
-          onUrlCaptured: (_) async {},
-          onTextCaptured: (_) async {},
-        ),
         update: (
           context,
           imageSaver,
