@@ -353,6 +353,10 @@ class _GridViewModuleState extends State<GridViewModule> {
     final settings = settingsRepo.value;
     final isMutating = mutationController.isMutating;
     final shouldHideGrid = mutationController.shouldHideGrid;
+    // 診断ログ: 操作不能バグの原因特定用
+    print(
+      '[GridViewModule] build: isMutating=$isMutating, shouldHideGrid=$shouldHideGrid',
+    );
     assert(() {
       // Skip alignment check when reconciliation is pending (tab transitions)
       if (_reconciliationPending) {
