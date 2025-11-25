@@ -64,6 +64,14 @@ class GridCardPreferencesRepository {
     await _box.put(id, pref);
   }
 
+  Future<void> savePan(String id, Offset offset) async {
+    final pref = getOrCreate(id).copyWith(
+      offsetDx: offset.dx,
+      offsetDy: offset.dy,
+    );
+    await _box.put(id, pref);
+  }
+
   Future<void> remove(String id) async {
     await _box.delete(id);
   }

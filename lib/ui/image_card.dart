@@ -23,6 +23,7 @@ class ImageCard extends StatefulWidget {
     required this.onResize,
     required this.onSpanChange,
     required this.onZoom,
+    required this.onPan,
     required this.onRetry,
     required this.onOpenPreview,
     required this.onCopyImage,
@@ -48,6 +49,7 @@ class ImageCard extends StatefulWidget {
   final void Function(String id, Size newSize) onResize;
   final void Function(String id, int span) onSpanChange;
   final void Function(String id, double scale) onZoom;
+  final void Function(String id, Offset offset) onPan;
   final void Function(String id) onRetry;
   final void Function(ImageItem item) onOpenPreview;
   final void Function(ImageItem item) onCopyImage;
@@ -144,6 +146,7 @@ class _ImageCardState extends State<ImageCard> {
     _scaleNotifier.addListener(_handleScaleExternalChange);
     _currentSpan = widget.viewState.columnSpan;
     _currentScale = widget.viewState.scale;
+    _imageOffset = widget.viewState.offset;
   }
 
   @override
@@ -722,6 +725,8 @@ class _ImageCardState extends State<ImageCard> {
         _isPanning = false;
         _panStartLocal = null;
         _panStartOffset = null;
+        // パン終了時にオフセットを永続化
+        widget.onPan(widget.item.id, _imageOffset);
       }
     }
   }

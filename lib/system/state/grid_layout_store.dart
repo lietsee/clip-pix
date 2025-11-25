@@ -21,6 +21,8 @@ class GridLayoutPreferenceRecord {
     required this.scale,
     required this.columnSpan,
     required this.customHeight,
+    this.offsetDx = 0.0,
+    this.offsetDy = 0.0,
   });
 
   final String id;
@@ -29,6 +31,8 @@ class GridLayoutPreferenceRecord {
   final double scale;
   final int columnSpan;
   final double? customHeight;
+  final double offsetDx;
+  final double offsetDy;
 
   static const double defaultWidth = 200;
   static const double defaultHeight = 200;
@@ -73,6 +77,8 @@ class GridCardViewState {
     required this.scale,
     required this.columnSpan,
     required this.customHeight,
+    this.offsetDx = 0.0,
+    this.offsetDy = 0.0,
   });
 
   final String id;
@@ -81,6 +87,10 @@ class GridCardViewState {
   final double scale;
   final int columnSpan;
   final double? customHeight;
+  final double offsetDx;
+  final double offsetDy;
+
+  Offset get offset => Offset(offsetDx, offsetDy);
 }
 
 class GridLayoutSnapshot {
@@ -171,6 +181,8 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
         scale: record.scale,
         columnSpan: record.columnSpan,
         customHeight: record.customHeight,
+        offsetDx: record.offsetDx,
+        offsetDy: record.offsetDy,
       );
       nextStates[item.id] = state;
       nextOrder.add(item.id);
@@ -455,6 +467,7 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     Size? customSize,
     double? scale,
     int? columnSpan,
+    Offset? offset,
   }) async {
     final current = _viewStates[id];
     if (current == null) {
@@ -465,6 +478,8 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     double? nextCustomHeight = current.customHeight;
     double nextScale = current.scale;
     int nextSpan = current.columnSpan;
+    double nextOffsetDx = current.offsetDx;
+    double nextOffsetDy = current.offsetDy;
 
     if (customSize != null) {
       nextWidth = customSize.width;
@@ -473,6 +488,10 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     }
     if (scale != null) {
       nextScale = scale;
+    }
+    if (offset != null) {
+      nextOffsetDx = offset.dx;
+      nextOffsetDy = offset.dy;
     }
     if (columnSpan != null) {
       final geometry = _geometry;
@@ -499,6 +518,8 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
       scale: nextScale,
       columnSpan: nextSpan,
       customHeight: nextCustomHeight,
+      offsetDx: nextOffsetDx,
+      offsetDy: nextOffsetDy,
     );
 
     if (_viewStateEquals(current, nextState)) {
@@ -567,6 +588,8 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
       scale: state.scale,
       columnSpan: state.columnSpan,
       customHeight: state.customHeight,
+      offsetDx: state.offsetDx,
+      offsetDy: state.offsetDy,
     );
   }
 

@@ -10,6 +10,8 @@ class GridCardPreference {
     required this.scale,
     required this.columnSpan,
     this.customHeight,
+    this.offsetDx = 0.0,
+    this.offsetDy = 0.0,
   });
 
   final String id;
@@ -18,8 +20,11 @@ class GridCardPreference {
   final double scale;
   final int columnSpan;
   final double? customHeight;
+  final double offsetDx;
+  final double offsetDy;
 
   Size get size => Size(width, height);
+  Offset get offset => Offset(offsetDx, offsetDy);
 
   GridCardPreference copyWith({
     String? id,
@@ -29,6 +34,8 @@ class GridCardPreference {
     int? columnSpan,
     double? customHeight,
     bool overrideCustomHeight = false,
+    double? offsetDx,
+    double? offsetDy,
   }) {
     return GridCardPreference(
       id: id ?? this.id,
@@ -39,6 +46,8 @@ class GridCardPreference {
       customHeight: overrideCustomHeight
           ? customHeight
           : (customHeight ?? this.customHeight),
+      offsetDx: offsetDx ?? this.offsetDx,
+      offsetDy: offsetDy ?? this.offsetDy,
     );
   }
 }
@@ -55,10 +64,17 @@ class GridCardPreferenceAdapter extends TypeAdapter<GridCardPreference> {
     final scale = reader.readDouble();
     int columnSpan = 1;
     double? customHeight;
+    double offsetDx = 0.0;
+    double offsetDy = 0.0;
     if (reader.availableBytes >= 4) {
       columnSpan = reader.readInt();
       if (reader.availableBytes >= 8) {
         customHeight = reader.readDouble();
+        // offsetDx, offsetDy の読み取り（後方互換性のため存在チェック）
+        if (reader.availableBytes >= 16) {
+          offsetDx = reader.readDouble();
+          offsetDy = reader.readDouble();
+        }
       }
     }
     return GridCardPreference(
@@ -68,6 +84,8 @@ class GridCardPreferenceAdapter extends TypeAdapter<GridCardPreference> {
       scale: scale,
       columnSpan: columnSpan,
       customHeight: customHeight,
+      offsetDx: offsetDx,
+      offsetDy: offsetDy,
     );
   }
 
@@ -79,6 +97,8 @@ class GridCardPreferenceAdapter extends TypeAdapter<GridCardPreference> {
       ..writeDouble(obj.height)
       ..writeDouble(obj.scale)
       ..writeInt(obj.columnSpan)
-      ..writeDouble(obj.customHeight ?? obj.height);
+      ..writeDouble(obj.customHeight ?? obj.height)
+      ..writeDouble(obj.offsetDx)
+      ..writeDouble(obj.offsetDy);
   }
 }

@@ -627,6 +627,7 @@ class _GridViewModuleState extends State<GridViewModule> {
                 onResize: _handleResize,
                 onSpanChange: _handleSpanChange,
                 onZoom: _handleZoom,
+                onPan: _handlePan,
                 onRetry: _handleRetry,
                 onOpenPreview: _showPreviewDialog,
                 onCopyImage: _handleCopy,
@@ -914,6 +915,10 @@ class _GridViewModuleState extends State<GridViewModule> {
     _scaleDebounceTimers[id] = Timer(const Duration(milliseconds: 150), () {
       unawaited(_layoutStore.updateCard(id: id, scale: scale));
     });
+  }
+
+  void _handlePan(String id, Offset offset) {
+    unawaited(_layoutStore.updateCard(id: id, offset: offset));
   }
 
   void _handleSpanChange(String id, int span) {

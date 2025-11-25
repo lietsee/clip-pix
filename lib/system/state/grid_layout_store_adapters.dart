@@ -23,6 +23,8 @@ class GridLayoutHivePersistence implements GridLayoutPersistence {
       scale: pref.scale,
       columnSpan: pref.columnSpan,
       customHeight: pref.customHeight,
+      offsetDx: pref.offsetDx,
+      offsetDy: pref.offsetDy,
     );
   }
 
@@ -39,6 +41,8 @@ class GridLayoutHivePersistence implements GridLayoutPersistence {
         scale: mutation.scale,
         columnSpan: mutation.columnSpan,
         customHeight: mutation.customHeight,
+        offsetDx: mutation.offsetDx,
+        offsetDy: mutation.offsetDy,
       ),
     );
     await _repository.saveAll(prefs);

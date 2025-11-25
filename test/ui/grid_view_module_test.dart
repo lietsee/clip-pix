@@ -86,6 +86,15 @@ class InMemoryGridCardPreferencesRepository
   }
 
   @override
+  Future<void> savePan(String id, Offset offset) async {
+    final current = getOrCreate(id);
+    _storage[id] = current.copyWith(
+      offsetDx: offset.dx,
+      offsetDy: offset.dy,
+    );
+  }
+
+  @override
   Future<void> savePreference(GridCardPreference preference) async {
     _storage[preference.id] = preference;
   }
