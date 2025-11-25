@@ -577,7 +577,9 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
                 (a.customHeight! - b.customHeight!).abs() < _epsilon)) &&
         (a.scale - b.scale).abs() < _epsilon &&
         (a.width - b.width).abs() < _epsilon &&
-        (a.height - b.height).abs() < _epsilon;
+        (a.height - b.height).abs() < _epsilon &&
+        (a.offsetDx - b.offsetDx).abs() < _epsilon &&
+        (a.offsetDy - b.offsetDy).abs() < _epsilon;
   }
 
   GridLayoutPreferenceRecord _recordFromState(GridCardViewState state) {
