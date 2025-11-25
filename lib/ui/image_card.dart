@@ -194,6 +194,8 @@ class _ImageCardState extends State<ImageCard> {
 
   @override
   void dispose() {
+    print('[ImageCard] dispose: ${widget.item.id.split('/').last}, '
+        'isResizing=$_isResizing, overlayService=${_overlayService != null}');
     _cancelMemoTooltip();
     _memoTooltipService?.dispose();
     _memoTooltipService = null;
@@ -278,16 +280,21 @@ class _ImageCardState extends State<ImageCard> {
         },
         child: Listener(
           behavior: HitTestBehavior.translucent,
-          onPointerDown: _handlePointerDown,
+          onPointerDown: (e) {
+            print('[ImageCard] onPointerDown: ${widget.item.id.split('/').last}');
+            _handlePointerDown(e);
+          },
           onPointerUp: _handlePointerUp,
           onPointerMove: _handlePointerMove,
           onPointerSignal: _handlePointerSignal,
           child: MouseRegion(
             onEnter: (_) {
+              print('[ImageCard] onEnter: ${widget.item.id.split('/').last}');
               _setControlsVisible(true);
               _scheduleMemoTooltip();
             },
             onExit: (_) {
+              print('[ImageCard] onExit: ${widget.item.id.split('/').last}');
               _setControlsVisible(false);
               _cancelMemoTooltip();
             },

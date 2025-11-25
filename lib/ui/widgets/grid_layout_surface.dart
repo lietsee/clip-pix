@@ -115,6 +115,11 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        // 診断ログ: 操作不能バグの原因特定用
+        print('[GridLayoutSurface] build: '
+            'mutationInProgress=$_mutationInProgress, '
+            'gridHiddenForReset=$_gridHiddenForReset, '
+            'constraints=$constraints');
         final double maxWidth = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : MediaQuery.of(context).size.width;
