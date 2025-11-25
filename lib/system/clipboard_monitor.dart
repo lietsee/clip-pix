@@ -7,6 +7,7 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:ffi/ffi.dart';
+import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 import 'package:logging/logging.dart';
 import 'package:win32/win32.dart';
@@ -74,7 +75,7 @@ abstract class ClipboardMonitorGuard {
   void clearGuardToken();
 }
 
-class ClipboardMonitor implements ClipboardMonitorGuard {
+class ClipboardMonitor extends ChangeNotifier implements ClipboardMonitorGuard {
   ClipboardMonitor({
     required Directory? Function() getSelectedFolder,
     required ImageCapturedCallback onImageCaptured,
@@ -139,6 +140,7 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
     _hasSequenceAdvanced = false;
     _startSequenceWatcher();
     await _initializeHook();
+    notifyListeners();
   }
 
   Future<void> stop() async {
@@ -155,6 +157,7 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
     _baselineSequenceNumber = null;
     _hasSequenceAdvanced = false;
     _sessionHashes.clear();
+    notifyListeners();
   }
 
   Future<void> onFolderChanged(Directory? directory) async {

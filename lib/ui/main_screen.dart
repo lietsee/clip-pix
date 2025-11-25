@@ -55,7 +55,6 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   String? _restoringForPath;
   final Set<String> _restoredRootScrollPaths = <String>{};
   bool _controllerLogScheduled = false;
-  bool _clipboardMonitorEnabled = false;
 
   // Minimap overlay service
   MinimapOverlayService? _minimapService;
@@ -180,6 +179,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     final watcherStatus = context.watch<WatcherStatusState>();
     final historyState = context.watch<ImageHistoryState>();
     final deletionMode = context.watch<DeletionModeState>();
+    final clipboardMonitor = context.watch<ClipboardMonitor>();
 
     // GridLayoutSettingsを取得してAppBarの色を決定
     final settingsRepo = context.watch<GridLayoutSettingsRepository>();
@@ -256,15 +256,16 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8.0),
               child: Tooltip(
-                message:
-                    _clipboardMonitorEnabled ? 'クリップボード監視を停止' : 'クリップボード監視を開始',
+                message: clipboardMonitor.isRunning
+                    ? 'クリップボード監視を停止'
+                    : 'クリップボード監視を開始',
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(Icons.content_paste, size: 20),
                     const SizedBox(width: 4),
                     Switch(
-                      value: _clipboardMonitorEnabled,
+                      value: clipboardMonitor.isRunning,
                       onChanged: (value) {
                         _toggleClipboardMonitor(context, value);
                       },
@@ -650,10 +651,6 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
 
   Future<void> _toggleClipboardMonitor(
       BuildContext context, bool enabled) async {
-    setState(() {
-      _clipboardMonitorEnabled = enabled;
-    });
-
     final monitor = context.read<ClipboardMonitor>();
     if (enabled) {
       await monitor.start();
@@ -722,7 +719,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
 
     await imageLibrary.loadForDirectory(directory);
     await fileWatcher.start(directory);
-    if (_clipboardMonitorEnabled) {
+    if (monitor.isRunning) {
       await monitor.onFolderChanged(directory);
     }
 
@@ -810,8 +807,9 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
 
         await imageLibrary.loadForDirectory(directory);
         await context.read<FileWatcherService>().start(directory);
-        if (_clipboardMonitorEnabled) {
-          await context.read<ClipboardMonitor>().onFolderChanged(directory);
+        final clipboardMonitor = context.read<ClipboardMonitor>();
+        if (clipboardMonitor.isRunning) {
+          await clipboardMonitor.onFolderChanged(directory);
         }
         debugPrint(
             '[MainScreen] _ensureDirectorySync postFrameCallback complete');
