@@ -707,9 +707,10 @@ class _ImageCardState extends State<ImageCard> {
   }
 
   void _handlePointerDown(PointerDownEvent event) {
+    print('[ImageCard] _handlePointerDown ENTRY: kind=${event.kind}, buttons=${event.buttons}');
     if (event.kind == PointerDeviceKind.mouse) {
       _isRightButtonPressed = event.buttons & kSecondaryMouseButton != 0;
-      debugPrint('[ImageCard] pointerDown: id=${widget.item.id.split('/').last}, '
+      print('[ImageCard] pointerDown: id=${widget.item.id.split('/').last}, '
           'rightButton=$_isRightButtonPressed, buttons=${event.buttons}');
       // 右クリックでパン操作を開始
       if (_isRightButtonPressed) {
@@ -719,7 +720,7 @@ class _ImageCardState extends State<ImageCard> {
           _isPanning = true;
           _panStartLocal = local;
           _panStartOffset = _imageOffset;
-          debugPrint('[ImageCard] pan_start: id=${widget.item.id.split('/').last}, '
+          print('[ImageCard] pan_start: id=${widget.item.id.split('/').last}, '
               'scale=$_currentScale, startOffset=$_panStartOffset');
         }
       }
@@ -727,8 +728,9 @@ class _ImageCardState extends State<ImageCard> {
   }
 
   void _handlePointerUp(PointerUpEvent event) {
+    print('[ImageCard] _handlePointerUp ENTRY: kind=${event.kind}');
     if (event.kind == PointerDeviceKind.mouse) {
-      debugPrint('[ImageCard] pointerUp: id=${widget.item.id.split('/').last}, '
+      print('[ImageCard] pointerUp: id=${widget.item.id.split('/').last}, '
           'isPanning=$_isPanning');
       _isRightButtonPressed = false;
       if (_isPanning) {
@@ -736,7 +738,7 @@ class _ImageCardState extends State<ImageCard> {
         _panStartLocal = null;
         _panStartOffset = null;
         // パン終了時にオフセットを永続化
-        debugPrint('[ImageCard] pan_end: id=${widget.item.id.split('/').last}, '
+        print('[ImageCard] pan_end: id=${widget.item.id.split('/').last}, '
             'offset=$_imageOffset, scale=$_currentScale');
         widget.onPan(widget.item.id, _imageOffset);
       }
