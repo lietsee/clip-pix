@@ -45,6 +45,7 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> with WindowListener {
   late ScrollController _rootScrollController;
   late final ScrollController _subfolderScrollController;
+  late final ScrollController _gridSubfolderScrollController;
   String? _lastLoadedPath;
   String? _lastSyncedFolder; // Track last synced folder to prevent re-entry
   bool _isSyncing = false; // Re-entry guard for _ensureDirectorySync()
@@ -67,6 +68,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     windowManager.addListener(this);
     _rootScrollController = ScrollController();
     _subfolderScrollController = ScrollController();
+    _gridSubfolderScrollController = ScrollController();
     _keyboardFocusNode = FocusNode();
   }
 
@@ -105,6 +107,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     _keyboardFocusNode.dispose();
     _rootScrollController.dispose();
     _subfolderScrollController.dispose();
+    _gridSubfolderScrollController.dispose();
     super.dispose();
   }
 
@@ -435,7 +438,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
               state: libraryState,
               controller: folderState.viewMode == FolderViewMode.root
                   ? _rootScrollController
-                  : null,
+                  : _gridSubfolderScrollController,
               enableGridSemantics: false,
             ),
           ),
@@ -834,11 +837,14 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     }
 
     final layoutStore = context.read<GridLayoutStore>();
+    final scrollController = folderState.viewMode == FolderViewMode.root
+        ? _rootScrollController
+        : _gridSubfolderScrollController;
 
     _minimapService = MinimapOverlayService();
     _minimapService!.show(
       context: context,
-      scrollController: _rootScrollController,
+      scrollController: scrollController,
       layoutStore: layoutStore,
     );
   }
