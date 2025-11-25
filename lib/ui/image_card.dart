@@ -735,13 +735,6 @@ class _ImageCardState extends State<ImageCard> {
     if (!_isPanning || _panStartLocal == null || _panStartOffset == null) {
       return;
     }
-    // 右ボタンが離されたらパン操作を終了
-    if (!_isRightButtonPressed) {
-      _isPanning = false;
-      _panStartLocal = null;
-      _panStartOffset = null;
-      return;
-    }
     final box = context.findRenderObject() as RenderBox?;
     if (box == null) {
       return;
