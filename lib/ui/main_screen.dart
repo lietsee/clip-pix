@@ -75,12 +75,11 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   void didChangeDependencies() {
     super.didChangeDependencies();
 
-    // Use context.select to watch ONLY viewDirectory?.path changes
+    // Use context.read to get current path without subscribing to all state changes
     // This prevents unnecessary _ensureDirectorySync() calls when other
     // SelectedFolderState properties change (e.g., during favorite updates)
-    final currentPath = context.select<SelectedFolderState, String?>(
-      (state) => state.viewDirectory?.path,
-    );
+    final selectedState = context.read<SelectedFolderState>();
+    final currentPath = selectedState.viewDirectory?.path;
 
     debugPrint('[MainScreen] didChangeDependencies: '
         'viewDirectory=$currentPath, '
@@ -91,9 +90,6 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
       debugPrint('[MainScreen] didChangeDependencies triggering sync: '
           'old=$_lastSyncedFolder → new=$currentPath');
       _lastSyncedFolder = currentPath;
-
-      // Get full state for sync operation
-      final selectedState = context.read<SelectedFolderState>();
       _ensureDirectorySync(context, selectedState);
     }
   }
