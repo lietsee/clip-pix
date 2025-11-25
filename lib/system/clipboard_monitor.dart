@@ -123,6 +123,7 @@ class ClipboardMonitor implements ClipboardMonitorGuard {
   int? _pngClipboardFormat;
 
   ClipboardMonitorMode get mode => _mode;
+  bool get isRunning => _isRunning;
 
   Future<void> start() async {
     if (_isRunning) {

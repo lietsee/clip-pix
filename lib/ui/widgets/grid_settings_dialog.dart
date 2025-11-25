@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../../data/grid_layout_settings_repository.dart';
 import '../../data/models/grid_layout_settings.dart';
 import '../../system/audio_service.dart';
+import '../../system/clipboard_monitor.dart';
+import '../../system/state/folder_view_mode.dart';
 import '../../system/state/grid_resize_controller.dart';
 import '../../system/state/selected_folder_notifier.dart';
 
@@ -37,14 +39,22 @@ class _GridSettingsDialogState extends State<GridSettingsDialog> {
   @override
   Widget build(BuildContext context) {
     final resizeController = context.watch<GridResizeController>();
+    final clipboardMonitor = context.watch<ClipboardMonitor>();
+    final selectedFolder = context.watch<SelectedFolderNotifier>();
 
     return AlertDialog(
-      title: const Text('グリッド設定'),
+      title: const Text('アプリ設定'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _buildClipboardMonitorSection(context, clipboardMonitor),
+            const SizedBox(height: 16),
+            _buildMinimapSection(context, selectedFolder),
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 16),
             _buildColumnsSection(),
             const SizedBox(height: 16),
             _buildBackgroundSection(),
@@ -164,6 +174,58 @@ class _GridSettingsDialogState extends State<GridSettingsDialog> {
                 ),
               )
               .toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildClipboardMonitorSection(
+      BuildContext context, ClipboardMonitor monitor) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('クリップボード監視', style: TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        SwitchListTile(
+          title: const Text('クリップボードから画像を自動保存'),
+          subtitle: monitor.isRunning
+              ? const Text('監視中', style: TextStyle(color: Colors.green))
+              : const Text('停止中', style: TextStyle(color: Colors.grey)),
+          value: monitor.isRunning,
+          onChanged: (value) async {
+            if (value) {
+              await monitor.start();
+            } else {
+              await monitor.stop();
+            }
+          },
+          contentPadding: EdgeInsets.zero,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMinimapSection(
+      BuildContext context, SelectedFolderNotifier notifier) {
+    final isEnabled = notifier.state.viewMode == FolderViewMode.root;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('マップ表示', style: TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        SwitchListTile(
+          title: const Text('ミニマップを常に表示 (Ctrl+M)'),
+          subtitle: !isEnabled
+              ? const Text('ルートビューでのみ有効',
+                  style: TextStyle(color: Colors.orange))
+              : null,
+          value: notifier.state.isMinimapAlwaysVisible,
+          onChanged: isEnabled
+              ? (value) {
+                  notifier.toggleMinimapAlwaysVisible();
+                }
+              : null,
+          contentPadding: EdgeInsets.zero,
         ),
       ],
     );
