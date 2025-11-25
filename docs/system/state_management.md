@@ -1,5 +1,5 @@
 # State Management 詳細設計
-最終更新: 2025-11-02
+最終更新: 2025-11-25
 
 ## 1. 目的
 Provider + StateNotifier を用いて、フォルダ選択・監視制御・UI 更新を一元管理する。
@@ -119,7 +119,7 @@ Provider + StateNotifier を用いて、フォルダ選択・監視制御・UI �
 |----------|------|--------|----------------------|
 | `syncLibrary(List<ContentItem>)` | ImageLibraryからの同期 | × | ✓ (contentChanged時) |
 | `updateGeometry(GridLayoutGeometry)` | ウィンドウリサイズ・列変更 | ✓ | ✓ |
-| `updateCard({id, customSize, scale, columnSpan})` | 個別カードリサイズ | ✓ | ✓ |
+| `updateCard({id, customSize, scale, columnSpan, offset})` | 個別カードリサイズ・パン | ✓ | ✓ |
 | `applyBulkSpan(int span)` | 一括揃え | ✓ | × (invalidate) |
 | `restoreSnapshot(GridLayoutSnapshot)` | Undo/Redo | ✓ | × (invalidate) |
 
@@ -212,3 +212,46 @@ void updateCard({required String id, ...}) {
 - `updateGeometry()`/`updateCard()`実行後にHiveモックで`saveBatch()`が呼ばれることを確認
 - スナップショットIDが変わることを検証（`latestSnapshot?.id`の変化）
 - `syncLibrary()`実行時に`contentChanged=false`となることを確認（永続化が正しく機能）
+
+### 10.7 パンオフセット永続化 (2025-11-25追加)
+
+#### 概要
+画像カードのパン位置（右クリック+ドラッグでの画像移動）をHiveに永続化し、アプリ再起動後も復元。
+
+#### データフロー
+```
+ImageCard._handlePointerUp
+  → widget.onPan(id, offset)
+  → GridViewModule._handlePan
+  → GridLayoutStore.updateCard(id: id, offset: offset)
+  → _persistence.saveBatch()
+  → Hive永続化
+```
+
+#### GridCardViewStateの拡張
+| フィールド | 型 | 説明 |
+|------------|------|------|
+| `offsetDx` | `double` | パンオフセットX |
+| `offsetDy` | `double` | パンオフセットY |
+
+#### updateGeometryでのオフセット保持
+`GridLayoutLayoutEngine`はオフセットを追跡しないため、`updateGeometry()`で`_viewStates`を更新する際に既存のオフセットを保持：
+
+```dart
+final preservedState = existing != null
+    ? GridCardViewState(
+        id: state.id,
+        width: state.width,
+        height: state.height,
+        scale: state.scale,
+        columnSpan: state.columnSpan,
+        customHeight: state.customHeight,
+        offsetDx: existing.offsetDx,  // ← 既存値を保持
+        offsetDy: existing.offsetDy,
+      )
+    : state;
+```
+
+**修正履歴** (commit f716f23):
+- `updateGeometry()`でレイアウトエンジン結果をマージする際、パンオフセットを保持
+- パン操作後に`updateGeometry()`が呼ばれてもオフセットがリセットされない

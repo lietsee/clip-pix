@@ -1,7 +1,7 @@
-# ImageCard 実装仕様（2025-10-26 時点）
+# ImageCard 実装仕様
 
-最終更新: 2025-10-26  
-対象コミット: `c44a51f`（fix: throttle grid geometry updates）
+最終更新: 2025-11-25
+対象コミット: `f716f23`（fix: preserve pan offset in updateGeometry）
 
 本書は `lib/ui/image_card.dart` に実装されているカードコンポーネントの仕様・挙動・描画フローを整理したものです。GridViewModule/ClipPix のリファクタ作業で参照できるよう、ユーザー操作とコールバックの関係、描画制御、既知の制約を詳細にまとめます。
 
@@ -70,6 +70,8 @@ Focus
 - **マウス**: 右クリック押下中にホイールスクロール→指数関数的ズーム（`exp(-Δy / 300)`）。
 - **キーボード**: `Ctrl` + `+`/`-`、`Ctrl` + `Shift` + `=` 等で ±0.1 ずつズーム。
 - **パン**: 右クリック + ドラッグで有効。画像中央を基準に `clampPanOffset` で画角外へ出ないよう制限。
+- **パン永続化**: パン操作終了時（右クリックリリース）に `onPan(id, offset)` コールバックを呼び出し、`GridLayoutStore` 経由で Hive に永続化。アプリ再起動後も復元される。
+- **Listener 設定**: `behavior: HitTestBehavior.translucent` により、子要素（GestureDetector等）へのイベント伝播を維持しつつ、ポインターイベントを確実に受信。
 - ズーム時はフォーカス点（ホイール位置）を考慮してパン位置を補正。
 - スケールは 0.5〜15.0 に clamp、更新時に `onZoom` で prefs レイヤへ保存要求。
 
@@ -99,7 +101,7 @@ Focus
 ユーザー操作            内部状態                     外部通知
 ------------------------------------------------------------------------------------
 右下ドラッグ            _sizeNotifier / _currentSpan -> onResize/onSpanChange
-右クリック+ドラッグ     _imageOffset 更新             (通知なし)
+右クリック+ドラッグ     _imageOffset 更新             onPan (操作終了時)
 右クリック+スクロール   _currentScale/_imageOffset -> onZoom
 コピーアイコン          （状態変化なし）              onCopyImage
 Retryボタン             _visualState=loading -> onRetry

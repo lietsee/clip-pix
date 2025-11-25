@@ -169,8 +169,12 @@ class GridCardViewState {
   final double scale;          // スケール倍率
   final int columnSpan;        // カラムスパン数
   final double? customHeight;  // カスタム高さ（ドラッグリサイズ時に設定）
+  final double offsetDx;       // パンオフセットX（レイアウトエンジンでは未使用）
+  final double offsetDy;       // パンオフセットY（レイアウトエンジンでは未使用）
 }
 ```
+
+**注意**: `offsetDx`/`offsetDy` はレイアウトエンジンでは使用されません。詳細は「制限事項」セクションを参照。
 
 ## レイアウトアルゴリズム
 
@@ -422,6 +426,35 @@ final engine = GridLayoutLayoutEngine(idProvider: MockIdProvider());
 - [GridLayoutStore](./state_management.md#gridlayoutstore) - レイアウトエンジンを使用する状態管理
 - [GridLayoutSurface](./grid_layout_surface.md) - スナップショットのレンダリング
 - [PinterestGrid Migration](./pinterest_grid_migration.md) - マサリーレイアウトの移行計画
+
+## 制限事項
+
+### パンオフセットの非追跡
+
+`GridLayoutLayoutEngine`はパンオフセット（`offsetDx`/`offsetDy`）を追跡しません。
+これはレイアウト計算（カード配置位置）とは独立したUI状態であるためです。
+
+**影響**:
+- `compute()`が返す`result.viewStates`にはオフセットが含まれない（常に0）
+- `GridLayoutStore.updateGeometry()`で`_viewStates`を更新する際、既存のオフセット値を保持する必要がある
+
+**対応** (commit f716f23, 2025-11-25):
+`updateGeometry()`内で`result.viewStates`をマージする際、既存の`offsetDx`/`offsetDy`を保持：
+
+```dart
+final preservedState = existing != null
+    ? GridCardViewState(
+        id: state.id,
+        width: state.width,
+        height: state.height,
+        scale: state.scale,
+        columnSpan: state.columnSpan,
+        customHeight: state.customHeight,
+        offsetDx: existing.offsetDx,  // ← 既存値を保持
+        offsetDy: existing.offsetDy,
+      )
+    : state;
+```
 
 ## 今後の拡張
 
