@@ -100,6 +100,12 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
 
   @override
   void dispose() {
+    // If mutation is still in progress when disposed, call onMutateEnd
+    // to ensure GridLayoutMutationController's depth/hideDepth are decremented
+    if (_mutationInProgress) {
+      widget.onMutateEnd?.call(false);
+      _mutationInProgress = false;
+    }
     _store.removeListener(_handleStoreChanged);
     _geometryQueue.dispose();
     super.dispose();
@@ -555,17 +561,23 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     const absoluteTimeout = Duration(seconds: 5);
 
     void finish() {
+      // Always capture callback before checking mounted state
+      // This ensures onMutateEnd is called even when widget is unmounted
+      // to properly decrement GridLayoutMutationController's depth/hideDepth
+      final callback = widget.onMutateEnd;
+
+      _mutationInProgress = false;
+      _waitingForSemantics = false;
+
       if (!mounted) {
-        _mutationInProgress = false;
-        _waitingForSemantics = false;
+        // Call callback even when unmounted to normalize controller state
+        callback?.call(hideGrid);
         if (!completer.isCompleted) {
           completer.complete();
         }
         return;
       }
-      widget.onMutateEnd?.call(hideGrid);
-      _mutationInProgress = false;
-      _waitingForSemantics = false;
+      callback?.call(hideGrid);
       _logSemanticsStatus('mutate_end hide=$hideGrid');
       final shouldRestoreGrid = hideGrid && _gridHiddenForReset;
       final shouldRestoreSemantics = _semanticsExcluded;

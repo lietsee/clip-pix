@@ -27,8 +27,9 @@ class GridLayoutMutationController extends ChangeNotifier {
 
   /// 状態が不整合になっている場合に強制的にリセットする。
   /// begin/end の呼び出し不一致が発生した場合の緊急リセット用。
+  /// 閾値を低く設定し、ディレクトリ切り替え時の不整合を早期にリセットする。
   void resetIfInconsistent() {
-    if (_depth > 10 || _hideDepth > 5) {
+    if (_depth > 3 || _hideDepth > 2) {
       if (_debugLoggingEnabled) {
         debugPrint(
           '[GridLayoutMutationController] INCONSISTENT STATE DETECTED: '
