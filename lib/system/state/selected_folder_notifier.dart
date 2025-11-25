@@ -61,23 +61,29 @@ class SelectedFolderNotifier extends StateNotifier<SelectedFolderState> {
   }
 
   Future<void> switchToRoot() async {
+    print('[SelectedFolderNotifier] switchToRoot START');
     final current = state.current;
+    print('[SelectedFolderNotifier] switchToRoot: current=$current');
     state = state.copyWith(
       viewMode: FolderViewMode.root,
       currentTab: null,
       viewDirectory: current,
     );
+    print('[SelectedFolderNotifier] switchToRoot: state updated');
     await persist();
+    print('[SelectedFolderNotifier] switchToRoot END');
   }
 
   Future<void> switchToSubfolder(String name) async {
+    print('[SelectedFolderNotifier] switchToSubfolder START: $name');
     final base = state.current;
     if (base == null) {
+      print('[SelectedFolderNotifier] switchToSubfolder: base is null, returning');
       return;
     }
     final subfolder = Directory(p.join(base.path, name));
 
-    debugPrint('[SelectedFolderNotifier] switchToSubfolder: '
+    print('[SelectedFolderNotifier] switchToSubfolder: '
         'name=$name, '
         'subfolder=${subfolder.path}, '
         'oldViewMode=${state.viewMode}, '
@@ -88,9 +94,10 @@ class SelectedFolderNotifier extends StateNotifier<SelectedFolderState> {
       currentTab: name,
       viewDirectory: subfolder,
     );
+    print('[SelectedFolderNotifier] switchToSubfolder: state updated');
     await persist();
 
-    debugPrint('[SelectedFolderNotifier] switchToSubfolder persist complete');
+    print('[SelectedFolderNotifier] switchToSubfolder END: $name');
   }
 
   void updateRootScroll(double offset) {

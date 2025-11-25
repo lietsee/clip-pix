@@ -469,8 +469,14 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
         foregroundColor: foregroundColor,
         backgroundColor: backgroundColor,
         onTap: () async {
-          debugPrint('[MainScreen] Root tab clicked');
-          await context.read<SelectedFolderNotifier>().switchToRoot();
+          print('[MainScreen] Root tab clicked START');
+          try {
+            await context.read<SelectedFolderNotifier>().switchToRoot();
+            print('[MainScreen] Root tab clicked END - success');
+          } catch (e, stack) {
+            print('[MainScreen] Root tab clicked ERROR: $e');
+            print('[MainScreen] Stack: $stack');
+          }
         },
       ),
     ];
@@ -493,11 +499,16 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           foregroundColor: foregroundColor,
           backgroundColor: backgroundColor,
           onTap: () async {
-            debugPrint('[MainScreen] Tab clicked: $name');
-            await context
-                .read<SelectedFolderNotifier>()
-                .switchToSubfolder(name);
-            debugPrint('[MainScreen] switchToSubfolder complete for: $name');
+            print('[MainScreen] Tab clicked START: $name');
+            try {
+              await context
+                  .read<SelectedFolderNotifier>()
+                  .switchToSubfolder(name);
+              print('[MainScreen] Tab clicked END - success: $name');
+            } catch (e, stack) {
+              print('[MainScreen] Tab clicked ERROR: $name - $e');
+              print('[MainScreen] Stack: $stack');
+            }
           },
         ),
       );
