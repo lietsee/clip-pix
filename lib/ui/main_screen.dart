@@ -75,23 +75,25 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   void didChangeDependencies() {
     super.didChangeDependencies();
 
-    // Call _ensureDirectorySync() here instead of in build() to prevent infinite rebuild loop
-    final selectedState = context.watch<SelectedFolderState>();
-    // Track viewDirectory (actual displayed directory) instead of current (root folder)
-    // This ensures sync runs when switching between root and subfolders like .trash
-    final currentPath = selectedState.viewDirectory?.path;
+    // Use context.select to watch ONLY viewDirectory?.path changes
+    // This prevents unnecessary _ensureDirectorySync() calls when other
+    // SelectedFolderState properties change (e.g., during favorite updates)
+    final currentPath = context.select<SelectedFolderState, String?>(
+      (state) => state.viewDirectory?.path,
+    );
 
     debugPrint('[MainScreen] didChangeDependencies: '
         'viewDirectory=$currentPath, '
-        'viewMode=${selectedState.viewMode}, '
-        'currentTab=${selectedState.currentTab}, '
         '_lastSyncedFolder=$_lastSyncedFolder');
 
-    // Only sync if folder has changed
+    // Only sync if folder path has actually changed
     if (_lastSyncedFolder != currentPath) {
       debugPrint('[MainScreen] didChangeDependencies triggering sync: '
           'old=$_lastSyncedFolder → new=$currentPath');
       _lastSyncedFolder = currentPath;
+
+      // Get full state for sync operation
+      final selectedState = context.read<SelectedFolderState>();
       _ensureDirectorySync(context, selectedState);
     }
   }
@@ -207,8 +209,12 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
         selectedState.viewMode == FolderViewMode.root &&
         libraryInfo.hasImages) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
         // Re-verify visibility on every build and re-show if invalidated
+        // This handles cases where scroll controller was recreated
         if (_minimapService == null || !_minimapService!.isVisible) {
+          debugPrint(
+              '[MainScreen] Re-showing minimap (service=${_minimapService != null}, visible=${_minimapService?.isVisible})');
           _showMinimap(context, selectedState);
         }
       });
@@ -742,7 +748,8 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
       }
       // FIX BUG 1: Clear flag before early return to prevent permanent blocking
       _isSyncing = false;
-      debugPrint('[MainScreen] _ensureDirectorySync: directory invalid, cleared flag');
+      debugPrint(
+          '[MainScreen] _ensureDirectorySync: directory invalid, cleared flag');
       return;
     }
 
@@ -750,7 +757,8 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     if (_lastLoadedPath == path) {
       // FIX BUG 1: Clear flag before early return
       _isSyncing = false;
-      debugPrint('[MainScreen] _ensureDirectorySync skipped: already loaded $path');
+      debugPrint(
+          '[MainScreen] _ensureDirectorySync skipped: already loaded $path');
       return;
     }
 
@@ -763,6 +771,14 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     if (_rootScrollController.hasClients) {
       _rootScrollController.dispose();
       _rootScrollController = ScrollController();
+
+      // Re-initialize minimap with new controller if it was visible
+      if (_minimapService != null) {
+        _minimapService!.dispose();
+        _minimapService = null;
+        debugPrint(
+            '[MainScreen] Minimap disposed due to controller recreation');
+      }
     }
 
     _lastLoadedPath = path;
@@ -783,7 +799,8 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
         if (_clipboardMonitorEnabled) {
           await context.read<ClipboardMonitor>().onFolderChanged(directory);
         }
-        debugPrint('[MainScreen] _ensureDirectorySync postFrameCallback complete');
+        debugPrint(
+            '[MainScreen] _ensureDirectorySync postFrameCallback complete');
       } catch (e, stack) {
         debugPrint('[MainScreen] _ensureDirectorySync error: $e\n$stack');
       } finally {
