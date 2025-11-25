@@ -479,6 +479,7 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     int? columnSpan,
     Offset? offset,
   }) async {
+    print('[GridLayoutStore] updateCard ENTRY: id=${id.split('/').last}, offset=$offset');
     final current = _viewStates[id];
     if (current == null) {
       throw StateError('ViewState for $id is not loaded');
@@ -533,12 +534,12 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     );
 
     if (_viewStateEquals(current, nextState)) {
-      debugPrint('[GridLayoutStore] updateCard_skip: id=${id.split('/').last}, '
+      print('[GridLayoutStore] updateCard_skip: id=${id.split('/').last}, '
           'no change detected');
       return;
     }
 
-    debugPrint('[GridLayoutStore] updateCard_save: id=${id.split('/').last}, '
+    print('[GridLayoutStore] updateCard_save: id=${id.split('/').last}, '
         'offsetDx=${nextState.offsetDx.toStringAsFixed(2)}, '
         'offsetDy=${nextState.offsetDy.toStringAsFixed(2)}, '
         'scale=${nextState.scale.toStringAsFixed(2)}');
