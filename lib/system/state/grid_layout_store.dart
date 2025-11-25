@@ -110,6 +110,8 @@ class GridCardSnapshot {
     required this.scale,
     required this.columnSpan,
     required this.customHeight,
+    this.offsetDx = 0.0,
+    this.offsetDy = 0.0,
   });
 
   final double width;
@@ -117,6 +119,8 @@ class GridCardSnapshot {
   final double scale;
   final int columnSpan;
   final double? customHeight;
+  final double offsetDx;
+  final double offsetDy;
 }
 
 class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
@@ -372,6 +376,8 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
         scale: current.scale,
         columnSpan: clampedSpan,
         customHeight: nextHeight,
+        offsetDx: current.offsetDx,
+        offsetDy: current.offsetDy,
       );
       if (!_viewStateEquals(current, gridState)) {
         changed = true;
@@ -418,6 +424,8 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
         scale: state.scale,
         columnSpan: state.columnSpan,
         customHeight: state.customHeight,
+        offsetDx: state.offsetDx,
+        offsetDy: state.offsetDy,
       );
     }
     return GridLayoutSnapshot(
@@ -444,6 +452,8 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
         scale: value.scale,
         columnSpan: value.columnSpan,
         customHeight: value.customHeight,
+        offsetDx: value.offsetDx,
+        offsetDy: value.offsetDy,
       );
       if (!_orderedIds.contains(entry.key)) {
         _orderedIds.add(entry.key);
