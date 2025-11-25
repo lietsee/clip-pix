@@ -415,6 +415,11 @@ class _GridViewModuleState extends State<GridViewModule> {
           final columnCount = math.max(1, geometry.columnCount).toInt();
           _currentBuildKeys.clear();
 
+          // Create a Set of current image IDs for efficient lookup in childBuilder
+          // This ensures deleted items are skipped even before _reconcileEntries runs
+          final currentImageIds =
+              widget.state.images.map((img) => img.id).toSet();
+
           return Container(
             color: backgroundColor,
             child: ExcludeSemantics(
@@ -469,6 +474,11 @@ class _GridViewModuleState extends State<GridViewModule> {
                           // Skip entries being removed to avoid ViewState access errors
                           if (entry.isRemoving) {
                             return null;
+                          }
+                          // Skip deleted items (not yet removed from _entries but already removed from state)
+                          // This ensures deleted items are hidden immediately, before _reconcileEntries runs
+                          if (!currentImageIds.contains(entry.item.id)) {
+                            return const SizedBox.shrink();
                           }
                           // Skip if viewState not yet synced (during initial load/folder change)
                           if (!layoutStore.hasViewState(entry.item.id)) {
