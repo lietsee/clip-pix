@@ -477,6 +477,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     final subdirs = directory
         .listSync(followLinks: false)
         .whereType<Directory>()
+        .where((dir) => !p.basename(dir.path).startsWith('.')) // Skip hidden folders
         .toList()
       ..sort((a, b) => a.path.compareTo(b.path));
 

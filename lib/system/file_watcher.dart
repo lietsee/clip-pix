@@ -187,6 +187,12 @@ class FileWatcherService {
 
     await for (final entity in root.list(followLinks: false)) {
       if (entity is Directory) {
+        // Skip hidden folders (e.g., .trash, .config)
+        final name = p.basename(entity.path);
+        if (name.startsWith('.')) {
+          continue;
+        }
+
         final normalized = _normalize(entity.path);
         current.add(normalized);
         await _attachWatcher(entity);

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
+import 'package:path/path.dart' as p;
 import 'package:state_notifier/state_notifier.dart';
 
 import '../../data/file_info_manager.dart';
@@ -73,6 +74,15 @@ class ImageLibraryNotifier extends StateNotifier<ImageLibraryState> {
     if (directory == null) {
       return;
     }
+
+    // Skip files in hidden folders (e.g., .trash, .config)
+    // Check if any path segment starts with '.'
+    final pathSegments = p.split(file.path);
+    if (pathSegments.any((segment) => segment.startsWith('.'))) {
+      _logger.fine('Skipping file in hidden folder: ${file.path}');
+      return;
+    }
+
     final item = await _repository.addOrUpdate(file);
     if (item == null) {
       return;
