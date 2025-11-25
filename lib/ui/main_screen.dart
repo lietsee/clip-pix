@@ -235,6 +235,24 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           iconTheme: IconThemeData(color: appBarFgColor),
           title: _Breadcrumb(selectedState: selectedState),
           actions: [
+            // Minimap toggle button
+            IconButton(
+              icon: Icon(
+                selectedState.isMinimapAlwaysVisible
+                    ? Icons.map
+                    : Icons.map_outlined,
+              ),
+              tooltip: selectedState.isMinimapAlwaysVisible
+                  ? 'マップ表示をオフ (Ctrl+M)'
+                  : 'マップ表示をオン (Ctrl+M)',
+              color: selectedState.isMinimapAlwaysVisible
+                  ? appBarFgColor
+                  : appBarFgColor.withOpacity(0.6),
+              onPressed: libraryInfo.hasImages &&
+                      selectedState.viewMode == FolderViewMode.root
+                  ? () => _toggleMinimapAlwaysVisible(context)
+                  : null,
+            ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8.0),
               child: Tooltip(
