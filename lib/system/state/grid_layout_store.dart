@@ -320,8 +320,21 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
       if (!changed && existing != null && !_viewStateEquals(existing, state)) {
         changed = true;
       }
-      _viewStates[state.id] = state;
-      mutations.add(_recordFromState(state));
+      // [FIX] Preserve pan offset from existing state (layout engine doesn't track offset)
+      final preservedState = existing != null
+          ? GridCardViewState(
+              id: state.id,
+              width: state.width,
+              height: state.height,
+              scale: state.scale,
+              columnSpan: state.columnSpan,
+              customHeight: state.customHeight,
+              offsetDx: existing.offsetDx,
+              offsetDy: existing.offsetDy,
+            )
+          : state;
+      _viewStates[state.id] = preservedState;
+      mutations.add(_recordFromState(preservedState));
     }
 
     // [FIX] Persist updated geometry to Hive to prevent stale reads in syncLibrary
