@@ -826,7 +826,10 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   }
 
   void _showMinimap(BuildContext context, SelectedFolderState folderState) {
+    print('[MainScreen] _showMinimap called: viewMode=${folderState.viewMode}');
+
     if (_minimapService?.isVisible == true) {
+      print('[MainScreen] _showMinimap: already visible, returning');
       return; // Already showing and mounted
     }
 
@@ -840,6 +843,8 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     final scrollController = folderState.viewMode == FolderViewMode.root
         ? _rootScrollController
         : _gridSubfolderScrollController;
+
+    print('[MainScreen] _showMinimap: controller hasClients=${scrollController.hasClients}, snapshotEntries=${layoutStore.latestSnapshot?.entries.length ?? 0}');
 
     _minimapService = MinimapOverlayService();
     _minimapService!.show(

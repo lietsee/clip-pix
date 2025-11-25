@@ -149,11 +149,13 @@ class _MinimapWidgetState extends State<_MinimapWidget> {
         final libraryState = context.watch<ImageLibraryState>();
 
         if (!scrollController.hasClients) {
+          print('[Minimap] hasClients=false, returning SizedBox.shrink');
           return const SizedBox.shrink();
         }
 
         final snapshot = layoutStore.latestSnapshot;
         if (snapshot == null || snapshot.entries.isEmpty) {
+          print('[Minimap] snapshot empty: isNull=${snapshot == null}, entriesCount=${snapshot?.entries.length ?? 0}');
           return const SizedBox.shrink();
         }
 
