@@ -277,6 +277,7 @@ class _ImageCardState extends State<ImageCard> {
           return false;
         },
         child: Listener(
+          behavior: HitTestBehavior.translucent,
           onPointerDown: _handlePointerDown,
           onPointerUp: _handlePointerUp,
           onPointerMove: _handlePointerMove,
