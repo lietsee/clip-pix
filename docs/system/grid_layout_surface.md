@@ -2,7 +2,7 @@
 
 **実装ファイル**: `lib/ui/widgets/grid_layout_surface.dart`
 **作成日**: 2025-10-28
-**最終更新**: 2025-11-02
+**最終更新**: 2025-11-25
 **ステータス**: 実装完了
 
 ## 概要
@@ -25,6 +25,7 @@
 - **セマンティクスアサーション**: `!_needsLayout`、`parentDataDirty` エラー
 - **ウィンドウリサイズ時のパフォーマンス**: 連続的なジオメトリ更新の最適化
 - **レイアウトのちらつき**: バッファスワップによるスムーズな遷移
+- **ディレクトリ切り替え時の操作不能**: ミューテーションフラグのレースコンディション（2025-11-25修正）
 
 ## アーキテクチャ概要
 
@@ -446,6 +447,45 @@ return Stack(children: stackChildren);
 
 ジオメトリ変更の開始・終了を外部に通知します（`GridLayoutMutationController` と連携）。
 
+### _mutationInProgress フラグ
+
+ミューテーション中かどうかを追跡するインスタンス変数です。
+
+```dart
+bool _mutationInProgress = false;
+```
+
+#### フラグ設定順序（重要）
+
+> **Bug Fix (2025-11-25)**: レースコンディション対策として、`_mutationInProgress` フラグは `onMutateStart` コールバックの**前**に設定する必要があります。
+
+**修正前（バグあり）**:
+```dart
+widget.onMutateStart?.call(notify);  // beginMutation() 呼び出し (depth++)
+_mutationInProgress = true;          // フラグが AFTER に設定される
+```
+
+**修正後（正しい順序）**:
+```dart
+_mutationInProgress = true;          // フラグを FIRST に設定
+widget.onMutateStart?.call(notify);  // その後で beginMutation() 呼び出し
+```
+
+**理由**: `onMutateStart` と `_mutationInProgress = true` の間に `dispose()` が呼ばれた場合、`dispose()` は `_mutationInProgress` が `false` なので `onMutateEnd` を呼ばない。これにより `GridLayoutMutationController._depth` が永続的にインクリメントされたままになり、`isMutating` が `true` のまま、`IgnorePointer(ignoring: true)` でUIが操作不能になる。
+
+#### dispose() での cleanup
+
+```dart
+@override
+void dispose() {
+  if (_mutationInProgress) {
+    // フラグがtrueなら確実にendMutationを呼ぶ
+    widget.onMutateEnd?.call(true);
+  }
+  super.dispose();
+}
+```
+
 #### 呼び出しタイミング
 
 ```mermaid
@@ -714,6 +754,9 @@ testWidgets('geometry change triggers buffer swap', (tester) async {
 - **2025-10-26**: 初期実装（セマンティクスアサーション解決）
 - **2025-10-27**: ダブルバッファ導入
 - **2025-10-28**: 2フレーム遅延セマンティクス、ドキュメント作成
+- **2025-11-25**: ディレクトリ切り替え時の操作不能バグ修正
+  - `_mutationInProgress` フラグ設定順序の修正（レースコンディション対策）
+  - `dispose()` で `_mutationInProgress` チェック後に `onMutateEnd` を呼ぶように修正
 
 ## 関連ドキュメント
 

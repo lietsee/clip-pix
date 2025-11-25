@@ -2,6 +2,7 @@
 
 **実装ファイル**: `lib/system/state/grid_layout_mutation_controller.dart`
 **作成日**: 2025-10-28
+**最終更新**: 2025-11-25
 **ステータス**: 実装完了
 
 ## 概要
@@ -20,6 +21,7 @@
 - カラム数変更時のレイアウトちらつき
 - 複数の変更が同時進行する際の制御
 - begin/endの不一致による状態不整合
+- ディレクトリ切り替え時の操作不能バグ（2025-11-25修正）
 
 ## 主要API
 
@@ -129,13 +131,55 @@ void endMutation({bool? hideGrid}) {
 #### 不整合判定基準
 
 ```dart
-if (_depth > 10 || _hideDepth > 5) {
+if (_depth > 3 || _hideDepth > 2) {
   // 異常な深さ → リセット
 }
 ```
 
-**通常の使用**: depth は 1〜3 程度、hideDepth は 1〜2 程度
-**異常パターン**: begin が連続して10回以上呼ばれている
+**通常の使用**: depth は 1〜2 程度、hideDepth は 1 程度
+**異常パターン**: begin が連続して3回以上呼ばれている
+
+> **Note (2025-11-25)**: 閾値を `10/5` から `3/2` に下げ、ディレクトリ切り替え時の不整合を早期にリセットするように変更。
+
+### forceReset()
+
+ディレクトリ切り替え時などに呼ばれる強制リセット。不整合状態を即座にクリアして操作不能を防ぎます。
+
+#### シグネチャ
+
+```dart
+void forceReset()
+```
+
+#### 処理フロー
+
+```dart
+void forceReset() {
+  if (_depth > 0 || _hideDepth > 0) {
+    print(
+      '[GridLayoutMutationController] forceReset: '
+      'depth=$_depth hideDepth=$_hideDepth',
+    );
+    _depth = 0;
+    _hideDepth = 0;
+    _hideStack.clear();
+    _activeFrameNumber = null;
+    _concurrentFrameBegins = 0;
+    notifyListeners();
+  }
+}
+```
+
+#### 使用例
+
+```dart
+// main_screen.dart の _ensureDirectorySync() で使用
+final mutationController = context.read<GridLayoutMutationController>();
+mutationController.forceReset();
+```
+
+**追加日**: 2025-11-25
+**目的**: GridLayoutSurface の dispose 時にレースコンディションで `endMutation()` が呼ばれないケースへの対策
 
 #### リセット処理
 
@@ -211,14 +255,11 @@ return GridContent();  // グリッド表示
 
 ## デバッグ機能
 
-### デバッグログの有効化
+### ログ出力
 
-```dart
-final controller = GridLayoutMutationController(debugLoggingEnabled: true);
+> **Note (2025-11-25)**: `debugPrint` は呼ばれないことがあるため、すべてのログ出力を `print` に変更しました。
 
-// または実行時に変更
-controller.debugLoggingEnabled = true;
-```
+すべてのミューテーション操作（`beginMutation`、`endMutation`、`forceReset`、`resetIfInconsistent`）は常にログを出力します。
 
 ### ログ出力例
 
@@ -246,7 +287,13 @@ controller.debugLoggingEnabled = true;
 #### 不整合検出ログ
 
 ```
-[GridLayoutMutationController] INCONSISTENT STATE DETECTED: depth=15 hideDepth=8 beginCount=15 endCount=7; forcing reset
+[GridLayoutMutationController] INCONSISTENT STATE DETECTED: depth=4 hideDepth=3 beginCount=4 endCount=0; forcing reset
+```
+
+#### forceReset ログ
+
+```
+[GridLayoutMutationController] forceReset: depth=1 hideDepth=1
 ```
 
 ### デバッグカウンタ
@@ -419,6 +466,10 @@ test('nested mutations notify only at boundaries', () {
 - **2025-10-26**: 初期実装（グリッド表示制御）
 - **2025-10-27**: フレームトラッキング、不整合検出追加
 - **2025-10-28**: ドキュメント作成
+- **2025-11-25**: ディレクトリ切り替え時の操作不能バグ修正
+  - `forceReset()` メソッド追加
+  - `resetIfInconsistent()` の閾値を `10/5` → `3/2` に変更
+  - `debugPrint` を `print` に変更（確実なログ出力のため）
 
 ## 関連ドキュメント
 
