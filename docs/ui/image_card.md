@@ -69,13 +69,13 @@ Focus
 ### 4.2 ズーム & パン
 - **マウス**: 右クリック押下中にホイールスクロール→指数関数的ズーム（`exp(-Δy / 300)`）。
 - **キーボード**: `Ctrl` + `+`/`-`、`Ctrl` + `Shift` + `=` 等で ±0.1 ずつズーム。
-- **パン**: `Shift` + 左ドラッグで有効。画像中央を基準に `clampPanOffset` で画角外へ出ないよう制限。
+- **パン**: 右クリック + ドラッグで有効。画像中央を基準に `clampPanOffset` で画角外へ出ないよう制限。
 - ズーム時はフォーカス点（ホイール位置）を考慮してパン位置を補正。
 - スケールは 0.5〜15.0 に clamp、更新時に `onZoom` で prefs レイヤへ保存要求。
 
 ### 4.3 コピー・プレビュー
 - コピーアイコン（右上のボタン）クリック or `Ctrl+C` で `onCopyImage`。
-- シングル／ダブルタップでプレビュー (`onOpenPreview`)。
+- ダブルクリックでプレビュー (`onOpenPreview`)。シングルクリックはフォーカスのみ。
 - `Enter`：プレビュー、`Shift+Enter`：サイズを 200×200 にリセットし `onResize`。
 
 ### 4.4 リオーダー
@@ -99,10 +99,11 @@ Focus
 ユーザー操作            内部状態                     外部通知
 ------------------------------------------------------------------------------------
 右下ドラッグ            _sizeNotifier / _currentSpan -> onResize/onSpanChange
-Shift+ドラッグ          _imageOffset 更新             (通知なし)
-Ctrl+スクロール(右押下) _currentScale/_imageOffset -> onZoom
+右クリック+ドラッグ     _imageOffset 更新             (通知なし)
+右クリック+スクロール   _currentScale/_imageOffset -> onZoom
 コピーアイコン          （状態変化なし）              onCopyImage
 Retryボタン             _visualState=loading -> onRetry
+ダブルクリック          (状態変化なし)               onOpenPreview
 Enter / Shift+Enter     _sizeNotifier or onOpenPreview -> onResize / onOpenPreview
 底部ドラッグハンドル     _isDragging フラグ            onReorder*
 ```

@@ -354,9 +354,8 @@ class _ImageCardState extends State<ImageCard> {
             ),
             Positioned.fill(
               child: GestureDetector(
-                onTap: () => widget.onOpenPreview(widget.item),
+                onTap: () => _focusNode.requestFocus(),
                 onDoubleTap: () => widget.onOpenPreview(widget.item),
-                onTapDown: (_) => _focusNode.requestFocus(),
               ),
             ),
           ],
@@ -703,8 +702,8 @@ class _ImageCardState extends State<ImageCard> {
   void _handlePointerDown(PointerDownEvent event) {
     if (event.kind == PointerDeviceKind.mouse) {
       _isRightButtonPressed = event.buttons & kSecondaryMouseButton != 0;
-      final shiftPressed = _isShiftPressed();
-      if (shiftPressed && event.buttons & kPrimaryMouseButton != 0) {
+      // 右クリックでパン操作を開始
+      if (_isRightButtonPressed) {
         final box = context.findRenderObject() as RenderBox?;
         if (box != null) {
           final local = box.globalToLocal(event.position);
@@ -731,7 +730,8 @@ class _ImageCardState extends State<ImageCard> {
     if (!_isPanning || _panStartLocal == null || _panStartOffset == null) {
       return;
     }
-    if (!_isShiftPressed()) {
+    // 右ボタンが離されたらパン操作を終了
+    if (!_isRightButtonPressed) {
       _isPanning = false;
       _panStartLocal = null;
       _panStartOffset = null;
