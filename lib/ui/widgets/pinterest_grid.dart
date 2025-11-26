@@ -251,11 +251,18 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
     RenderBox? leadingChildWithLayout;
 
     while (child != null) {
-      final childParentData = child.parentData! as PinterestGridParentData;
+      // CRITICAL: Skip children with invalid parentData
+      // This can happen during directory switch when old children are being replaced
+      final rawParentData = child.parentData;
+      if (rawParentData is! PinterestGridParentData) {
+        child = childAfter(child);
+        continue;
+      }
+      final childParentData = rawParentData;
       placeChild(child, childParentData);
 
-      final double layoutOffset = childParentData.layoutOffset!;
-      final double paintExtent = childParentData.paintExtent ?? 0;
+      final double layoutOffset = childParentData.layoutOffset ?? 0;
+      final double paintExtent = childParentData.paintExtent;
       final double childEnd = layoutOffset + paintExtent;
 
       if (childEnd >= scrollOffset && leadingChildWithLayout == null) {
@@ -283,7 +290,10 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
     }
 
     // Drop leading offscreen children.
+    // CRITICAL: Check hasSize before calling paintExtentOf to avoid assertion failure
+    // during directory switch when old children may not have been laid out yet
     while (leadingChildWithLayout != null &&
+        leadingChildWithLayout.hasSize &&
         childScrollOffset(leadingChildWithLayout) != null &&
         childScrollOffset(leadingChildWithLayout)! +
                 paintExtentOf(leadingChildWithLayout) <
@@ -299,7 +309,9 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
     }
 
     // Drop trailing offscreen children.
+    // CRITICAL: Check hasSize before accessing child properties
     while (trailingChildWithLayout != null &&
+        trailingChildWithLayout.hasSize &&
         childScrollOffset(trailingChildWithLayout) != null &&
         childScrollOffset(trailingChildWithLayout)! > targetEndScrollOffset) {
       trailingGarbage++;
@@ -325,7 +337,14 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
     RenderBox? leadingTrackedChild;
     RenderBox? trailingTrackedChild;
     while (paintChild != null) {
-      final parentData = paintChild.parentData! as PinterestGridParentData;
+      // CRITICAL: Skip children without valid parentData or layoutOffset
+      // This can happen during directory switch when old children are being replaced
+      final parentData = paintChild.parentData;
+      if (parentData is! PinterestGridParentData ||
+          parentData.layoutOffset == null) {
+        paintChild = childAfter(paintChild);
+        continue;
+      }
       final double end = parentData.layoutOffset! + parentData.paintExtent;
       if (end > maxPaintedExtent) {
         maxPaintedExtent = end;
@@ -341,9 +360,10 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
     final double viewportExtent = constraints.viewportMainAxisExtent;
     double bottomChildPaintExtent = 0;
     if (trailingTrackedChild != null) {
-      final trailingData =
-          trailingTrackedChild.parentData! as PinterestGridParentData;
-      bottomChildPaintExtent = trailingData.paintExtent;
+      final trailingData = trailingTrackedChild.parentData;
+      if (trailingData is PinterestGridParentData) {
+        bottomChildPaintExtent = trailingData.paintExtent;
+      }
     }
     final double extraExtent =
         math.max(0, viewportExtent - (bottomChildPaintExtent * 2));
@@ -393,13 +413,19 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
 
   @override
   double childCrossAxisPosition(RenderBox child) {
-    final parentData = child.parentData! as PinterestGridParentData;
+    final parentData = child.parentData;
+    if (parentData is! PinterestGridParentData) {
+      return 0;
+    }
     return parentData.crossAxisOffset;
   }
 
   @override
   double childMainAxisPosition(RenderBox child) {
-    final parentData = child.parentData! as PinterestGridParentData;
+    final parentData = child.parentData;
+    if (parentData is! PinterestGridParentData) {
+      return 0;
+    }
     return (parentData.layoutOffset ?? 0) - constraints.scrollOffset;
   }
 
