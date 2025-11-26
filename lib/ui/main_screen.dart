@@ -789,36 +789,34 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
 
     // Set syncing flag
     _isSyncing = true;
+    _lastLoadedPath = path;
     debugPrint('[MainScreen] _ensureDirectorySync executing for: $path');
 
-    // NOTE: forceReset() is now called inside addPostFrameCallback to avoid
-    // "setState during build" error when didChangeDependencies triggers this
-
-    // Dispose and recreate scroll controller when folder changes
-    // to prevent multiple ScrollPosition attachment errors
-    if (_rootScrollController.hasClients) {
-      _rootScrollController.dispose();
-      _rootScrollController = ScrollController();
-
-      // Re-initialize minimap with new controller if it was visible
-      if (_minimapService != null) {
-        _minimapService!.dispose();
-        _minimapService = null;
-        debugPrint(
-            '[MainScreen] Minimap disposed due to controller recreation');
-      }
-    }
-
-    _lastLoadedPath = path;
+    // NOTE: All state-changing operations are deferred to addPostFrameCallback
+    // to avoid "setState during build" errors when didChangeDependencies triggers this
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
         debugPrint('[MainScreen] _ensureDirectorySync postFrameCallback start');
 
         // FIX: Force reset mutation state to prevent unresponsive UI
-        // This must be called inside postFrameCallback to avoid "setState during build"
         final mutationController = context.read<GridLayoutMutationController>();
         mutationController.forceReset();
+
+        // Dispose and recreate scroll controller when folder changes
+        // to prevent multiple ScrollPosition attachment errors
+        if (_rootScrollController.hasClients) {
+          _rootScrollController.dispose();
+          _rootScrollController = ScrollController();
+
+          // Re-initialize minimap with new controller if it was visible
+          if (_minimapService != null) {
+            _minimapService!.dispose();
+            _minimapService = null;
+            debugPrint(
+                '[MainScreen] Minimap disposed due to controller recreation');
+          }
+        }
 
         final imageLibrary = context.read<ImageLibraryNotifier>();
 
