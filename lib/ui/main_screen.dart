@@ -791,10 +791,8 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     _isSyncing = true;
     debugPrint('[MainScreen] _ensureDirectorySync executing for: $path');
 
-    // FIX: Force reset mutation state to prevent unresponsive UI
-    // This ensures any stale mutation state is cleared when switching directories
-    final mutationController = context.read<GridLayoutMutationController>();
-    mutationController.forceReset();
+    // NOTE: forceReset() is now called inside addPostFrameCallback to avoid
+    // "setState during build" error when didChangeDependencies triggers this
 
     // Dispose and recreate scroll controller when folder changes
     // to prevent multiple ScrollPosition attachment errors
@@ -816,6 +814,12 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
         debugPrint('[MainScreen] _ensureDirectorySync postFrameCallback start');
+
+        // FIX: Force reset mutation state to prevent unresponsive UI
+        // This must be called inside postFrameCallback to avoid "setState during build"
+        final mutationController = context.read<GridLayoutMutationController>();
+        mutationController.forceReset();
+
         final imageLibrary = context.read<ImageLibraryNotifier>();
 
         // FIX BUG 3: Don't call switchToRoot when viewing subfolder
