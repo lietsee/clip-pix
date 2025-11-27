@@ -1,7 +1,7 @@
 # データフロー
 
 **作成日**: 2025-10-28
-**最終更新**: 2025-11-02
+**最終更新**: 2025-11-27
 **ステータス**: 実装完了
 
 ## 全体データフロー
@@ -9,7 +9,7 @@
 ```mermaid
 flowchart TB
     subgraph Input["入力ソース"]
-        CB[クリップボード<br>画像/URL]
+        CB[クリップボード<br>画像/URL/テキスト]
         FILE[ファイルシステム]
         USER[ユーザー操作]
     end
@@ -18,7 +18,11 @@ flowchart TB
         CBM[ClipboardMonitor]
         FW[FileWatcher]
         IS[ImageSaver]
+        TS[TextSaver]
         UDS[UrlDownloadService]
+        DS[DeleteService]
+        IPPM[ImagePreviewProcessManager]
+        TPPM[TextPreviewProcessManager]
     end
 
     subgraph State["状態管理レイヤー"]
@@ -26,26 +30,32 @@ flowchart TB
         IHN[ImageHistoryNotifier]
         GLS[GridLayoutStore]
         SFN[SelectedFolderNotifier]
+        DMN[DeletionModeNotifier]
     end
 
     subgraph Data["データレイヤー"]
         IR[ImageRepository]
         GCPR[GridCardPreferencesRepo]
         GLSR[GridLayoutSettingsRepo]
+        OPR[OpenPreviewsRepository]
         MW[MetadataWriter]
     end
 
     subgraph UI["UIレイヤー"]
         MS[MainScreen]
         GV[GridViewModule]
-        IC[ImageCard]
+        IC[ImageCard / TextCard]
+        IPW[ImagePreviewWindow]
+        TPW[TextPreviewWindow]
     end
 
     CB --> CBM
     CBM -->|画像| IS
     CBM -->|URL| UDS
+    CBM -->|テキスト| TS
     UDS --> IS
     IS --> MW
+    TS --> MW
     MW --> FILE
     FILE --> FW
     FW --> ILN
@@ -62,6 +72,17 @@ flowchart TB
 
     GV --> IC
     IC --> GLS
+
+    IC --> IPPM
+    IC --> TPPM
+    IPPM --> IPW
+    TPPM --> TPW
+    IPPM --> OPR
+    TPPM --> OPR
+
+    USER -->|削除モード| DMN
+    DMN --> DS
+    DS --> FILE
 ```
 
 ## フロー1: クリップボード画像保存
@@ -79,14 +100,15 @@ sequenceDiagram
     participant UI
 
     User->>Clipboard: Ctrl+C（画像コピー）
-    Clipboard->>CBM: ポーリング検出（500ms）
+    Clipboard->>CBM: ポーリング検出（400ms）
     CBM->>CBM: ガードトークン確認
-    CBM->>Clipboard: GetImage()
+    CBM->>CBM: シーケンス番号変更チェック
+    CBM->>Clipboard: GetImage() (DIBV5 → PNG → DIB)
     Clipboard-->>CBM: 画像バイト
     CBM->>IS: save(bytes, metadata)
     IS->>FS: writeAsBytes(image.jpg)
-    IS->>MW: writeMetadata(image.json)
-    MW->>FS: writeAsString(JSON)
+    IS->>MW: writeMetadata(.fileInfo.json)
+    MW->>FS: appendEntry(JSON)
     FS->>FW: ファイル作成イベント
     FW->>ILN: addImage(ImageItem)
     ILN->>ILN: notifyListeners()
@@ -121,7 +143,40 @@ sequenceDiagram
     Note over FS: 以降はフロー1と同じ
 ```
 
-## フロー3: フォルダ選択とスキャン
+## フロー3: クリップボードテキスト保存 (2025-11-27追加)
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Clipboard
+    participant CBM as ClipboardMonitor
+    participant TS as TextSaver
+    participant MW as MetadataWriter
+    participant FS as FileSystem
+    participant FW as FileWatcher
+    participant ILN as ImageLibraryNotifier
+    participant UI
+
+    User->>Clipboard: Ctrl+C（テキストコピー）
+    Clipboard->>CBM: ポーリング検出（400ms）
+    CBM->>CBM: ガードトークン確認
+    CBM->>Clipboard: GetText() (CF_UNICODETEXT)
+    Clipboard-->>CBM: テキストデータ
+    CBM->>CBM: URL判定 → 非URL
+    CBM->>TS: saveTextData(text)
+    TS->>TS: テキストサニタイズ
+    TS->>TS: サイズチェック（1MB上限）
+    TS->>FS: writeAsString(note.txt)
+    TS->>MW: writeMetadata(.fileInfo.json)
+    MW->>FS: appendEntry(JSON with content_type: "text")
+    FS->>FW: ファイル作成イベント
+    FW->>ILN: addImage(TextContentItem)
+    ILN->>ILN: notifyListeners()
+    ILN->>UI: 再描画トリガー
+    UI->>UI: 新しいTextCard表示
+```
+
+## フロー4: フォルダ選択とスキャン
 
 ```mermaid
 sequenceDiagram
@@ -139,18 +194,19 @@ sequenceDiagram
     MS->>SFN: updateFolder(folderPath)
     SFN->>IR: scanFolder(folderPath)
     IR->>FS: Directory.listSync()
-    FS-->>IR: [file1.jpg, file2.png, ...]
-    IR->>IR: JSONメタデータ読み込み
-    IR-->>SFN: List<ImageItem>
-    SFN->>FW: setWatchPath(folderPath)
+    FS-->>IR: [file1.jpg, file2.png, note.txt, ...]
+    IR->>IR: .fileInfo.json メタデータ読み込み
+    IR->>IR: ContentItem生成（ImageItem / TextContentItem）
+    IR-->>SFN: List<ContentItem>
+    SFN->>FW: start(folderPath)
     FW->>FW: Watcher購読開始
-    SFN->>ILN: syncLibrary(images)
+    SFN->>ILN: syncLibrary(items)
     ILN->>ILN: notifyListeners()
     ILN->>MS: 再描画
     MS->>MS: GridView表示
 ```
 
-## フロー4: カードリサイズ (2025-11-02更新)
+## フロー5: カードリサイズ
 
 ```mermaid
 sequenceDiagram
@@ -170,11 +226,11 @@ sequenceDiagram
     Note over GLS: メモリ状態更新
     GLS->>GLS: _viewStates[id] = newState
 
-    Note over GLS,Hive: Hive永続化 (2025-11-02 fix)
+    Note over GLS,Hive: Hive永続化
     GLS->>GCPR: saveBatch([record])
     GCPR->>Hive: box.put(id, preference)
 
-    Note over GLS,Engine: スナップショット再生成 (2025-11-02 fix)
+    Note over GLS,Engine: スナップショット再生成
     GLS->>Engine: compute(geometry, orderedStates)
     Engine-->>GLS: LayoutComputationResult
     GLS->>GLS: _latestSnapshot = result.snapshot
@@ -192,42 +248,76 @@ sequenceDiagram
     Minimap->>Minimap: setState() → rebuild with new snapshot
 ```
 
-### 重要な改善 (2025-11-02)
+## フロー6: プレビューウィンドウ起動 (2025-11-27追加)
 
-**以前の実装では**:
-1. `updateCard()`が`_invalidateSnapshot()`を呼び出し
-2. `_latestSnapshot = null`にセット
-3. ミニマップが`latestSnapshot`を参照すると古い`_previousSnapshot`が返される
-4. **結果**: ミニマップが更新されない
+```mermaid
+sequenceDiagram
+    participant User
+    participant IC as ImageCard/TextCard
+    participant PPM as PreviewProcessManager
+    participant FS as FileSystem
+    participant OPR as OpenPreviewsRepository
+    participant PW as PreviewWindow
 
-**現在の実装では**:
-1. `updateCard()`が`_layoutEngine.compute()`を呼び出し
-2. 新しいスナップショットを生成して`_latestSnapshot`にセット
-3. ミニマップが最新のスナップショットを取得
-4. **結果**: ミニマップが即座に更新される
+    User->>IC: ダブルクリック
+    IC->>PPM: isLaunching(itemId)?
+    PPM-->>IC: false
+    IC->>PPM: markLaunching(itemId)
+    IC->>FS: Process.start(exe, --preview, jsonPayload)
+    FS-->>IC: Process
+    IC->>PPM: registerProcess(itemId, process, alwaysOnTop)
+    PPM->>OPR: add(itemId, alwaysOnTop)
+    OPR->>OPR: Hive永続化
+    PPM->>PPM: process.exitCode.then(...)
+    FS-->>PW: 新プロセス起動
+    PW->>PW: ウィンドウ表示
 
-```dart
-// lib/system/state/grid_layout_store.dart:503-524
-void updateCard({required String id, ...}) {
-  _viewStates[id] = nextState;
-  await _persistence.saveBatch([_recordFromState(nextState)]);
-
-  // スナップショット再生成（updateGeometry()と同じパターン）
-  final geometry = _geometry;
-  if (geometry != null) {
-    final result = _layoutEngine.compute(
-      geometry: geometry,
-      states: orderedStates,
-    );
-    _previousSnapshot = _latestSnapshot;
-    _latestSnapshot = result.snapshot;  // ← 新しいスナップショット
-  }
-
-  notifyListeners();
-}
+    Note over PW: ユーザーがウィンドウを閉じる
+    User->>PW: 閉じる
+    PW-->>PPM: exitCode callback
+    PPM->>OPR: remove(itemId)
+    PPM->>PPM: notifyListeners()
 ```
 
-## フロー5: グリッド設定変更
+## フロー7: 一括削除 (2025-11-27追加)
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant MS as MainScreen
+    participant DMN as DeletionModeNotifier
+    participant IC as ImageCard/TextCard
+    participant DS as DeleteService
+    participant FS as FileSystem
+    participant FW as FileWatcher
+    participant ILN as ImageLibraryNotifier
+    participant GLS as GridLayoutStore
+
+    User->>MS: 削除モードボタン
+    MS->>DMN: enterDeletionMode()
+    DMN->>DMN: state.isActive = true
+    DMN->>MS: 再描画（選択UIオーバーレイ表示）
+
+    User->>IC: カードをタップ（複数選択）
+    IC->>DMN: toggleSelection(cardId)
+    DMN->>DMN: selectedCardIds.add(cardId)
+
+    User->>MS: [削除を実行]ボタン
+    MS->>DMN: setDeleting(true)
+    MS->>DS: deleteFiles(selectedCardIds)
+    loop 各選択ファイル
+        DS->>FS: file.delete()
+        FS->>FW: REMOVE イベント
+        FW->>ILN: removeItem(path)
+        ILN->>GLS: removeCard(id)
+    end
+    DS-->>MS: 完了
+    MS->>DMN: exitDeletionMode()
+    DMN->>DMN: state = initial
+    DMN->>MS: 再描画（通常UI復帰）
+```
+
+## フロー8: グリッド設定変更
 
 ```mermaid
 sequenceDiagram
@@ -249,10 +339,10 @@ sequenceDiagram
     GLSR->>GLSR: _controller.add(newSettings)
     GLSR->>Surface: stream.listen()
     Surface->>GLS: updateGeometry(newGeometry)
-    Note over GLS,Surface: 以降はフロー4と同じ
+    Note over GLS,Surface: 以降はフロー5と同じ
 ```
 
-## フロー6: Undo/Redo
+## フロー9: Undo/Redo
 
 ```mermaid
 sequenceDiagram
@@ -283,10 +373,13 @@ sequenceDiagram
 
 | アクション | 保存先 | タイミング |
 |-----------|--------|-----------|
-| 画像保存 | FS (image.jpg + .json) | 即座 |
+| 画像保存 | FS (image.jpg + .fileInfo.json) | 即座 |
+| テキスト保存 | FS (note.txt + .fileInfo.json) | 即座 |
 | カードリサイズ | Hive (grid_card_prefs) | ドラッグ終了時 |
 | フォルダ選択 | Hive (app_state) | 選択確定時 |
 | グリッド設定変更 | Hive (grid_layout) | [保存]ボタン押下時 |
+| プレビューウィンドウ起動 | Hive (open_previews) | 即座 |
+| プレビューウィンドウ終了 | Hive (open_previews) | 即座 |
 
 ### バッチ保存
 
@@ -304,8 +397,8 @@ await gridLayoutStore.applyBulkSpan(span: 3);
 // FileWatcher検出
 _watcher.events.listen((event) {
   if (event.type == ChangeType.ADD) {
-    final imageItem = ImageItem.fromPath(event.path);
-    _imageLibraryNotifier.addImage(imageItem);
+    final contentItem = ContentItem.fromPath(event.path);
+    _imageLibraryNotifier.addItem(contentItem);
   }
 });
 ```
@@ -327,6 +420,7 @@ notifyListeners();
 // アプリ起動時
 final settings = GridLayoutSettingsRepository().value;
 final selectedFolder = Hive.box('app_state').get('folder');
+final openPreviews = OpenPreviewsRepository().getAll();
 // → Providerに注入して初期化
 ```
 
@@ -338,18 +432,21 @@ flowchart LR
     B -->|ファイルI/O| C[Logger.warning]
     B -->|ネットワーク| D[Logger.severe + null返却]
     B -->|状態不整合| E[StateError throw]
+    B -->|テキストサイズ超過| F[SaveResult.failed]
 
-    C --> F[処理続行]
-    D --> F
-    E --> G[SnackBar表示]
-    G --> H[ユーザー通知]
+    C --> G[処理続行]
+    D --> G
+    F --> G
+    E --> H[SnackBar表示]
+    H --> I[ユーザー通知]
 ```
 
 ### エラーハンドリング戦略
 
 1. **回復可能**: ログ出力のみ、処理続行（例: メタデータ読み込み失敗）
 2. **ユーザー通知必要**: SnackBar表示（例: フォルダアクセス拒否）
-3. **致命的**: エラーダイアログ + アプリ終了（例: Hive初期化失敗）
+3. **サイズ制限**: SaveResult.failed 返却（例: テキスト1MB超過）
+4. **致命的**: エラーダイアログ + アプリ終了（例: Hive初期化失敗）
 
 ## パフォーマンス特性
 
@@ -357,19 +454,31 @@ flowchart LR
 
 | コンポーネント | メモリ使用量 | 備考 |
 |---------------|-------------|------|
-| ImageLibraryNotifier | カード数 × 1KB | ImageItemリスト |
+| ImageLibraryNotifier | カード数 × 1KB | ContentItemリスト |
 | GridLayoutStore | カード数 × 200B | viewStatesマップ |
 | Hive (grid_card_prefs) | カード数 × 100B | 永続化データ |
 | LayoutSnapshot | カード数 × 150B | Rectとメタデータ |
+| PreviewProcessManager | プロセス数 × 50B | プロセス参照のみ |
 
 ### I/O最適化
 
 - **バッチ書き込み**: `Hive.putAll()` で複数レコードを1回のI/Oで保存
 - **遅延読み込み**: フォルダ選択時のみImageRepository.scanFolder実行
 - **デバウンス**: ウィンドウリサイズ時の設定保存（200ms）
+- **統合メタデータ**: 個別JSONファイルを廃止、`.fileInfo.json` に統合
 
 ## 関連ドキュメント
 
 - [State Management Flow](./state_management_flow.md) - 状態管理の詳細
 - [Grid Rendering Pipeline](./grid_rendering_pipeline.md) - レンダリングフロー
 - [Repositories](../data/repositories.md) - データアクセス層
+- [TextSaver](../system/text_saver.md) - テキスト保存サービス
+- [ClipboardMonitor](../system/clipboard_monitor.md) - クリップボード監視
+
+## 変更履歴
+
+| 日付 | 内容 |
+|------|------|
+| 2025-11-27 | TEXT保存フロー、プレビューウィンドウフロー、削除フロー追加 |
+| 2025-11-02 | カードリサイズフロー、ミニマップ更新パターン更新 |
+| 2025-10-28 | 初版作成 |

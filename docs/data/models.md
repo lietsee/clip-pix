@@ -1,50 +1,75 @@
 # データモデル
 
 **作成日**: 2025-10-28
+**最終更新**: 2025-11-27
 **ステータス**: 実装完了
 
 ## モデル一覧
 
-### ImageItem
+### ContentItem (基底クラス)
 
-画像ファイルとメタデータを表すモデル。
+画像/テキストファイルの共通基底クラス。
 
 ```dart
-class ImageItem {
-  final String id;              // ファイルパスのハッシュ
-  final String path;            // 画像ファイルの絶対パス
-  final String fileName;        // ファイル名
-  final DateTime modifiedTime;  // 更新日時
-  final ImageMetadata? metadata;  // JSONメタデータ（オプション）
-  final int? width;             // 画像幅（メタデータから取得）
-  final int? height;            // 画像高さ
+abstract class ContentItem extends HiveObject {
+  final String id;                    // 一意識別子（通常はファイルパス）
+  final String filePath;              // ファイルパス
+  final ContentType contentType;      // コンテンツの種類（IMAGE/TEXT）
+  final ImageSourceType sourceType;   // ソースの種類（web/local/unknown）
+  final DateTime savedAt;             // 保存日時（UTC）
+  final String? source;               // ソースURL（該当する場合）
+  final String memo;                  // メモ
+  final int favorite;                 // お気に入りレベル（0-3）
 }
 ```
 
-### ImageMetadata
+### ImageItem
 
-画像保存時に記録されるメタデータ（JSON）。
+画像ファイルを表すモデル（ContentItemのサブクラス）。
 
 ```dart
-class ImageMetadata {
-  final ImageSourceType source;  // clipboard, url, file
-  final DateTime timestamp;      // 保存日時
-  final String? originalUrl;     // URL元（URL保存時のみ）
-  final int? width;              // 画像幅
+class ImageItem extends ContentItem {
+  final int? width;              // 画像幅（メタデータから取得）
   final int? height;             // 画像高さ
-  final int? fileSize;           // ファイルサイズ（バイト）
+  final double? aspectRatio;     // アスペクト比
+
+  // ContentTypeは常にContentType.image
+}
+```
+
+### TextContentItem (2025-11-27追加)
+
+テキストファイルを表すモデル（ContentItemのサブクラス）。
+
+```dart
+class TextContentItem extends ContentItem {
+  final int? characterCount;     // 文字数
+  final String? preview;         // プレビューテキスト（先頭100文字）
+
+  // ContentTypeは常にContentType.text
+}
+```
+
+### ContentType (2025-11-27追加)
+
+コンテンツの種別。
+
+```dart
+enum ContentType {
+  image,  // 画像ファイル（.jpg, .jpeg, .png）
+  text,   // テキストファイル（.txt）
 }
 ```
 
 ### ImageSourceType
 
-画像の出典種別。
+画像/テキストの出典種別。
 
 ```dart
 enum ImageSourceType {
-  clipboard,  // クリップボードから保存
-  url,        // URLダウンロード
-  file,       // ファイルコピー
+  web,      // URLダウンロード
+  local,    // クリップボードまたはローカルファイル
+  unknown,  // 不明
 }
 ```
 
@@ -70,12 +95,13 @@ class ImageEntry {
 
 ```dart
 class GridCardPreference {
-  final String id;             // ImageItem.id
+  final String id;             // ContentItem.id
   final double width;          // カード幅（ピクセル）
   final double height;         // カード高さ
   final double scale;          // スケール倍率（1.0 = 100%）
   final int columnSpan;        // カラムスパン数
   final double? customHeight;  // ドラッグリサイズ時の高さ
+  final Offset? panOffset;     // パン（ズーム位置）オフセット（2025-11-25追加）
 }
 ```
 
@@ -124,15 +150,43 @@ enum GridBackgroundTone {
 
 ```dart
 class SelectedFolderState {
-  final String? folderPath;        // 選択中のフォルダ
+  final Directory? current;          // 選択中のディレクトリ
   final List<String> recentFolders;  // 最近使用したフォルダ（最大3件）
-  final FolderViewMode viewMode;   // root or subfolder
-  final String? currentTab;        // 選択中のサブフォルダ名
-  final double scrollOffset;       // スクロール位置
+  final FolderViewMode viewMode;     // root or subfolder
+  final String? currentTab;          // 選択中のサブフォルダ名
+  final double scrollOffset;         // スクロール位置
 }
 ```
 
 **永続化**: Hive box `app_state` に保存
+
+### FolderViewMode
+
+フォルダビューモード。
+
+```dart
+enum FolderViewMode {
+  root,       // ルートフォルダ表示
+  subfolder,  // サブフォルダ表示（タブ切り替え）
+}
+```
+
+### DeletionModeState (2025-11-27追加)
+
+一括削除モードの状態。
+
+```dart
+class DeletionModeState {
+  final bool isActive;              // 削除モードが有効
+  final Set<String> selectedCardIds;  // 選択中のカードID
+  final bool isDeleting;            // 削除処理実行中
+}
+```
+
+**便利プロパティ**:
+- `hasSelection`: 選択があるか
+- `selectedCount`: 選択数
+- `isSelected(cardId)`: 特定カードが選択されているか
 
 ### GridLayoutGeometry
 
@@ -154,12 +208,13 @@ class GridLayoutGeometry {
 
 ```dart
 class GridCardViewState {
-  final String id;             // ImageItem.id
+  final String id;             // ContentItem.id
   final double width;          // 描画幅
   final double height;         // 描画高さ
   final double scale;          // スケール
   final int columnSpan;        // カラムスパン
   final double? customHeight;  // カスタム高さ
+  final Offset? panOffset;     // パンオフセット（2025-11-25追加）
 }
 ```
 
@@ -183,7 +238,7 @@ class LayoutSnapshot {
 
 ```dart
 class LayoutSnapshotEntry {
-  final String id;           // ImageItem.id
+  final String id;           // ContentItem.id
   final Rect rect;           // 描画位置とサイズ
   final int columnSpan;      // カラムスパン数
 }
@@ -191,27 +246,34 @@ class LayoutSnapshotEntry {
 
 ## JSON シリアライゼーション
 
-### ImageMetadata JSON例
+### 統合メタデータ形式 (.fileInfo.json)
 
 ```json
-{
-  "source": "url",
-  "timestamp": "2025-10-28T10:30:00.000Z",
-  "originalUrl": "https://example.com/image.jpg",
-  "width": 1920,
-  "height": 1080,
-  "size": 524288
-}
+[
+  {
+    "file": "image_001.jpg",
+    "saved_at": "2025-10-28T10:30:00.000Z",
+    "source": "https://example.com/image.jpg",
+    "source_type": "web"
+  },
+  {
+    "file": "note.txt",
+    "saved_at": "2025-10-28T10:31:00.000Z",
+    "source": "Clipboard",
+    "source_type": "local",
+    "content_type": "text"
+  }
+]
 ```
 
 ### ファイル配置
 
 ```
 selected_folder/
+  ├── .fileInfo.json       ← 統合メタデータ
   ├── image_001.jpg
-  ├── image_001.json  ← ImageMetadata
   ├── image_002.png
-  └── image_002.json
+  └── note.txt
 ```
 
 ## Hive TypeAdapterの実装
@@ -232,6 +294,9 @@ class GridCardPreferenceAdapter extends TypeAdapter<GridCardPreference> {
       scale: reader.readDouble(),
       columnSpan: reader.readInt(),
       customHeight: reader.readBool() ? reader.readDouble() : null,
+      panOffset: reader.readBool()
+        ? Offset(reader.readDouble(), reader.readDouble())
+        : null,
     );
   }
 
@@ -246,22 +311,29 @@ class GridCardPreferenceAdapter extends TypeAdapter<GridCardPreference> {
     if (obj.customHeight != null) {
       writer.writeDouble(obj.customHeight!);
     }
+    writer.writeBool(obj.panOffset != null);
+    if (obj.panOffset != null) {
+      writer.writeDouble(obj.panOffset!.dx);
+      writer.writeDouble(obj.panOffset!.dy);
+    }
   }
 }
 ```
 
 ## バリデーション
 
-### ImageItem
+### ContentItem
 
-- `path`: 実在するファイルパス
+- `filePath`: 実在するファイルパス
 - `id`: 空でない文字列
+- `contentType`: ImageItem なら `image`、TextContentItem なら `text`
 
 ### GridCardPreference
 
 - `width`, `height`: 正の数
 - `scale`: 0より大きい（通常0.5〜2.0）
 - `columnSpan`: 1以上、maxColumns以下
+- `panOffset`: 任意（nullの場合は中央配置）
 
 ### GridLayoutSettings
 
@@ -273,3 +345,12 @@ class GridCardPreferenceAdapter extends TypeAdapter<GridCardPreference> {
 
 - [Repositories](./repositories.md) - データアクセス層
 - [State Management](../system/state_management.md) - モデルを使用する状態管理
+- [JSON Schema](./json_schema.md) - JSONスキーマ詳細
+
+## 変更履歴
+
+| 日付 | 内容 |
+|------|------|
+| 2025-11-27 | ContentItem基底クラス、TextContentItem、ContentType、DeletionModeState追加 |
+| 2025-11-25 | GridCardPreferenceにpanOffset追加 |
+| 2025-10-28 | 初版作成 |

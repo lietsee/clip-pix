@@ -1,6 +1,7 @@
 # データレイヤー: Repositories
 
 **作成日**: 2025-10-28
+**最終更新**: 2025-11-27
 **ステータス**: 実装完了
 
 ## 概要
@@ -46,19 +47,20 @@ Stream<GridLayoutSettings> get stream  // 変更監視
 
 ```dart
 class GridCardPreference {
-  final String id;          // ImageItem.id
-  final double width;       // カード幅
-  final double height;      // カード高さ
-  final double scale;       // スケール倍率
-  final int columnSpan;     // カラムスパン数
-  final double? customHeight;  // カスタム高さ
+  final String id;            // ContentItem.id
+  final double width;         // カード幅
+  final double height;        // カード高さ
+  final double scale;         // スケール倍率
+  final int columnSpan;       // カラムスパン数
+  final double? customHeight; // カスタム高さ
+  final Offset? panOffset;    // パンオフセット（2025-11-25追加）
 }
 ```
 
 #### Hive Box
 
 - **名前**: `grid_card_prefs`
-- **キー**: ImageItem.id
+- **キー**: ContentItem.id
 - **型**: `GridCardPreference`
 
 #### 主要API
@@ -93,7 +95,7 @@ void delete(String id)  // 削除
 ```dart
 class GridOrder {
   final String folderId;        // フォルダID
-  final List<String> orderedIds;  // ImageItem.idのリスト
+  final List<String> orderedIds;  // ContentItem.idのリスト
 }
 ```
 
@@ -116,53 +118,149 @@ Future<void> saveOrder(String folderId, List<String> ids)  // 順序保存
 
 #### 責務
 
-- 指定フォルダ内の画像ファイルスキャン
-- JSONメタデータの読み込み
-- `ImageItem` モデルへの変換
+- 指定フォルダ内の画像/テキストファイルスキャン
+- `.fileInfo.json` メタデータの読み込み
+- `ContentItem` モデル（`ImageItem` / `TextContentItem`）への変換
 
 #### 主要API
 
 ```dart
-Future<List<ImageItem>> scanFolder(String folderPath)  // フォルダスキャン
-Future<ImageMetadata?> readMetadata(String imagePath)  // JSON読み込み
+Future<List<ContentItem>> scanFolder(Directory directory)  // フォルダスキャン
+Future<Map<String, FileInfoEntry>> loadFileInfo(Directory directory)  // メタデータ読み込み
 ```
 
 #### スキャン対象
 
-- **画像拡張子**: `.jpg`, `.jpeg`, `.png`, `.gif`
-- **メタデータ**: `image_name.json`（画像と同階層）
+- **画像拡張子**: `.jpg`, `.jpeg`, `.png`
+- **テキスト拡張子**: `.txt`（2025-11-27追加）
+- **メタデータ**: `.fileInfo.json`（フォルダごとに1つ）
 
-### 5. MetadataWriter
+#### ContentItem生成ロジック
+
+```dart
+Future<List<ContentItem>> scanFolder(Directory directory) async {
+  final fileInfo = await loadFileInfo(directory);
+  final items = <ContentItem>[];
+
+  await for (final entity in directory.list()) {
+    if (entity is! File) continue;
+
+    final ext = path.extension(entity.path).toLowerCase();
+    final fileName = path.basename(entity.path);
+    final info = fileInfo[fileName];
+
+    if (['.jpg', '.jpeg', '.png'].contains(ext)) {
+      items.add(ImageItem.fromFile(entity, info));
+    } else if (ext == '.txt') {
+      items.add(TextContentItem.fromFile(entity, info));
+    }
+  }
+
+  return items;
+}
+```
+
+### 5. OpenPreviewsRepository (2025-11-27追加)
+
+**ファイル**: `lib/data/open_previews_repository.dart`
+
+#### 責務
+
+プレビューウィンドウの状態を永続化し、アプリ再起動時に復元可能にする。
+
+#### 管理データ
+
+```dart
+class OpenPreviewEntry {
+  final String itemId;       // ContentItem.id（ファイルパス）
+  final bool alwaysOnTop;    // 常に最前面フラグ
+  final DateTime openedAt;   // オープン日時
+}
+```
+
+#### Hive Box
+
+- **名前**: `open_previews`
+- **キー**: ContentItem.id
+- **型**: `OpenPreviewEntry`
+
+#### 主要API
+
+```dart
+List<OpenPreviewEntry> getAll()                      // 全エントリ取得
+Future<void> add(String itemId, {bool alwaysOnTop})  // エントリ追加
+Future<void> remove(String itemId)                   // エントリ削除
+Future<void> removeOlderThan(Duration duration)      // 古いエントリ削除
+```
+
+#### 使用例
+
+```dart
+// PreviewProcessManager
+Future<void> registerProcess(String itemId, Process process, {bool alwaysOnTop}) async {
+  _processes[itemId] = process;
+  await _repository?.add(itemId, alwaysOnTop: alwaysOnTop);
+}
+
+void _handleProcessExit(String itemId) {
+  _processes.remove(itemId);
+  _repository?.remove(itemId);
+}
+```
+
+### 6. MetadataWriter
 
 **ファイル**: `lib/data/metadata_writer.dart`
 
 #### 責務
 
-画像保存時にJSONメタデータを書き込む。
-
-#### メタデータ構造
-
-```json
-{
-  "source": "clipboard",
-  "timestamp": "2025-10-28T10:30:00.000Z",
-  "originalUrl": "https://example.com/image.jpg",
-  "width": 1920,
-  "height": 1080,
-  "size": 524288
-}
-```
+画像/テキスト保存時にJSONメタデータを `.fileInfo.json` に追記。
 
 #### 主要API
 
 ```dart
-Future<void> writeMetadata({
-  required String imagePath,
-  required ImageSourceType source,
-  String? originalUrl,
-  Size? imageSize,
-  int? fileSize,
+Future<void> appendEntry({
+  required Directory directory,
+  required String fileName,
+  required String source,
+  required ImageSourceType sourceType,
+  ContentType contentType = ContentType.image,
 })
+```
+
+#### 使用例
+
+```dart
+// ImageSaver
+await metadataWriter.appendEntry(
+  directory: targetDirectory,
+  fileName: 'clipboard_20251027.jpg',
+  source: 'Clipboard',
+  sourceType: ImageSourceType.local,
+);
+
+// TextSaver
+await metadataWriter.appendEntry(
+  directory: targetDirectory,
+  fileName: 'note.txt',
+  source: 'Clipboard',
+  sourceType: ImageSourceType.local,
+  contentType: ContentType.text,
+);
+```
+
+### 7. FileInfoManager
+
+**ファイル**: `lib/data/file_info_manager.dart`
+
+#### 責務
+
+`.fileInfo.json` の読み込みと解析。
+
+#### 主要API
+
+```dart
+Future<Map<String, FileInfoEntry>> loadFileInfo(Directory directory)
 ```
 
 ## Hive Box初期化
@@ -176,6 +274,7 @@ Future<void> _openCoreBoxes() async {
   await Hive.openBox<List<String>>('grid_order');
   await Hive.openBox<ImageEntry>('image_history');
   await Hive.openBox('app_state');  // SelectedFolderState
+  await Hive.openBox('open_previews');  // OpenPreviewEntry（2025-11-27追加）
 }
 ```
 
@@ -222,11 +321,11 @@ if (!Hive.isBoxOpen('grid_layout')) {
 
 ```dart
 try {
-  final json = await File(metadataPath).readAsString();
-  return ImageMetadata.fromJson(jsonDecode(json));
+  final json = await File(fileInfoPath).readAsString();
+  return FileInfoEntry.fromJson(jsonDecode(json));
 } catch (error) {
-  _logger.warning('Failed to read metadata: $metadataPath', error);
-  return null;  // nullで処理続行
+  _logger.warning('Failed to read fileInfo: $fileInfoPath', error);
+  return {};  // 空マップで処理続行
 }
 ```
 
@@ -271,6 +370,7 @@ class MockGridCardPreferencesRepository implements GridLayoutPersistence {
 - **grid_layout**: 1レコード（数百バイト）
 - **grid_card_prefs**: カード数 × 100バイト（1000カード = 100KB）
 - **grid_order**: フォルダ数 × ID配列サイズ
+- **open_previews**: オープン中のプレビュー数 × 200バイト
 
 ### ディスクI/O
 
@@ -281,4 +381,13 @@ class MockGridCardPreferencesRepository implements GridLayoutPersistence {
 ## 関連ドキュメント
 
 - [Models](./models.md) - データモデル定義
+- [JSON Schema](./json_schema.md) - JSONスキーマ
 - [GridLayoutStore](../system/state_management.md#gridlayoutstore) - リポジトリの使用側
+
+## 変更履歴
+
+| 日付 | 内容 |
+|------|------|
+| 2025-11-27 | OpenPreviewsRepository追加、ImageRepositoryのTEXT対応、統合メタデータ対応 |
+| 2025-11-02 | write-through cacheパターンの重要性を追記 |
+| 2025-10-28 | 初版作成 |
