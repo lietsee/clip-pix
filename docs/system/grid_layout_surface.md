@@ -763,7 +763,7 @@ testWidgets('geometry change triggers buffer swap', (tester) async {
 - [GridLayoutLayoutEngine](./grid_layout_layout_engine.md) - レイアウト計算エンジン
 - [GridLayoutMutationController](./grid_layout_mutation_controller.md) - ミューテーション制御
 - [GeometryMutationQueue](#geometrymutationqueue) - ジオメトリキュー
-- [Grid Semantics Rebuild Plan](./grid_semantics_rebuild_plan.md) - セマンティクス問題の調査と解決
+- セマンティクス問題の調査と解決（`docs/archive/grid_semantics_rebuild_plan.md`）
 
 ## 今後の拡張
 

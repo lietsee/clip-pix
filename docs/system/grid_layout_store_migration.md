@@ -2,7 +2,7 @@
 最終更新: 2025-11-02
 
 ## 目的
-- グリッド列変更・一括揃え時に発生している RenderObject セマンティクスアサーション（`docs/known_issue_grid_semantics.md`）を解消する。
+- グリッド列変更・一括揃え時に発生している RenderObject セマンティクスアサーション（`docs/archive/known_issue_grid_semantics.md`）を解消する。
 - 各カードが個別の `ValueNotifier` に依存している現行構造を見直し、レイアウト更新をバッチ適用に統一して `notifyListeners()` 回数を最小化する。
 - 将来のグリッド設定/整列機能拡張に向けて、状態管理をサービス層に集約しテスト容易性を高める。
 

@@ -425,7 +425,7 @@ final engine = GridLayoutLayoutEngine(idProvider: MockIdProvider());
 
 - [GridLayoutStore](./state_management.md#gridlayoutstore) - レイアウトエンジンを使用する状態管理
 - [GridLayoutSurface](./grid_layout_surface.md) - スナップショットのレンダリング
-- [PinterestGrid Migration](./pinterest_grid_migration.md) - マサリーレイアウトの移行計画
+- PinterestSliverGrid - マサリーレイアウトの実装（`lib/ui/widgets/pinterest_grid.dart`）
 
 ## 制限事項
 

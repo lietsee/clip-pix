@@ -316,6 +316,143 @@ ClipPixプロジェクトの実装に合わせて、包括的なドキュメン�
 
 ---
 
+## Update 2025-11-27: TEXT Support & New Features Documentation
+
+**更新日**: 2025-11-27
+**ステータス**: 完了
+
+### 概要
+
+テキストファイル対応、一括削除モード、プレビューウィンドウ管理機能を反映して、包括的なドキュメント更新を実施しました。
+
+### 新規作成ドキュメント（1ファイル）
+
+1. **docs/system/text_saver.md** ✅
+   - TextSaverサービスの仕様
+   - クリップボードテキストの.txt保存
+   - ImageSaverとの並列実装
+
+### 更新されたドキュメント（15ファイル）
+
+#### データレイヤー
+
+1. **docs/data/models.md** ✅
+   - ContentItem基底クラス追加
+   - TextContentItem追加
+   - ContentType enum追加
+   - DeletionModeState追加
+
+2. **docs/data/json_schema.md** ✅
+   - content_typeフィールド追加
+   - 統合メタデータ形式.fileInfo.json
+
+3. **docs/data/repositories.md** ✅
+   - OpenPreviewsRepository追加
+   - ImageRepositoryのTEXT対応
+
+#### システムレイヤー
+
+4. **docs/system/clipboard_monitor.md** ✅
+   - onTextCapturedコールバック
+   - データ優先度（画像 > URL > テキスト）
+   - シーケンス番号監視
+
+5. **docs/system/clipboard_copy_service.md** ✅
+   - copyText()メソッド追加
+   - テキストガードトークン
+
+6. **docs/system/file_watcher.md** ✅
+   - .txt拡張子サポート
+   - WatcherStatusNotifier統合
+
+7. **docs/system/state_management.md** ✅
+   - DeletionModeNotifierセクション追加
+   - List<ImageItem>→List<ContentItem>更新
+
+#### UIレイヤー
+
+8. **docs/ui/grid_view.md** ✅
+   - List<ImageItem>→List<ContentItem>更新
+
+9. **docs/ui/main_screen.md** ✅
+   - 一括削除モードセクション追加
+   - プレビューウィンドウ管理セクション追加
+   - DeletionModeNotifier、PreviewProcessManager依存追加
+
+10. **docs/ui/image_card.md** ✅
+    - アーカイブ済みドキュメントへの参照修正
+
+11. **docs/ui/image_preview_window.md** ✅
+    - TextPreviewWindow言及追加
+    - プロセス管理セクション追加
+
+#### アーキテクチャレイヤー
+
+12. **docs/architecture/data_flow.md** ✅
+    - TEXTフロー追加
+    - プレビューフロー追加
+    - 削除フロー追加
+
+13. **docs/architecture/state_management_flow.md** ✅
+    - DeletionModeNotifier追加
+    - PreviewProcessManager追加
+
+14. **docs/architecture/grid_rendering_pipeline.md** ✅
+    - アーカイブ済みドキュメントへの参照修正
+
+#### その他
+
+15. **docs/overview.md** ✅
+    - TEXT対応機能追加
+    - 一括削除モード追加
+    - プレビューウィンドウ管理追加
+
+### アーカイブ移動（4ファイル）
+
+1. `docs/archive/grid_semantics_double_buffer_plan.md`
+2. `docs/archive/grid_semantics_rebuild_plan.md`
+3. `docs/archive/pinterest_grid_migration.md`
+4. `docs/archive/semantics_investigation_2025-10-26.md`
+
+### アーカイブ参照修正（追加5ファイル）
+
+1. `docs/system/grid_layout_layout_engine.md` - pinterest_grid_migration.md参照修正
+2. `docs/system/grid_layout_store_migration.md` - known_issue_grid_semantics.md参照修正
+3. `docs/system/grid_layout_surface.md` - grid_semantics_rebuild_plan.md参照修正
+
+### ドキュメント統計（2025-11-27更新分）
+
+- **新規作成**: 1ファイル
+- **更新ファイル**: 15ファイル
+- **アーカイブ移動**: 4ファイル
+- **アーカイブ参照修正**: 5ファイル（追加分）
+- **総追加行数**: 約800行
+
+### 主要な機能追加
+
+1. **テキストファイル対応**
+   - ClipboardMonitorでテキスト検出
+   - TextSaverで.txt保存
+   - TextContentItemモデル
+   - TextPreviewWindow
+
+2. **一括削除モード**
+   - DeletionModeNotifier状態管理
+   - 複数カード選択UI
+   - 確認ダイアログ
+
+3. **プレビューウィンドウ管理**
+   - ImagePreviewProcessManager
+   - TextPreviewProcessManager
+   - OpenPreviewsRepository永続化
+
+### 関連コミット
+
+- 58172f8: docs: comprehensive documentation update for TEXT support and new components
+- 052e63a: docs: update remaining documentation for ContentItem and new features
+
+---
+
 **作成者**: Claude Code
 **レビュー**: 必要に応じてプロジェクトメンテナーによるレビュー推奨
 **次回更新**: 新機能実装時、または四半期ごとの定期レビュー
