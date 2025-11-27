@@ -1,14 +1,18 @@
 # MainScreen 詳細設計
 
+**最終更新**: 2025-11-27
+
 ## 1. 概要
 アプリのルート画面。フォルダ選択・タブ表示・GridView呼び出しを管理。
 
 ## 2. 責務
-- 選択フォルダを保持し、ルート直下の画像とサブフォルダを切り替え表示。
-- 表示フェーズ（ルートギャラリー／サブフォルダ）変更時に該当フォルダの画像をロード。
+- 選択フォルダを保持し、ルート直下のコンテンツ（画像・テキスト）とサブフォルダを切り替え表示。
+- 表示フェーズ（ルートギャラリー／サブフォルダ）変更時に該当フォルダのコンテンツをロード。
 - FileWatcher, ClipboardMonitor の起動管理。
 - AppBar・メニューバー操作からフォルダ選択モーダルを呼び出し、結果を状態に反映。
 - 選択履歴を Provider 状態と Hive に同期し、未選択時はプレースホルダを表示。
+- プレビューウィンドウプロセスの管理（ImagePreviewProcessManager, TextPreviewProcessManager）。
+- 一括削除モードの管理（DeletionModeNotifier）。
 
 ## 3. 入出力
 | 種別 | 名称 | 型 | 説明 |
@@ -24,6 +28,9 @@
 - ClipboardMonitor
 - FolderPickerService(file_selector)
 - Provider(StateNotifier)
+- ImagePreviewProcessManager（画像プレビューウィンドウ管理）
+- TextPreviewProcessManager（テキストプレビューウィンドウ管理）
+- DeletionModeNotifier（一括削除モード管理）
 
 ## 5. エラーハンドリング
 - フォルダアクセス拒否時：エラーダイアログ表示。
@@ -84,6 +91,51 @@ A --> D[GridView]
 
 ## 11. UI ステート
 - `NoFolder` : ガイダンスカード＋「フォルダを選択」ボタンのみ表示。
-- `RootGallery` : ルート直下の画像を MasonryGridView で表示し、上部にサブフォルダ一覧と最近保存した画像の履歴ストリップを水平リストで表示。
-- `SubFolder` : 選択したサブフォルダの画像のみを表示。戻る操作で `RootGallery` に復帰。
+- `RootGallery` : ルート直下のコンテンツを PinterestGrid で表示し、上部にサブフォルダ一覧と最近保存した画像の履歴ストリップを水平リストで表示。
+- `SubFolder` : 選択したサブフォルダのコンテンツのみを表示。戻る操作で `RootGallery` に復帰。
 - 各ビュー切替時はロードインジケータを表示し、読み込み完了後にグリッドへ差し替え。
+
+## 12. 一括削除モード (2025-11-27追加)
+
+### 12.1 概要
+複数のカードを選択して一括削除する機能。`DeletionModeNotifier` で状態を管理。
+
+### 12.2 UI要素
+- **AppBar**: 削除モード時に「削除を実行」「キャンセル」ボタンを表示
+- **カード**: 削除モード時にチェックボックスオーバーレイを表示
+- **選択数表示**: AppBarに選択中のカード数を表示
+
+### 12.3 状態
+```dart
+class DeletionModeState {
+  final bool isActive;              // 削除モードが有効
+  final Set<String> selectedCardIds;  // 選択中のカードID
+  final bool isDeleting;            // 削除処理実行中
+}
+```
+
+### 12.4 操作フロー
+1. ユーザーが削除モードを有効化（メニューまたはショートカット）
+2. カードをタップして選択/解除
+3. 「削除を実行」で確認ダイアログ表示
+4. 確認後、選択されたファイルを削除
+5. ImageLibraryNotifierに削除通知 → グリッド更新
+
+## 13. プレビューウィンドウ管理 (2025-11-27追加)
+
+### 13.1 概要
+画像・テキストプレビューは別プロセスとして起動し、常に最前面表示が可能。
+
+### 13.2 コンポーネント
+| マネージャー | 対象 | プレビューウィンドウ |
+|-------------|------|---------------------|
+| `ImagePreviewProcessManager` | `ImageItem` | `ImagePreviewWindow` |
+| `TextPreviewProcessManager` | `TextContentItem` | `TextPreviewWindow` |
+
+### 13.3 起動方法
+- `ImageCard` / `TextCard` のダブルクリック
+- Enter キー
+- コンテキストメニュー「プレビューを開く」
+
+### 13.4 永続化
+`OpenPreviewsRepository` でオープン中のプレビュー情報を保存し、アプリ再起動時に復元可能。

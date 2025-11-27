@@ -410,4 +410,4 @@ testWidgets('full rendering pipeline', (tester) async {
 
 - [GridLayoutSurface](../system/grid_layout_surface.md) - Surface実装詳細
 - [GridLayoutLayoutEngine](../system/grid_layout_layout_engine.md) - レイアウト計算エンジン
-- [PinterestSliverGrid](../system/pinterest_grid_migration.md) - Sliver実装
+- PinterestSliverGrid - Sliver実装（`lib/ui/widgets/pinterest_grid.dart`）

@@ -13,7 +13,7 @@
 ## 3. 入出力
 | 種別 | 名称 | 型 | 説明 |
 |------|------|----|------|
-| 入力 | imageList | `List<ImageItem>` | 表示対象画像情報 |
+| 入力 | imageList | `List<ContentItem>` | 表示対象コンテンツ（ImageItem / TextContentItem） |
 | 出力 | onResize | `Function(String id, Size newSize)` | サイズ変更通知 |
 | 出力 | onSpanChange | `Function(String id, int span)` | 列スパン変更通知 |
 | 出力 | onZoom | `Function(String id, double scale)` | ズーム変更通知 |

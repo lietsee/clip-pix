@@ -1,5 +1,5 @@
 # State Management 詳細設計
-最終更新: 2025-11-25
+最終更新: 2025-11-27
 
 ## 1. 目的
 Provider + StateNotifier を用いて、フォルダ選択・監視制御・UI 更新を一元管理する。
@@ -9,9 +9,10 @@ Provider + StateNotifier を用いて、フォルダ選択・監視制御・UI �
 - `SelectedFolderNotifier` : 選択フォルダと履歴を管理。
 - `WatcherStatusNotifier` : FileWatcher / ClipboardMonitor の稼働状態を追跡。
 - `ImageHistoryNotifier` : 直近保存した画像のメタ情報を保持。
-- `ImageLibraryNotifier` : 表示中フォルダの画像一覧・読込状態を管理。
-- `ClipboardCopyService` : 画像コピー処理とガードトークンを管理。
-- `ImageRepository` : ファイルシステムからの画像/メタデータ復元を担当。
+- `ImageLibraryNotifier` : 表示中フォルダのコンテンツ一覧・読込状態を管理。
+- `DeletionModeNotifier` : 一括削除モードの状態を管理（2025-11-27追加）。
+- `ClipboardCopyService` : 画像/テキストコピー処理とガードトークンを管理。
+- `ImageRepository` : ファイルシステムからのコンテンツ/メタデータ復元を担当。
 
 ## 3. SelectedFolderState
 | フィールド | 型 | 説明 |
@@ -65,7 +66,7 @@ Provider + StateNotifier を用いて、フォルダ選択・監視制御・UI �
 | フィールド | 型 | 説明 |
 |-----------|----|------|
 | `activeDirectory` | `Directory?` | 現在表示しているフォルダ |
-| `images` | `List<ImageItem>` | 表示対象の画像モデル |
+| `images` | `List<ContentItem>` | 表示対象コンテンツ（ImageItem / TextContentItem） |
 | `isLoading` | `bool` | 読み込み中フラグ |
 | `error` | `String?` | 直近のエラー |
 
@@ -97,6 +98,42 @@ Provider + StateNotifier を用いて、フォルダ選択・監視制御・UI �
 - ImageLibraryNotifier については一時ディレクトリを用いて `loadForDirectory` / `addOrUpdate` / `remove` の動作を確認。
 - 監視フラグの切り替えは FileWatcher / ClipboardMonitor のスタブを使って `onFolderChanged` の呼び出し順序を確認。
 - ImageHistory のサイズ制限 (最大20件) と FIFO 振る舞いをテスト。
+
+---
+
+## 9.5 DeletionModeNotifier (2025-11-27追加)
+
+### 9.5.1 概要
+一括削除モードの状態を管理する StateNotifier。複数カードを選択して一括削除する機能を提供。
+
+**ファイル**: `lib/system/state/deletion_mode_notifier.dart`
+
+### 9.5.2 DeletionModeState
+| フィールド | 型 | 説明 |
+|-----------|----|------|
+| `isActive` | `bool` | 削除モードが有効か |
+| `selectedCardIds` | `Set<String>` | 選択中のカードID集合 |
+| `isDeleting` | `bool` | 削除処理実行中フラグ |
+
+### 9.5.3 アクション
+- `enterDeletionMode()` : 削除モードを有効化
+- `exitDeletionMode()` : 削除モードを終了し、選択をクリア
+- `toggleSelection(String cardId)` : カードの選択状態を切り替え
+- `selectAll(List<String> cardIds)` : 全カードを選択
+- `deselectAll()` : 全選択を解除
+- `executeDelete(Function(List<String>) onDelete)` : 選択カードの削除を実行
+
+### 9.5.4 便利プロパティ
+```dart
+bool get hasSelection => selectedCardIds.isNotEmpty;
+int get selectedCount => selectedCardIds.length;
+bool isSelected(String cardId) => selectedCardIds.contains(cardId);
+```
+
+### 9.5.5 UI連携
+- **MainScreen**: AppBarに削除モードUI（選択数、実行ボタン、キャンセルボタン）を表示
+- **ImageCard / TextCard**: 削除モード時にチェックボックスオーバーレイを表示
+- **GridViewModule**: カードタップで `toggleSelection` を呼び出し
 
 ---
 

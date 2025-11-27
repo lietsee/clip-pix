@@ -1,7 +1,11 @@
 # ImagePreviewWindow 詳細設計
 
+**最終更新**: 2025-11-27
+
 ## 1. 概要
 ImageCard から起動される単独ウィンドウ。対象画像を等倍またはウィンドウ幅で表示し、最前面表示の切替と閉じる操作のみを提供する。
+
+> **Note**: テキストファイル用のプレビューは `TextPreviewWindow` として別コンポーネントで提供されています。詳細は `lib/ui/text_preview_window.dart` を参照。
 
 ## 2. 表示要素
 ```
@@ -52,3 +56,22 @@ ImageCard から起動される単独ウィンドウ。対象画像を等倍ま�
 - ウィンドウ生成／破棄をモックして、`onToggleAlwaysOnTop` イベントが正しく飛ぶか確認。
 - 画像読み込み例外をシミュレートし、エラービューが表示されることを Golden テストで検証。
 - 最前面トグルの状態が次回起動時に反映されるか（Hive 保存時のみ）を `StateNotifier` テストで確認。
+
+## 8. 関連コンポーネント (2025-11-27追加)
+
+### 8.1 プロセス管理
+- **ImagePreviewProcessManager**: 画像プレビュープロセスのライフサイクル管理
+- **OpenPreviewsRepository**: オープン中のプレビュー永続化
+
+### 8.2 テキストプレビュー
+テキストファイル（`.txt`）用のプレビューは以下のコンポーネントで提供：
+- **TextPreviewWindow** (`lib/ui/text_preview_window.dart`)
+- **TextPreviewProcessManager**: テキストプレビュープロセス管理
+
+### 8.3 起動パターン
+```
+ImageCard.onOpenPreview
+  → ImagePreviewProcessManager.launchPreview(imageItem)
+  → Process.start(executable, ['--preview', jsonPayload])
+  → ImagePreviewWindow (別プロセス)
+```

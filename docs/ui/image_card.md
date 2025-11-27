@@ -112,7 +112,7 @@ Enter / Shift+Enter     _sizeNotifier or onOpenPreview -> onResize / onOpenPrevi
 
 ## 7. 既知の制約・課題
 
-- **Semantics アサーション**: 連続リサイズ時に `!semantics.parentDataDirty` / `!childSemantics.renderObject._needsLayout` が発生。詳細は `docs/known_issue_grid_semantics.md` を参照。
+- **Semantics アサーション**: 連続リサイズ時に `!semantics.parentDataDirty` / `!childSemantics.renderObject._needsLayout` が発生。詳細は `docs/archive/known_issue_grid_semantics.md` を参照。
 - **画像ぼやけ**: ウィンドウ幅の急激な縮小で `cacheWidth` の再計算が追いつかず、暫定的に低解像でレンダリングされる場合がある。
 - **プレビュー取り違え**: セマンティクス例外発生後に `_GridEntry` と `ImageCard` の対応が乱れるケースあり。現象は `GridViewModule` 側の再構築シーケンスと関連。
 
