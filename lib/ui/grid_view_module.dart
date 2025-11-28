@@ -172,6 +172,25 @@ class _GridViewModuleState extends State<GridViewModule> {
     // ディレクトリが変わった場合も reconciliation を実行
     // (directoryChanged=true but imagesChanged=false のケースで _entries が更新されない問題を修正)
     if (imagesChanged || directoryChanged) {
+      // ディレクトリ変更時は、画像が新しいディレクトリに属しているか検証
+      // 画像ロードは非同期なので、activeDirectory が更新されても
+      // images はまだ古いディレクトリの画像の可能性がある
+      if (directoryChanged && widget.state.images.isNotEmpty) {
+        final newDirPath = widget.state.activeDirectory?.path;
+        if (newDirPath != null) {
+          // 最初の画像のパスがディレクトリパスで始まるかチェック
+          final firstImagePath = widget.state.images.first.id;
+          final imagesMatchDirectory = firstImagePath.startsWith(newDirPath);
+
+          if (!imagesMatchDirectory) {
+            debugPrint('[GridViewModule] didUpdateWidget: skipping sync - '
+                'images not yet updated for new directory. '
+                'newPath=$newDirPath, firstImage=$firstImagePath');
+            return; // 次の didUpdateWidget を待つ
+          }
+        }
+      }
+
       // [DIAGNOSTIC] Track specific image positions in state.images
       final stateImages = widget.state.images;
       final note2Index =
