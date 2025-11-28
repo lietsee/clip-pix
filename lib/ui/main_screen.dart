@@ -439,7 +439,6 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
               controller: folderState.viewMode == FolderViewMode.root
                   ? _rootScrollController
                   : _gridSubfolderScrollController,
-              enableGridSemantics: false,
             ),
           ),
         ),

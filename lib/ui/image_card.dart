@@ -462,24 +462,20 @@ class _ImageCardState extends State<ImageCard> {
                 onPanStart: _onResizeStart,
                 onPanUpdate: _onResizeUpdate,
                 onPanEnd: _onResizeEnd,
-                child: Semantics(
-                  label: 'サイズ変更ハンドル',
-                  button: true,
-                  child: Container(
-                    width: 24,
-                    height: 24,
-                    decoration: const BoxDecoration(
-                      color: Color(0x44000000),
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(12),
-                      ),
+                child: Container(
+                  width: 24,
+                  height: 24,
+                  decoration: const BoxDecoration(
+                    color: Color(0x44000000),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(12),
                     ),
-                    alignment: Alignment.bottomRight,
-                    child: const Icon(
-                      Icons.open_in_full,
-                      size: 16,
-                      color: Colors.white,
-                    ),
+                  ),
+                  alignment: Alignment.bottomRight,
+                  child: const Icon(
+                    Icons.open_in_full,
+                    size: 16,
+                    color: Colors.white,
                   ),
                 ),
               ),

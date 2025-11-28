@@ -45,12 +45,10 @@ class GridViewModule extends StatefulWidget {
     super.key,
     required this.state,
     this.controller,
-    this.enableGridSemantics = true,
   });
 
   final ImageLibraryState state;
   final ScrollController? controller;
-  final bool enableGridSemantics;
 
   @override
   State<GridViewModule> createState() => _GridViewModuleState();
@@ -404,7 +402,6 @@ class _GridViewModuleState extends State<GridViewModule> {
             mutationController.beginMutation(hideGrid: hideGrid),
         onMutateEnd: (hideGrid) =>
             mutationController.endMutation(hideGrid: hideGrid),
-        semanticsOverlayEnabled: widget.enableGridSemantics,
         geometryQueueEnabled: true,
         childBuilder: (context, geometry, states, snapshot,
             {bool isStaging = false}) {
@@ -425,8 +422,7 @@ class _GridViewModuleState extends State<GridViewModule> {
 
           return Container(
             color: backgroundColor,
-            child: ExcludeSemantics(
-              child: CustomScrollView(
+            child: CustomScrollView(
                 controller: controller,
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
@@ -516,7 +512,6 @@ class _GridViewModuleState extends State<GridViewModule> {
                     ),
                   ),
                 ],
-              ),
             ),
           );
         },
@@ -525,14 +520,11 @@ class _GridViewModuleState extends State<GridViewModule> {
 
     return Stack(
       children: [
-        ExcludeSemantics(
-          excluding: isMutating,
-          child: Offstage(
-            offstage: shouldHideGrid,
-            child: IgnorePointer(
-              ignoring: isMutating,
-              child: content,
-            ),
+        Offstage(
+          offstage: shouldHideGrid,
+          child: IgnorePointer(
+            ignoring: isMutating,
+            child: content,
           ),
         ),
         if (shouldHideGrid)

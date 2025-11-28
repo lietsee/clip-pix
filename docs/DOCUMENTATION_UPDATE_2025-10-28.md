@@ -453,6 +453,91 @@ ClipPixプロジェクトの実装に合わせて、包括的なドキュメン�
 
 ---
 
+## Update 2025-11-28: Semantics Feature Removal
+
+**更新日**: 2025-11-28
+**ステータス**: 完了
+
+### 概要
+
+イラストレーター向けアプリのため、アクセシビリティ機能（セマンティクス/スクリーンリーダー対応）を完全に削除しました。これによりコードベースの簡素化とレンダリングパフォーマンスの向上を実現。
+
+### 削除されたファイル（2ファイル）
+
+1. **lib/ui/widgets/grid_semantics_tree.dart**
+   - GridSemanticsTree, RenderGridSemantics クラス
+
+2. **lib/ui/widgets/grid_semantics_bundle.dart**
+   - GridSemanticsBundle, GridSemanticsEntry, GridSemanticsBuilder クラス
+
+### 変更されたコードファイル（4ファイル）
+
+1. **lib/ui/widgets/grid_layout_surface.dart**
+   - セマンティクス関連の全コードを削除（~330行削減）
+   - 削除項目: `semanticsOverlayEnabled`, `_semanticsExcluded`, `_semanticsSnapshot`, `_scheduleSemanticsUpdate()`, `GridSemanticsTree` import
+
+2. **lib/ui/grid_view_module.dart**
+   - `enableGridSemantics` パラメータ削除
+   - `ExcludeSemantics` ウィジェット削除
+
+3. **lib/ui/main_screen.dart**
+   - `enableGridSemantics: false` パラメータ削除
+
+4. **lib/ui/image_card.dart**
+   - リサイズハンドルの `Semantics` ウィジェット削除
+
+### 更新されたドキュメント（9ファイル）
+
+1. **docs/architecture/grid_rendering_pipeline.md** ✅
+   - 8ステージから7ステージに変更
+   - セマンティクス関連セクション削除
+   - 3バッファから2バッファアーキテクチャに変更
+
+2. **docs/system/grid_layout_surface.md** ✅
+   - 全面書き直し（セマンティクス管理セクション削除）
+   - 実装履歴に削除記録追加
+
+3. **docs/system/grid_layout_store_migration.md** ✅
+   - セマンティクス関連の目的・課題を削除
+   - アクセシビリティ機能削除を完了事項に追加
+
+4. **docs/system/grid_layout_layout_engine.md** ✅
+   - 実装履歴からセマンティクス参照を削除
+
+5. **docs/system/state_management.md** ✅
+   - GridLayoutSurfaceの説明からセマンティクス参照を削除
+
+6. **docs/INDEX.md** ✅
+   - grid_layout_surface.md の説明を更新
+   - grid_rendering_pipeline.md の説明を更新
+   - アーカイブセクションの説明を更新
+
+7. **docs/overview.md** ✅
+   - 「セマンティクス戦略」を「アクセシビリティ」に変更
+   - 削除理由と履歴を記載
+
+8. **docs/ui/image_card.md** ✅
+   - 既知の制約からセマンティクスアサーション項目を削除
+
+9. **docs/DOCUMENTATION_UPDATE_2025-10-28.md** ✅ (本ファイル)
+   - Update 2025-11-28 セクション追加
+
+### アーカイブファイルの扱い
+
+以下のファイルは履歴として保持（内容は更新せず）：
+- `docs/archive/known_issue_grid_semantics.md`
+- `docs/archive/grid_semantics_double_buffer_plan.md`
+- `docs/archive/grid_semantics_rebuild_plan.md`
+- `docs/archive/semantics_investigation_2025-10-26.md`
+
+### 効果
+
+- **コード削減**: 約400行のセマンティクス関連コードを削除
+- **パフォーマンス向上**: 2フレーム遅延パターン、セマンティクスバッファ管理が不要に
+- **保守性向上**: 複雑なセマンティクスツリー管理ロジックの廃止
+
+---
+
 **作成者**: Claude Code
 **レビュー**: 必要に応じてプロジェクトメンテナーによるレビュー推奨
 **次回更新**: 新機能実装時、または四半期ごとの定期レビュー

@@ -54,7 +54,7 @@ ClipPixプロジェクトの全ドキュメントとその概要です。
 | ファイル | 概要 |
 |---------|------|
 | [grid_layout_layout_engine.md](./system/grid_layout_layout_engine.md) | Pinterestスタイルレイアウト計算エンジン、マサリーアルゴリズム、スナップショット生成 |
-| [grid_layout_surface.md](./system/grid_layout_surface.md) | Front/Backダブルバッファアーキテクチャ、セマンティクス管理、ジオメトリ更新スロットリング |
+| [grid_layout_surface.md](./system/grid_layout_surface.md) | Front/Stagingダブルバッファアーキテクチャ、ジオメトリ更新スロットリング |
 | [grid_layout_mutation_controller.md](./system/grid_layout_mutation_controller.md) | グリッドミューテーションライフサイクル管理、ネスト対応、不整合検出 |
 | [grid_layout_store_migration.md](./system/grid_layout_store_migration.md) | GridLayoutStoreへの移行計画、バッチ適用方式、永続化同期パターン |
 
@@ -85,7 +85,7 @@ ClipPixプロジェクトの全ドキュメントとその概要です。
 |---------|------|
 | [data_flow.md](./architecture/data_flow.md) | データフロー図（クリップボード保存、URLダウンロード、テキスト保存、フォルダ選択、カードリサイズ、削除、プレビュー） |
 | [state_management_flow.md](./architecture/state_management_flow.md) | 状態管理フロー、Providerツリー、各Notifier/Storeの責務と連携 |
-| [grid_rendering_pipeline.md](./architecture/grid_rendering_pipeline.md) | グリッドレンダリングパイプライン（8ステージ）、セマンティクス管理、パフォーマンス最適化 |
+| [grid_rendering_pipeline.md](./architecture/grid_rendering_pipeline.md) | グリッドレンダリングパイプライン（7ステージ）、パフォーマンス最適化 |
 
 ---
 
@@ -95,11 +95,11 @@ ClipPixプロジェクトの全ドキュメントとその概要です。
 
 | ファイル | 概要 |
 |---------|------|
-| known_issue_grid_semantics.md | グリッドセマンティクス問題の既知の課題（解決済み） |
+| known_issue_grid_semantics.md | グリッドレイアウト問題の既知の課題（解決済み・セマンティクス機能は2025-11-28に削除） |
 | grid_semantics_double_buffer_plan.md | ダブルバッファ導入計画（実装完了） |
-| grid_semantics_rebuild_plan.md | セマンティクス再構築計画（実装完了） |
+| grid_semantics_rebuild_plan.md | レイアウト再構築計画（履歴・セマンティクス機能は削除済み） |
 | pinterest_grid_migration.md | PinterestSliverGrid移行計画（実装完了） |
-| semantics_investigation_2025-10-26.md | セマンティクス調査記録 |
+| semantics_investigation_2025-10-26.md | レイアウト調査記録（履歴） |
 
 ---
 

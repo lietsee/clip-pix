@@ -170,12 +170,12 @@ URL画像ダウンロード:
 - **テキストコピー時のアサーション失敗修正** (commit 62608ac)
   - `GridViewModule` の reconcile 判定に `itemCountChanged` チェックを追加
 
-## 9. セマンティクス戦略
+## 9. アクセシビリティ
 
-デスクトップアプリのため、グリッドセマンティクスは無効化:
-- `ExcludeSemantics` でセマンティクスツリーから除外
-- アサーションエラーを100%解消
-- **詳細**: `docs/archive/grid_semantics_rebuild_plan.md`（履歴）
+イラストレーター向けデスクトップアプリのため、アクセシビリティ機能（セマンティクス/スクリーンリーダー対応）は2025-11-28に完全削除:
+- コードベースの簡素化
+- レンダリングパフォーマンスの向上
+- **履歴**: `docs/archive/grid_semantics_rebuild_plan.md`
 
 ## 10. ドキュメント構成
 

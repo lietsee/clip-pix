@@ -241,7 +241,7 @@ void updateCard({required String id, ...}) {
 ### 10.5 関連コンポーネント
 - `GridLayoutLayoutEngine`: レイアウト計算とスナップショット生成（`lib/system/grid_layout_layout_engine.dart`）
 - `GridCardPreferencesRepository`: Hiveへのバッチ永続化（`lib/data/grid_card_preferences_repository.dart`）
-- `GridLayoutSurface`: Front/Back buffer管理とセマンティクス更新（`lib/ui/widgets/grid_layout_surface.dart`）
+- `GridLayoutSurface`: Front/Staging buffer管理（`lib/ui/widgets/grid_layout_surface.dart`）
 - `GridViewModule`: Entry reconciliationとGridLayoutStore同期（`lib/ui/grid_view_module.dart`）
 
 ### 10.6 テスト方針

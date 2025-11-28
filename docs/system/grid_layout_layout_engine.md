@@ -417,7 +417,7 @@ final engine = GridLayoutLayoutEngine(idProvider: MockIdProvider());
 
 ## 実装履歴
 
-- **2025-10-26**: 初期実装（セマンティクスアサーション問題の解決）
+- **2025-10-26**: 初期実装
 - **2025-10-27**: Front/Backバッファとの統合
 - **2025-10-28**: ドキュメント作成
 

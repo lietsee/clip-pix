@@ -34,7 +34,6 @@ flowchart TB
         Surface[GridLayoutSurface]
         Front[Front Buffer]
         Back[Back/Staging Buffer]
-        Semantics[Semantics Buffer]
     end
 
     subgraph Render["レンダリングレイヤー"]
@@ -45,7 +44,6 @@ flowchart TB
 
     subgraph Output["出力"]
         Display[画面描画]
-        A11y[アクセシビリティ]
     end
 
     WR --> Surface
@@ -64,15 +62,13 @@ flowchart TB
 
     Surface --> Front
     Surface --> Back
-    Surface --> Semantics
 
     Front --> Sliver
     Sliver --> Card
     Card --> Display
-    Semantics --> A11y
 ```
 
-## レンダリングパイプライン（8ステージ）
+## レンダリングパイプライン（7ステージ）
 
 | ステージ | 処理内容 | 担当コンポーネント | タイミング |
 |---------|---------|------------------|-----------|
@@ -83,7 +79,6 @@ flowchart TB
 | 5 | バッファスワップ | GridLayoutSurface | スナップショット生成後 |
 | 6 | Sliver レイアウト | PinterestSliverGrid | build フェーズ |
 | 7 | カード描画 | ImageCard | paint フェーズ |
-| 8 | セマンティクス更新 | GridLayoutSurface | 2フレーム遅延後 |
 
 ## 完全なレンダリングフロー
 
@@ -102,8 +97,7 @@ flowchart TD
     H -->|60ms スロットリング| I[_processGeometryMutation]
 
     I --> J[GridLayoutMutationController.beginMutation]
-    J --> K[setState: _semanticsExcluded = true]
-    K --> L[GridLayoutStore.updateGeometry]
+    J --> L[GridLayoutStore.updateGeometry]
 
     L --> M[GridLayoutLayoutEngine.compute]
     M --> N[LayoutSnapshot生成]
@@ -114,9 +108,6 @@ flowchart TD
     Q --> R[setState: Front ← Staging]
 
     R --> S[GridLayoutMutationController.endMutation]
-    S --> T[_scheduleSemanticsUpdate]
-    T --> U[2フレーム遅延]
-    U --> V[GridSemanticsTree更新]
 
     R --> W[PinterestSliverGrid]
     W --> X[画面に表示]
@@ -157,11 +148,6 @@ sequenceDiagram
     Surface->>Sliver: build(frontSnapshot)
     Sliver->>Sliver: performLayout()
     Sliver-->>Surface: 描画完了
-
-    Note over Surface: 2フレーム遅延後
-    Surface->>Surface: endOfFrame
-    Surface->>Surface: addPostFrameCallback
-    Surface->>Surface: semantics rebuild
 ```
 
 ### ジオメトリミューテーションキュー
@@ -355,50 +341,6 @@ AnimatedSwitcher(
 )
 ```
 
-## フロー5: セマンティクスツリー更新
-
-```mermaid
-sequenceDiagram
-    participant Surface as GridLayoutSurface
-    participant Scheduler as SchedulerBinding
-    participant Frame1 as Frame N
-    participant Frame2 as Frame N+1
-    participant Semantics as SemanticsTree
-
-    Surface->>Surface: _swapBuffers()
-    Surface->>Surface: _scheduleSemanticsUpdate()
-
-    Note over Surface,Frame1: 現フレーム終了を待機
-    Surface->>Scheduler: endOfFrame
-
-    Scheduler-->>Surface: フレーム完了
-    Note over Surface,Frame2: 次フレームで更新
-
-    Surface->>Scheduler: addPostFrameCallback
-    Scheduler->>Frame2: postFrameCallback実行
-
-    Frame2->>Surface: _scheduleNextFrameSemanticsUpdate()
-    Surface->>Semantics: rebuildSemantics()
-
-    Note over Semantics: アサーション回避
-    Semantics->>Semantics: 安全なタイミングで更新
-```
-
-**2フレーム遅延**: PinterestSliverGrid のレイアウト完全確定を保証
-
-```dart
-// lib/ui/widgets/grid_layout_surface.dart
-void _scheduleSemanticsUpdate() {
-  SchedulerBinding.instance.endOfFrame.then((_) {
-    if (!mounted) return;
-    SchedulerBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _rebuildSemantics();
-    });
-  });
-}
-```
-
 ## バッファ管理アーキテクチャ
 
 ```mermaid
@@ -412,24 +354,21 @@ stateDiagram-v2
     Computing --> StagingReady: layout complete
 
     StagingReady --> BufferSwap: endOfFrame
-    BufferSwap --> SemanticsWait: setState()
-
-    SemanticsWait --> Idle: 2フレーム遅延後
+    BufferSwap --> Idle: setState()
 
     state BufferSwap {
         [*] --> StagingToFront
-        StagingToFront --> FrontToSemanticsBuffer
-        FrontToSemanticsBuffer --> [*]
+        StagingToFront --> ClearStaging
+        ClearStaging --> [*]
     }
 ```
 
-### Front/Back/Semantics バッファの役割
+### Front/Staging バッファの役割
 
 | バッファ | 役割 | 更新タイミング |
 |---------|------|---------------|
 | Front | 現在表示中のスナップショット | バッファスワップ時 |
 | Staging (Back) | 次フレーム用スナップショット | レイアウト計算完了時 |
-| Semantics | アクセシビリティ用スナップショット | 2フレーム遅延後 |
 
 ```dart
 // lib/ui/widgets/grid_layout_surface.dart
@@ -615,29 +554,6 @@ void paint(PaintingContext context, Offset offset) {
 }
 ```
 
-## セマンティクスアサーション防止
-
-### 問題
-
-```
-!_needsLayout: RenderObject needs layout before semantics update
-parentDataDirty: ParentData not finalized
-```
-
-### 解決策
-
-1. **ExcludeSemantics**: 変更中は `ExcludeSemantics(excluding: true)`
-2. **独立オーバーレイ**: `GridSemanticsTree` を `IgnorePointer` + `Stack` で配置
-3. **2フレーム遅延**: レイアウト完全確定後に更新
-
-```dart
-final stackChildren = [
-  frontChild,                    // グリッド本体（セマンティクス除外）
-  stagingChild,                  // Offstage
-  GridSemanticsTree(snapshot),   // 独立セマンティクスツリー
-];
-```
-
 ## パフォーマンス最適化
 
 | 最適化 | 実装箇所 | 効果 |
@@ -645,7 +561,6 @@ final stackChildren = [
 | ジオメトリスロットリング | GeometryMutationQueue | 60ms でバッチ処理、CPU 負荷 80% 削減 |
 | バッチ notifyListeners | GridLayoutStore | 1回/コミット、ウィジェット再構築削減 |
 | 部分再描画 | ImageCard (ValueNotifier) | ズーム/パン時にカード全体を再構築しない |
-| セマンティクス遅延 | GridLayoutSurface | 2フレーム遅延でアサーション回避 |
 | 可視範囲描画 | PinterestSliverGrid | 画面外カードをスキップ |
 | Hive バッチ書き込み | GridCardPreferencesRepo | putAll() で I/O 回数削減 |
 | Offstage レンダリング | GridLayoutSurface | ペイントスキップ、フレーム時間の約5〜10% |
@@ -663,7 +578,7 @@ final stackChildren = [
 |---------------|-------------|------|
 | LayoutSnapshot | カード数 × 150B | Rect + メタデータ |
 | GridCardViewState | カード数 × 200B | 状態情報 |
-| Front/Staging/Semantics バッファ | 3 × Snapshot | 最大3世代保持 |
+| Front/Staging バッファ | 2 × Snapshot | 最大2世代保持 |
 | ImageCard (ロード済み) | 画像サイズ依存 | キャッシュで管理 |
 
 ## エラーハンドリング
@@ -671,8 +586,6 @@ final stackChildren = [
 ### タイムアウト保護
 
 - **ミューテーション終了**: 5秒絶対タイムアウト
-- **セマンティクス更新**: 3秒タイムアウト
-- **セマンティクス待機**: 最大8回リトライ
 
 ### 防御チェック一覧
 
@@ -681,7 +594,7 @@ final stackChildren = [
 | hasSize | paint(), hitTest() | 無効なカードをスキップ |
 | parentData 型 | performLayout(), paint() | 型不一致時スキップ |
 | layoutOffset null | childMainAxisPosition() | 0.0 を返却 |
-| mounted チェック | セマンティクス更新 | dispose 後の更新を防止 |
+| mounted チェック | ミューテーション処理 | dispose 後の更新を防止 |
 | Timer キャンセル | dispose() | メモリリーク防止 |
 
 ### フォールバック
@@ -706,8 +619,7 @@ finally {
 [GridLayoutStore] updateGeometry geometry=... notify=false deltaColumns=2
 [GridLayoutSurface] staging_snapshot_ready id=layout_snapshot_000123
 [GridLayoutSurface] front_snapshot_swapped id=layout_snapshot_000123
-[GridLayoutSurface] semantics commit_start notify=true
-[GridLayoutSurface] semantics mutate_end hide=true
+[GridLayoutSurface] mutate_end hide=true
 ```
 
 ### デバッグフロー確認
@@ -716,7 +628,7 @@ finally {
 2. `geometry_commit` → ストア更新開始
 3. `staging_snapshot_ready` → Stagingバッファ準備完了
 4. `front_snapshot_swapped` → 表示切り替え
-5. `semantics mutate_end` → セマンティクス復元
+5. `mutate_end` → ミューテーション終了
 
 ## テスト戦略
 
@@ -734,10 +646,6 @@ testWidgets('window resize triggers buffer swap', (tester) async {
   await tester.pump(Duration(milliseconds: 60));
 
   // バッファスワップ待機
-  await tester.pump();
-  await tester.pump();
-
-  // セマンティクス更新待機
   await tester.pump();
   await tester.pump();
 
@@ -778,6 +686,7 @@ testWidgets('full rendering pipeline', (tester) async {
 
 | 日付 | 内容 |
 |------|------|
+| 2025-11-28 | セマンティクス機能削除（アクセシビリティ不要のため） |
 | 2025-11-28 | 全体アーキテクチャ図、詳細シーケンス図、カードライフサイクル追加 |
 | 2025-11-02 | 個別カード更新フロー、スナップショット再生成パターン追加 |
 | 2025-10-28 | 初版作成 |

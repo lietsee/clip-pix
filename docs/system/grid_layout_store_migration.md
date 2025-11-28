@@ -1,12 +1,11 @@
 # GridLayoutStore バッチ適用方式導入計画
-最終更新: 2025-11-02
+最終更新: 2025-11-28
 
 ## 目的
-- グリッド列変更・一括揃え時に発生している RenderObject セマンティクスアサーション（`docs/archive/known_issue_grid_semantics.md`）を解消する。
 - 各カードが個別の `ValueNotifier` に依存している現行構造を見直し、レイアウト更新をバッチ適用に統一して `notifyListeners()` 回数を最小化する。
 - 将来のグリッド設定/整列機能拡張に向けて、状態管理をサービス層に集約しテスト容易性を高める。
 
-## 実装状況 (2025-11-02更新)
+## 実装状況 (2025-11-28更新)
 
 ### ✅ 完了した改善
 GridLayoutStore移行計画の一環として、以下の重要なバグ修正が完了しました：
@@ -26,9 +25,12 @@ GridLayoutStore移行計画の一環として、以下の重要なバグ修正�
    - `itemCountChanged`検出を追加
    - 詳細: `docs/ui/grid_view.md`
 
+4. **アクセシビリティ機能削除** (2025-11-28)
+   - イラストレーター向けアプリのためセマンティクス（スクリーンリーダー対応）を完全削除
+   - コードベース簡素化、レンダリングパフォーマンス向上
+
 ### 🚧 進行中の課題
-- Semanticsツリー最適化（Front/Back buffer安定化）
-- GeometryMutationQueue統合
+- GeometryMutationQueue統合の最適化
 
 ## 現状整理
 - `lib/ui/grid_view_module.dart` がカードごとに `_sizeNotifiers` / `_scaleNotifiers` を動的生成し、Provider 経由で `ImageLibraryState`（`ImageLibraryNotifier`）を再読込。
@@ -88,7 +90,6 @@ GridLayoutStore移行計画の一環として、以下の重要なバグ修正�
 - **ビュー状態 (`GridCardViewState`)**: UI が参照する読み取り専用データ。`id`, `width`, `height`, `scale`, `span`, `isAnimating` 等を含む。
 
 ## 今後の検討
-- Store 導入後、Semantics 情報の段階的簡略化（カード詳細をフォーカス時にロード）を追加し、アクセシビリティ負荷を制御。
 - `GridLayoutStore` のバッチ適用を他機能（お気に入り・タグ付け）にも拡張し、状態管理の一貫性を高める。
 
 ---
