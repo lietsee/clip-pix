@@ -189,14 +189,20 @@ class _GridViewModuleState extends State<GridViewModule> {
       if (directoryChanged && widget.state.images.isNotEmpty) {
         final newDirPath = widget.state.activeDirectory?.path;
         if (newDirPath != null) {
-          // 最初の画像のパスがディレクトリパスで始まるかチェック
+          // 画像の親ディレクトリがターゲットディレクトリと一致するかチェック
+          // startsWith だとルートディレクトリへ戻る時にサブディレクトリの画像も通過してしまう
+          // 例: "F:\fav_test\goodpic\62.jpg".startsWith("F:\fav_test") = TRUE (誤判定)
           final firstImagePath = widget.state.images.first.id;
-          final imagesMatchDirectory = firstImagePath.startsWith(newDirPath);
+          final imageParentDir = p.dirname(firstImagePath);
+          final imagesMatchDirectory = imageParentDir == newDirPath;
+
+          print('[GridViewModule] didUpdateWidget: directory check - '
+              'newDirPath=$newDirPath, imageParentDir=$imageParentDir, '
+              'match=$imagesMatchDirectory');
 
           if (!imagesMatchDirectory) {
             debugPrint('[GridViewModule] didUpdateWidget: skipping sync - '
-                'images not yet updated for new directory. '
-                'newPath=$newDirPath, firstImage=$firstImagePath');
+                'images not yet updated for new directory');
             return; // 次の didUpdateWidget を待つ
           }
         }
