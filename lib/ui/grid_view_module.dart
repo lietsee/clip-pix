@@ -172,6 +172,17 @@ class _GridViewModuleState extends State<GridViewModule> {
     // ディレクトリが変わった場合も reconciliation を実行
     // (directoryChanged=true but imagesChanged=false のケースで _entries が更新されない問題を修正)
     if (imagesChanged || directoryChanged) {
+      // ディレクトリ変更時は、まず _entries をクリア
+      // これにより childBuilder の childCount が 0 になり、
+      // 旧データによる SizedBox.shrink() の大量生成を防ぐ
+      // (大量の SizedBox.shrink がレンダーツリーを破損させ、ヒットテストが効かなくなる問題の修正)
+      if (directoryChanged) {
+        print('[GridViewModule] didUpdateWidget: directory changed, clearing _entries');
+        setState(() {
+          _entries = [];
+        });
+      }
+
       // ディレクトリ変更時は、画像が新しいディレクトリに属しているか検証
       // 画像ロードは非同期なので、activeDirectory が更新されても
       // images はまだ古いディレクトリの画像の可能性がある
