@@ -338,7 +338,6 @@ void main() {
               height: 600,
               child: GridViewModule(
                 state: imageNotifier.state,
-                enableGridSemantics: false,
               ),
             ),
           ),

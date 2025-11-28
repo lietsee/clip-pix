@@ -46,6 +46,7 @@ class GridLayoutSurface extends StatefulWidget {
 class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
   GridLayoutGeometry? _lastReportedGeometry;
   bool _mutationInProgress = false;
+  bool _mutationEndCalled = false;
   bool _gridHiddenForReset = false;
   Key _gridResetKey = UniqueKey();
   static const _throttleDuration = Duration(milliseconds: 60);
@@ -91,9 +92,10 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
 
   @override
   void dispose() {
-    if (_mutationInProgress) {
+    if (_mutationInProgress && !_mutationEndCalled) {
       widget.onMutateEnd?.call(false);
       _mutationInProgress = false;
+      _mutationEndCalled = true;
     }
     _store.removeListener(_handleStoreChanged);
     _geometryQueue.dispose();
@@ -279,6 +281,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     final notify = job.notify;
 
     _mutationInProgress = true;
+    _mutationEndCalled = false;
     widget.onMutateStart?.call(notify);
     bool mutationEndScheduled = false;
 
@@ -369,8 +372,16 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     final completer = Completer<void>();
 
     void finish() {
-      final callback = widget.onMutateEnd;
+      // 重複呼び出し防止
+      if (_mutationEndCalled) {
+        if (!completer.isCompleted) {
+          completer.complete();
+        }
+        return;
+      }
+      _mutationEndCalled = true;
 
+      final callback = widget.onMutateEnd;
       _mutationInProgress = false;
 
       if (!mounted) {
@@ -398,7 +409,18 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
       }
     }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) => finish());
+    // endOfFrame でレイアウト完了を待ってから終了
+    SchedulerBinding.instance.endOfFrame.then((_) {
+      if (!mounted) {
+        finish();
+        return;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) => finish());
+    }).catchError((error) {
+      _debugLog('endOfFrame error: $error');
+      finish();
+    });
+
     return completer.future;
   }
 

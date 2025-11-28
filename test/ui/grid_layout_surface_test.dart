@@ -20,7 +20,6 @@ void main() {
                 columnGap: 3,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 resolveColumnCount: (_) => 2,
-                semanticsOverlayEnabled: true,
                 childBuilder: (context, geometry, states, snapshot,
                     {bool isStaging = false}) {
                   return Text('items=${states.length}');
@@ -54,7 +53,6 @@ void main() {
               columnGap: 4,
               padding: EdgeInsets.zero,
               resolveColumnCount: (_) => 1,
-              semanticsOverlayEnabled: true,
               childBuilder: (context, geometry, states, snapshot,
                   {bool isStaging = false}) {
                 buildCount += 1;
@@ -105,7 +103,6 @@ void main() {
               columnGap: 4,
               padding: EdgeInsets.zero,
               resolveColumnCount: (_) => 1,
-              semanticsOverlayEnabled: true,
               childBuilder: (context, geometry, states, snapshot,
                   {bool isStaging = false}) {
                 received = snapshot;
@@ -119,7 +116,10 @@ void main() {
       await tester.pump();
       await tester.idle();
       await _waitForGeometryCalls(tester, store, 1);
-      await tester.pump(const Duration(milliseconds: 50));
+      // Wait for endOfFrame + postFrameCallback completion
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump();
+      await tester.pump();
 
       expect(received, isNotNull);
       expect(received!.entries, isNotEmpty);
@@ -158,8 +158,7 @@ void main() {
                       padding: EdgeInsets.zero,
                       resolveColumnCount: (available) =>
                           available >= 400 ? 3 : 1,
-                      semanticsOverlayEnabled: true,
-                      onMutateStart: (hideGrid) =>
+                            onMutateStart: (hideGrid) =>
                           mutateStartFlags.add(hideGrid),
                       onMutateEnd: (hideGrid) => mutateEndFlags.add(hideGrid),
                       childBuilder: (context, geometry, states, snapshot,
@@ -180,6 +179,10 @@ void main() {
       await tester.pump();
       await tester.idle();
       await _waitForGeometryCalls(tester, store, 1);
+      // Wait for endOfFrame + postFrameCallback completion
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump();
+      await tester.pump();
       final initialGeometry = store.lastGeometry;
       expect(initialGeometry, isNotNull);
       expect(initialGeometry!.columnCount, 3);
@@ -251,8 +254,7 @@ void main() {
                       padding: EdgeInsets.zero,
                       resolveColumnCount: (available) =>
                           available >= 400 ? 2 : 1,
-                      semanticsOverlayEnabled: true,
-                      childBuilder: (context, geometry, states, snapshot,
+                            childBuilder: (context, geometry, states, snapshot,
                           {bool isStaging = false}) {
                         return const SizedBox.shrink();
                       },
@@ -265,11 +267,16 @@ void main() {
         );
 
         await tester.pump();
+        await tester.pump();
         width.value = 300;
         await tester.pump(const Duration(milliseconds: 100));
+        await tester.pump();
+        await tester.pump();
         width.value = 700;
         await tester.pump(const Duration(milliseconds: 100));
-        await tester.pumpAndSettle(const Duration(milliseconds: 100));
+        await tester.pump();
+        await tester.pump();
+        await tester.pumpAndSettle(const Duration(milliseconds: 200));
       } finally {
         debugPrint = originalDebugPrint;
       }
