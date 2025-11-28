@@ -201,8 +201,18 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
       ),
     );
 
-    // NOTE: _ensureDirectorySync() is now called in didChangeDependencies() instead of build()
-    // to prevent infinite rebuild loop when switching tabs
+    // Detect viewDirectory changes and trigger sync
+    // Use postFrameCallback to avoid build-time side effects
+    final currentViewPath = selectedState.viewDirectory?.path;
+    if (_lastSyncedFolder != currentViewPath) {
+      debugPrint('[MainScreen] build: viewDirectory changed, scheduling sync: '
+          'old=$_lastSyncedFolder → new=$currentViewPath');
+      _lastSyncedFolder = currentViewPath;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _ensureDirectorySync(context, selectedState);
+      });
+    }
 
     // Show minimap if always-visible mode is enabled
     if (selectedState.isMinimapAlwaysVisible && libraryInfo.hasImages) {
