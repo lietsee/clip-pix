@@ -263,9 +263,8 @@ class _ImageCardState extends State<ImageCard> {
   @override
   Widget build(BuildContext context) {
     // [DIAGNOSTIC] Log every ImageCard build to track actual rebuilds
-    debugPrint('[ImageCard] build_called: '
-        'item=${widget.item.id.split('/').last}, '
-        'favorite=${widget.item.favorite}');
+    print('[ImageCard] build_called: '
+        'item=${widget.item.id.split('/').last}');
 
     return Focus(
       focusNode: _focusNode,

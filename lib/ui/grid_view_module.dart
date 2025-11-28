@@ -500,47 +500,32 @@ class _GridViewModuleState extends State<GridViewModule> {
                       (context, index) {
                         // [DIAGNOSTIC] Log _entries order at build time (once per build)
                         if (index == 0) {
-                          final entriesBuildIds = _entries
-                              .take(10)
-                              .map((e) => e.item.id.split('/').last)
-                              .toList();
-                          final viewStatesFirst10 = layoutStore.viewStates
-                              .take(10)
-                              .map((s) => s.id.split('/').last)
-                              .toList();
-                          final note2BuildIdx = _entries.indexWhere(
-                              (e) => e.item.id.contains('note_2.txt'));
-                          final g3jjyBuildIdx = _entries.indexWhere((e) =>
-                              e.item.id.contains('G3JJYDIa8AAezjR_orig.jpg'));
-                          debugPrint(
-                              '[GridViewModule] build_pinterest_entries: '
-                              'snapshotId=${snapshot?.id}, isStaging=$isStaging, '
-                              'note_2.txt@$note2BuildIdx, G3JJYDIa8AAezjR_orig.jpg@$g3jjyBuildIdx, '
-                              '_entries[0-9]=$entriesBuildIds, '
-                              'viewStates[0-9]=$viewStatesFirst10');
+                          print('[GridViewModule] childBuilder START: '
+                              '_entriesCount=${_entries.length}, '
+                              'viewStatesCount=${layoutStore.viewStates.length}, '
+                              'isStaging=$isStaging, snapshotId=${snapshot?.id}');
                         }
 
                         if (index >= _entries.length) {
+                          print('[GridViewModule] childBuilder[$index]: returning null (index >= _entries.length)');
                           return null;
                         }
                         final entry = _entries[index];
 
-                        // [DIAGNOSTIC] Log EVERY childBuilder call to track render order
-                        debugPrint('[GridViewModule] childBuilder_call: '
-                            'index=$index, item=${entry.item.id.split('/').last}, '
-                            'version=${entry.version}, isRemoving=${entry.isRemoving}');
-
                         // Skip entries being removed to avoid ViewState access errors
                         if (entry.isRemoving) {
+                          print('[GridViewModule] childBuilder[$index]: returning null (isRemoving) item=${entry.item.id.split('/').last}');
                           return null;
                         }
                         // Skip deleted items (not yet removed from _entries but already removed from state)
                         // This ensures deleted items are hidden immediately, before _reconcileEntries runs
                         if (!currentImageIds.contains(entry.item.id)) {
+                          print('[GridViewModule] childBuilder[$index]: returning SizedBox.shrink (not in currentImageIds) item=${entry.item.id.split('/').last}');
                           return const SizedBox.shrink();
                         }
                         // Skip if viewState not yet synced (during initial load/folder change)
                         if (!layoutStore.hasViewState(entry.item.id)) {
+                          print('[GridViewModule] childBuilder[$index]: returning SizedBox.shrink (no viewState) item=${entry.item.id.split('/').last}');
                           return const SizedBox.shrink();
                         }
                         final viewState = layoutStore.viewStateFor(
@@ -558,6 +543,10 @@ class _GridViewModuleState extends State<GridViewModule> {
                           usePersistentKey: !isStaging,
                           snapshotId: snapshot?.id,
                         );
+                        // Log only first few cards to avoid spam
+                        if (index < 3) {
+                          print('[GridViewModule] childBuilder[$index]: built card item=${entry.item.id.split('/').last}');
+                        }
                         return PinterestGridTile(
                           span: span,
                           child: cardWidget,
@@ -576,6 +565,12 @@ class _GridViewModuleState extends State<GridViewModule> {
         },
       ),
     );
+
+    print('[GridViewModule] returning outer Stack: '
+        'shouldHideGrid=$shouldHideGrid, isMutating=$isMutating, '
+        'hasOverlay=$shouldHideGrid, '
+        '_entriesCount=${_entries.length}, '
+        '_reconciliationPending=$_reconciliationPending');
 
     return Stack(
       children: [
