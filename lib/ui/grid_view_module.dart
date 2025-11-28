@@ -356,18 +356,17 @@ class _GridViewModuleState extends State<GridViewModule> {
     final libraryNotifier = context.read<ImageLibraryNotifier>();
     final selectedState = context.watch<SelectedFolderState>();
 
-    // Detect viewDirectory changes from SelectedFolderState
-    // (This triggers reconciliation when tab changes, since ImageLibraryState
-    // updates asynchronously and didUpdateWidget receives stale values)
+    // Detect directory mismatch between viewDirectory and activeDirectory
+    // When user switches tabs, viewDirectory updates immediately but images
+    // are loaded asynchronously. Show loading until images are ready.
     final currentViewDirectory = selectedState.viewDirectory?.path;
-    if (_lastViewDirectory != null &&
-        _lastViewDirectory != currentViewDirectory) {
-      debugPrint('[GridViewModule] viewDirectory changed: '
-          '$_lastViewDirectory -> $currentViewDirectory, scheduling forceReconciliation');
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _forceReconciliation();
-      });
+    final activeDirectory = widget.state.activeDirectory?.path;
+    if (currentViewDirectory != null &&
+        activeDirectory != null &&
+        currentViewDirectory != activeDirectory) {
+      debugPrint('[GridViewModule] directory mismatch: '
+          'view=$currentViewDirectory, active=$activeDirectory, showing loading');
+      return const Center(child: CircularProgressIndicator());
     }
     _lastViewDirectory = currentViewDirectory;
 
@@ -1064,36 +1063,6 @@ class _GridViewModuleState extends State<GridViewModule> {
         // Entry versions updated above
       });
     }
-  }
-
-  /// Force reconciliation when viewDirectory changes (detected in build())
-  /// This handles the timing issue where ImageLibraryState.activeDirectory
-  /// is updated asynchronously, causing didUpdateWidget to receive stale values
-  void _forceReconciliation() {
-    if (!mounted) return;
-    debugPrint(
-        '[GridViewModule] _forceReconciliation: triggered by viewDirectory change');
-
-    final orderedImages = _applyDirectoryOrder(widget.state.images);
-
-    _layoutStore.syncLibrary(
-      orderedImages,
-      directoryPath: widget.state.activeDirectory?.path,
-      notify: false,
-    );
-
-    SchedulerBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _layoutStore.notifyListeners();
-    });
-
-    _reconciliationPending = true;
-    _isDirectoryChangeReconcile = true;
-
-    SchedulerBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _reconcileEntries(orderedImages);
-    });
   }
 
   void _reconcileEntries(List<ContentItem> newItems) {
