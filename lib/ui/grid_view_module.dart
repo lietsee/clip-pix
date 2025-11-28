@@ -162,7 +162,9 @@ class _GridViewModuleState extends State<GridViewModule> {
       return;
     }
 
-    if (imagesChanged) {
+    // ディレクトリが変わった場合も reconciliation を実行
+    // (directoryChanged=true but imagesChanged=false のケースで _entries が更新されない問題を修正)
+    if (imagesChanged || directoryChanged) {
       // [DIAGNOSTIC] Track specific image positions in state.images
       final stateImages = widget.state.images;
       final note2Index =
