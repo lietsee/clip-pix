@@ -380,11 +380,27 @@ class _GridViewModuleState extends State<GridViewModule> {
     // are loaded asynchronously. Show loading until images are ready.
     final currentViewDirectory = selectedState.viewDirectory?.path;
     final activeDirectory = widget.state.activeDirectory?.path;
-    if (currentViewDirectory != null &&
+
+    // Check 1: viewDirectory と activeDirectory の不一致
+    final directoriesMismatch = currentViewDirectory != null &&
         activeDirectory != null &&
-        currentViewDirectory != activeDirectory) {
+        currentViewDirectory != activeDirectory;
+
+    // Check 2: images が activeDirectory に属しているか
+    // loadForDirectory が activeDirectory を先に更新するため、
+    // images がまだ古いディレクトリの場合がある
+    bool imagesMismatch = false;
+    if (!directoriesMismatch &&
+        activeDirectory != null &&
+        widget.state.images.isNotEmpty) {
+      final firstImagePath = widget.state.images.first.id;
+      imagesMismatch = !firstImagePath.startsWith(activeDirectory);
+    }
+
+    if (directoriesMismatch || imagesMismatch) {
       debugPrint('[GridViewModule] directory mismatch: '
-          'view=$currentViewDirectory, active=$activeDirectory, showing loading');
+          'view=$currentViewDirectory, active=$activeDirectory, '
+          'imagesMismatch=$imagesMismatch, showing loading');
       return const Center(child: CircularProgressIndicator());
     }
     _lastViewDirectory = currentViewDirectory;
