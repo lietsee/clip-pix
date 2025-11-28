@@ -89,7 +89,8 @@ class _GridViewModuleState extends State<GridViewModule> {
   List<_GridEntry> _entries = <_GridEntry>[];
   bool _loggedInitialBuild = false;
   bool _firstFrameComplete = false;
-  bool _reconciliationPending = false; // Track pending reconciliation to skip assertion during tab transitions
+  bool _reconciliationPending =
+      false; // Track pending reconciliation to skip assertion during tab transitions
   final Set<Object> _currentBuildKeys = <Object>{};
 
   // Scroll position preservation for image add/delete within same folder
@@ -99,6 +100,11 @@ class _GridViewModuleState extends State<GridViewModule> {
   // Track if reconciliation is due to directory change (show loading indicator)
   // vs same-folder card add/delete (keep existing grid to avoid flicker)
   bool _isDirectoryChangeReconcile = false;
+
+  // Track viewDirectory from SelectedFolderState to detect tab changes
+  // (ImageLibraryState.activeDirectory updates asynchronously, so we need
+  // to detect changes directly from SelectedFolderState in build())
+  String? _lastViewDirectory;
 
   @override
   void didChangeDependencies() {
@@ -158,7 +164,8 @@ class _GridViewModuleState extends State<GridViewModule> {
 
     // Only proceed if directory changed or images changed
     if (!directoryChanged && !imagesChanged) {
-      debugPrint('[GridViewModule] didUpdateWidget: no changes, skipping syncLibrary');
+      debugPrint(
+          '[GridViewModule] didUpdateWidget: no changes, skipping syncLibrary');
       return;
     }
 
@@ -240,7 +247,8 @@ class _GridViewModuleState extends State<GridViewModule> {
         // (e.g., clipboard save, file deletion)
         if (imagesChanged && !directoryChanged) {
           _preserveScrollOnReconcile = true;
-          debugPrint('[GridViewModule] scroll_preserve: flagged for preservation');
+          debugPrint(
+              '[GridViewModule] scroll_preserve: flagged for preservation');
         }
 
         SchedulerBinding.instance.addPostFrameCallback((_) {
@@ -347,6 +355,22 @@ class _GridViewModuleState extends State<GridViewModule> {
 
     final libraryNotifier = context.read<ImageLibraryNotifier>();
     final selectedState = context.watch<SelectedFolderState>();
+
+    // Detect viewDirectory changes from SelectedFolderState
+    // (This triggers reconciliation when tab changes, since ImageLibraryState
+    // updates asynchronously and didUpdateWidget receives stale values)
+    final currentViewDirectory = selectedState.viewDirectory?.path;
+    if (_lastViewDirectory != null &&
+        _lastViewDirectory != currentViewDirectory) {
+      debugPrint('[GridViewModule] viewDirectory changed: '
+          '$_lastViewDirectory -> $currentViewDirectory, scheduling forceReconciliation');
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _forceReconciliation();
+      });
+    }
+    _lastViewDirectory = currentViewDirectory;
+
     final layoutStore = context.watch<GridLayoutStore>();
     final mutationController = context.watch<GridLayoutMutationController>();
     final settingsRepo = context.watch<GridLayoutSettingsRepository>();
@@ -425,95 +449,94 @@ class _GridViewModuleState extends State<GridViewModule> {
           return Container(
             color: backgroundColor,
             child: CustomScrollView(
-                controller: controller,
-                physics: const AlwaysScrollableScrollPhysics(),
-                slivers: [
-                  SliverPadding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: _outerPadding,
-                      vertical: _outerPadding,
-                    ).copyWith(bottom: _outerPadding + 68),
-                    sliver: PinterestSliverGrid(
-                      gridDelegate: PinterestGridDelegate(
-                        columnCount: columnCount,
-                        gap: _gridGap,
-                      ),
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          // [DIAGNOSTIC] Log _entries order at build time (once per build)
-                          if (index == 0) {
-                            final entriesBuildIds = _entries
-                                .take(10)
-                                .map((e) => e.item.id.split('/').last)
-                                .toList();
-                            final viewStatesFirst10 = layoutStore.viewStates
-                                .take(10)
-                                .map((s) => s.id.split('/').last)
-                                .toList();
-                            final note2BuildIdx = _entries.indexWhere(
-                                (e) => e.item.id.contains('note_2.txt'));
-                            final g3jjyBuildIdx = _entries.indexWhere((e) =>
-                                e.item.id.contains('G3JJYDIa8AAezjR_orig.jpg'));
-                            debugPrint(
-                                '[GridViewModule] build_pinterest_entries: '
-                                'snapshotId=${snapshot?.id}, isStaging=$isStaging, '
-                                'note_2.txt@$note2BuildIdx, G3JJYDIa8AAezjR_orig.jpg@$g3jjyBuildIdx, '
-                                '_entries[0-9]=$entriesBuildIds, '
-                                'viewStates[0-9]=$viewStatesFirst10');
-                          }
+              controller: controller,
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverPadding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: _outerPadding,
+                    vertical: _outerPadding,
+                  ).copyWith(bottom: _outerPadding + 68),
+                  sliver: PinterestSliverGrid(
+                    gridDelegate: PinterestGridDelegate(
+                      columnCount: columnCount,
+                      gap: _gridGap,
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        // [DIAGNOSTIC] Log _entries order at build time (once per build)
+                        if (index == 0) {
+                          final entriesBuildIds = _entries
+                              .take(10)
+                              .map((e) => e.item.id.split('/').last)
+                              .toList();
+                          final viewStatesFirst10 = layoutStore.viewStates
+                              .take(10)
+                              .map((s) => s.id.split('/').last)
+                              .toList();
+                          final note2BuildIdx = _entries.indexWhere(
+                              (e) => e.item.id.contains('note_2.txt'));
+                          final g3jjyBuildIdx = _entries.indexWhere((e) =>
+                              e.item.id.contains('G3JJYDIa8AAezjR_orig.jpg'));
+                          debugPrint(
+                              '[GridViewModule] build_pinterest_entries: '
+                              'snapshotId=${snapshot?.id}, isStaging=$isStaging, '
+                              'note_2.txt@$note2BuildIdx, G3JJYDIa8AAezjR_orig.jpg@$g3jjyBuildIdx, '
+                              '_entries[0-9]=$entriesBuildIds, '
+                              'viewStates[0-9]=$viewStatesFirst10');
+                        }
 
-                          if (index >= _entries.length) {
-                            return null;
-                          }
-                          final entry = _entries[index];
+                        if (index >= _entries.length) {
+                          return null;
+                        }
+                        final entry = _entries[index];
 
-                          // [DIAGNOSTIC] Log EVERY childBuilder call to track render order
-                          debugPrint('[GridViewModule] childBuilder_call: '
-                              'index=$index, item=${entry.item.id.split('/').last}, '
-                              'version=${entry.version}, isRemoving=${entry.isRemoving}');
+                        // [DIAGNOSTIC] Log EVERY childBuilder call to track render order
+                        debugPrint('[GridViewModule] childBuilder_call: '
+                            'index=$index, item=${entry.item.id.split('/').last}, '
+                            'version=${entry.version}, isRemoving=${entry.isRemoving}');
 
-                          // Skip entries being removed to avoid ViewState access errors
-                          if (entry.isRemoving) {
-                            return null;
-                          }
-                          // Skip deleted items (not yet removed from _entries but already removed from state)
-                          // This ensures deleted items are hidden immediately, before _reconcileEntries runs
-                          if (!currentImageIds.contains(entry.item.id)) {
-                            return const SizedBox.shrink();
-                          }
-                          // Skip if viewState not yet synced (during initial load/folder change)
-                          if (!layoutStore.hasViewState(entry.item.id)) {
-                            return const SizedBox.shrink();
-                          }
-                          final viewState = layoutStore.viewStateFor(
-                            entry.item.id,
-                          );
-                          final span = viewState.columnSpan
-                              .clamp(1, columnCount)
-                              .toInt();
-                          final cardWidget = _buildCard(
-                            entry: entry,
-                            viewState: viewState,
-                            columnWidth: geometry.columnWidth,
-                            columnCount: columnCount,
-                            span: span,
-                            backgroundColor: cardBackgroundColor,
-                            usePersistentKey: !isStaging,
-                            snapshotId: snapshot?.id,
-                          );
-                          return PinterestGridTile(
-                            span: span,
-                            child: cardWidget,
-                          );
-                        },
-                        childCount: _entries.length,
-                        addAutomaticKeepAlives: false,
-                        addRepaintBoundaries: false,
-                        addSemanticIndexes: false,
-                      ),
+                        // Skip entries being removed to avoid ViewState access errors
+                        if (entry.isRemoving) {
+                          return null;
+                        }
+                        // Skip deleted items (not yet removed from _entries but already removed from state)
+                        // This ensures deleted items are hidden immediately, before _reconcileEntries runs
+                        if (!currentImageIds.contains(entry.item.id)) {
+                          return const SizedBox.shrink();
+                        }
+                        // Skip if viewState not yet synced (during initial load/folder change)
+                        if (!layoutStore.hasViewState(entry.item.id)) {
+                          return const SizedBox.shrink();
+                        }
+                        final viewState = layoutStore.viewStateFor(
+                          entry.item.id,
+                        );
+                        final span =
+                            viewState.columnSpan.clamp(1, columnCount).toInt();
+                        final cardWidget = _buildCard(
+                          entry: entry,
+                          viewState: viewState,
+                          columnWidth: geometry.columnWidth,
+                          columnCount: columnCount,
+                          span: span,
+                          backgroundColor: cardBackgroundColor,
+                          usePersistentKey: !isStaging,
+                          snapshotId: snapshot?.id,
+                        );
+                        return PinterestGridTile(
+                          span: span,
+                          child: cardWidget,
+                        );
+                      },
+                      childCount: _entries.length,
+                      addAutomaticKeepAlives: false,
+                      addRepaintBoundaries: false,
+                      addSemanticIndexes: false,
                     ),
                   ),
-                ],
+                ),
+              ],
             ),
           );
         },
@@ -736,7 +759,8 @@ class _GridViewModuleState extends State<GridViewModule> {
     double? scrollOffsetBeforeDelete;
     if (controller != null && controller.hasClients) {
       scrollOffsetBeforeDelete = controller.position.pixels;
-      debugPrint('[GridViewModule] delete: saved scroll offset=${scrollOffsetBeforeDelete.toStringAsFixed(1)}');
+      debugPrint(
+          '[GridViewModule] delete: saved scroll offset=${scrollOffsetBeforeDelete.toStringAsFixed(1)}');
     }
 
     try {
@@ -915,7 +939,8 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   void _handlePan(String id, Offset offset) {
-    print('[GridViewModule] _handlePan: id=${id.split('/').last}, offset=$offset');
+    print(
+        '[GridViewModule] _handlePan: id=${id.split('/').last}, offset=$offset');
     unawaited(_layoutStore.updateCard(id: id, offset: offset));
   }
 
@@ -1041,6 +1066,36 @@ class _GridViewModuleState extends State<GridViewModule> {
     }
   }
 
+  /// Force reconciliation when viewDirectory changes (detected in build())
+  /// This handles the timing issue where ImageLibraryState.activeDirectory
+  /// is updated asynchronously, causing didUpdateWidget to receive stale values
+  void _forceReconciliation() {
+    if (!mounted) return;
+    debugPrint(
+        '[GridViewModule] _forceReconciliation: triggered by viewDirectory change');
+
+    final orderedImages = _applyDirectoryOrder(widget.state.images);
+
+    _layoutStore.syncLibrary(
+      orderedImages,
+      directoryPath: widget.state.activeDirectory?.path,
+      notify: false,
+    );
+
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _layoutStore.notifyListeners();
+    });
+
+    _reconciliationPending = true;
+    _isDirectoryChangeReconcile = true;
+
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _reconcileEntries(orderedImages);
+    });
+  }
+
   void _reconcileEntries(List<ContentItem> newItems) {
     _reconciliationPending = false; // Clear pending flag
     _isDirectoryChangeReconcile = false; // Clear directory change flag
@@ -1053,7 +1108,8 @@ class _GridViewModuleState extends State<GridViewModule> {
       final controller = widget.controller;
       if (controller != null && controller.hasClients) {
         _scrollOffsetBeforeReconcile = controller.position.pixels;
-        debugPrint('[GridViewModule] scroll_preserve: saved offset=${_scrollOffsetBeforeReconcile?.toStringAsFixed(1)}');
+        debugPrint(
+            '[GridViewModule] scroll_preserve: saved offset=${_scrollOffsetBeforeReconcile?.toStringAsFixed(1)}');
       }
     }
     final duplicateIncoming = _findDuplicateIds(
@@ -1193,7 +1249,8 @@ class _GridViewModuleState extends State<GridViewModule> {
       position.maxScrollExtent,
     );
 
-    debugPrint('[GridViewModule] scroll_restore: jumping to ${clamped.toStringAsFixed(1)} '
+    debugPrint(
+        '[GridViewModule] scroll_restore: jumping to ${clamped.toStringAsFixed(1)} '
         '(target=${targetOffset.toStringAsFixed(1)}, max=${position.maxScrollExtent.toStringAsFixed(1)})');
 
     controller.jumpTo(clamped);
