@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_state_notifier/flutter_state_notifier.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:logging/logging.dart';
@@ -61,6 +62,9 @@ import 'system/window_bounds_service.dart';
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // DEBUG: ヒットテスト可視化（タブ切り替え後の操作不能バグ調査用）
+  debugPaintPointersEnabled = true;
 
   final previewIndex = args.indexOf('--preview');
   if (previewIndex != -1 && previewIndex + 1 < args.length) {
