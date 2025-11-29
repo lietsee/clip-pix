@@ -1,19 +1,20 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ffi';
 import 'dart:io';
 
+import 'package:ffi/ffi.dart';
 import 'package:flutter/widgets.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
-import 'package:window_manager/window_manager.dart';
+import 'package:win32/win32.dart';
 
 /// Service for persisting and restoring window position and size.
 ///
-/// Uses the `window_manager` package for cross-platform support (Windows/macOS).
+/// Uses Win32 API directly for reliable window bounds on Windows.
 /// Window bounds are stored in a JSON file in the current directory.
 ///
-/// Uses [WidgetsBindingObserver.didChangeMetrics] to detect window changes,
-/// which is more reliable than WindowListener on Windows.
+/// Uses [WidgetsBindingObserver.didChangeMetrics] to detect window changes.
 class WindowBoundsService with WidgetsBindingObserver {
   WindowBoundsService() : _logger = Logger('WindowBoundsService');
 
@@ -27,7 +28,8 @@ class WindowBoundsService with WidgetsBindingObserver {
   static const _debounceDuration = Duration(milliseconds: 200);
 
   /// Returns true if window bounds persistence is supported on this platform.
-  bool get _isSupported => Platform.isWindows || Platform.isMacOS;
+  /// Currently only Windows is supported (uses Win32 API directly).
+  bool get _isSupported => Platform.isWindows;
 
   void init() {
     if (!_isSupported) {
@@ -62,15 +64,14 @@ class WindowBoundsService with WidgetsBindingObserver {
   @override
   void didChangeMetrics() {
     debugPrint('[WindowBoundsService] didChangeMetrics');
-    // Read bounds immediately during callback (more reliable than after debounce)
-    unawaited(_readAndCacheBounds());
+    // Read bounds immediately during callback
+    _readAndCacheBounds();
     _scheduleBoundsPersist();
   }
 
   /// Read bounds immediately and cache for later persistence.
-  /// window_manager reads are more reliable during the callback than after debounce.
-  Future<void> _readAndCacheBounds() async {
-    final rect = await _readWindowRect();
+  void _readAndCacheBounds() {
+    final rect = _readWindowRect();
     if (rect != null) {
       _pendingBounds = rect;
       _lastKnownBounds = rect;
@@ -127,7 +128,7 @@ class WindowBoundsService with WidgetsBindingObserver {
       for (var attempt = 0; attempt < 5; attempt++) {
         debugPrint(
             '[WindowBoundsService] apply attempt ${attempt + 1} -> $desired');
-        final success = await _applyBounds(desired);
+        final success = _applyBounds(desired);
         if (success) {
           _logger.info('Bounds restored on attempt ${attempt + 1}');
           debugPrint('[WindowBoundsService] applied bounds');
@@ -173,41 +174,87 @@ class WindowBoundsService with WidgetsBindingObserver {
     }
   }
 
-  /// Read current window bounds using window_manager
-  ///
-  /// Uses [getPosition] and [getSize] separately instead of [getBounds] to avoid
-  /// null reference errors that occur when getBounds() returns incomplete data.
-  Future<Rect?> _readWindowRect() async {
+  /// Read current window bounds using Win32 API
+  Rect? _readWindowRect() {
+    final hwnd = _resolveWindowHandle();
+    if (hwnd == 0) {
+      _logger.finer('Window handle not available for bounds read');
+      return null;
+    }
+    _logger.finer('Reading window rect for handle 0x${hwnd.toRadixString(16)}');
+    final rectPointer = calloc<RECT>();
     try {
-      final position = await windowManager.getPosition();
-      final size = await windowManager.getSize();
-
-      _logger.fine('Read position: $position, size: $size');
-      debugPrint('[WindowBoundsService] read: position=$position, size=$size');
-
-      if (size.width <= 0 || size.height <= 0) {
-        _logger.warning('Read rect has non-positive dimensions: $size');
+      if (GetWindowRect(hwnd, rectPointer) == 0) {
+        _logger.finer(
+            'GetWindowRect failed for handle 0x${hwnd.toRadixString(16)}');
         return null;
       }
-
-      return Rect.fromLTWH(position.dx, position.dy, size.width, size.height);
-    } catch (error) {
-      _logger.warning('Failed to read window bounds: $error');
-      debugPrint('[WindowBoundsService] read error: $error');
-      return null;
+      final rect = rectPointer.ref;
+      final width = rect.right - rect.left;
+      final height = rect.bottom - rect.top;
+      if (width <= 0 || height <= 0) {
+        _logger.finer('Read rect has non-positive dimensions: $rect');
+        return null;
+      }
+      final result = Rect.fromLTWH(
+        rect.left.toDouble(),
+        rect.top.toDouble(),
+        width.toDouble(),
+        height.toDouble(),
+      );
+      debugPrint('[WindowBoundsService] read: $result');
+      return result;
+    } finally {
+      calloc.free(rectPointer);
     }
   }
 
-  /// Apply bounds to window using window_manager
-  Future<bool> _applyBounds(Rect rect) async {
-    try {
-      _logger.finer('Applying bounds: $rect');
-      await windowManager.setBounds(rect);
-      return true;
-    } catch (error) {
-      _logger.finer('Failed to apply bounds: $error');
+  /// Apply bounds to window using Win32 API
+  bool _applyBounds(Rect rect) {
+    final hwnd = _resolveWindowHandle();
+    if (hwnd == 0) {
+      _logger.finer('Cannot apply bounds; window handle missing');
+      debugPrint('[WindowBoundsService] apply bounds failed; hwnd=0');
       return false;
     }
+    _logger
+        .finer('Applying bounds to handle 0x${hwnd.toRadixString(16)}: $rect');
+    final width = rect.width.round();
+    final height = rect.height.round();
+    final left = rect.left.round();
+    final top = rect.top.round();
+    final result = SetWindowPos(
+      hwnd,
+      NULL,
+      left,
+      top,
+      width,
+      height,
+      SWP_NOZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW,
+    );
+    if (result == 0) {
+      _logger.finer('SetWindowPos failed with error ${GetLastError()}');
+    }
+    return result != 0;
+  }
+
+  int _resolveWindowHandle() {
+    final className = TEXT('FLUTTER_RUNNER_WIN32_WINDOW');
+    final hwnd = FindWindow(className, nullptr.cast<Utf16>());
+    calloc.free(className);
+    if (hwnd != 0) {
+      debugPrint(
+          '[WindowBoundsService] found hwnd via class: 0x${hwnd.toRadixString(16)}');
+      return hwnd;
+    }
+    final fallback = GetForegroundWindow();
+    if (fallback == 0) {
+      _logger.finer('FindWindow and GetForegroundWindow both failed');
+      debugPrint('[WindowBoundsService] hwnd fallback failed');
+    }
+    debugPrint(
+        '[WindowBoundsService] fallback hwnd 0x${fallback.toRadixString(16)}');
+    return fallback;
   }
 
   String _resolveConfigPath() {
