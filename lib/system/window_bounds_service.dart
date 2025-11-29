@@ -71,12 +71,24 @@ class WindowBoundsService
   }
 
   @override
-  void onWindowClose() async {
+  void onWindowClose() {
     _logger.info('Window closing; persisting final bounds');
     debugPrint('[WindowBoundsService] onWindowClose -> persisting');
     _debounce?.cancel();
-    await _persistCurrentBounds();
-    await windowManager.destroy();
+
+    // Persist bounds with timeout to avoid blocking window close indefinitely
+    _persistCurrentBounds().then((_) {
+      _logger.info('Bounds persisted, destroying window');
+      debugPrint('[WindowBoundsService] bounds persisted, destroying window');
+      windowManager.destroy();
+    }).timeout(
+      const Duration(seconds: 2),
+      onTimeout: () {
+        _logger.warning('Persist timed out, forcing destroy');
+        debugPrint('[WindowBoundsService] persist timed out, forcing destroy');
+        windowManager.destroy();
+      },
+    );
   }
 
   // Empty implementations for other WindowListener methods
@@ -161,7 +173,8 @@ class WindowBoundsService
         return;
       }
       final desired = Rect.fromLTWH(left, top, width, height);
-      _lastKnownBounds = desired;
+      // Note: Don't set _lastKnownBounds here - it should only be updated
+      // when we successfully read the current window bounds after resize/move.
       _logger.info('Attempting to restore window bounds: $desired');
       for (var attempt = 0; attempt < 5; attempt++) {
         debugPrint(
@@ -220,15 +233,22 @@ class WindowBoundsService
   }
 
   /// Read current window bounds using window_manager
+  ///
+  /// Uses [getPosition] and [getSize] separately instead of [getBounds] to avoid
+  /// null reference errors that occur when getBounds() returns incomplete data.
   Future<Rect?> _readWindowRect() async {
     try {
-      final bounds = await windowManager.getBounds();
-      _logger.fine('Read bounds: $bounds');
-      if (bounds.width <= 0 || bounds.height <= 0) {
-        _logger.warning('Read rect has non-positive dimensions: $bounds');
+      final position = await windowManager.getPosition();
+      final size = await windowManager.getSize();
+
+      _logger.fine('Read position: $position, size: $size');
+
+      if (size.width <= 0 || size.height <= 0) {
+        _logger.warning('Read rect has non-positive dimensions: $size');
         return null;
       }
-      return bounds;
+
+      return Rect.fromLTWH(position.dx, position.dy, size.width, size.height);
     } catch (error) {
       _logger.warning('Failed to read window bounds: $error');
       return null;
