@@ -15,6 +15,7 @@ class SelectedFolderState {
     required this.viewDirectory,
     required this.isMinimapAlwaysVisible,
     required this.scrollToTopRequested,
+    this.bookmarkData,
   });
 
   factory SelectedFolderState.initial() => const SelectedFolderState(
@@ -39,6 +40,10 @@ class SelectedFolderState {
   final bool isMinimapAlwaysVisible;
   final bool scrollToTopRequested;
 
+  /// Security-scoped bookmark data for macOS (Base64 encoded).
+  /// Used to restore folder access after app restart on macOS.
+  final String? bookmarkData;
+
   SelectedFolderState copyWith({
     Directory? current,
     List<Directory>? history,
@@ -49,6 +54,7 @@ class SelectedFolderState {
     Directory? viewDirectory,
     bool? isMinimapAlwaysVisible,
     bool? scrollToTopRequested,
+    String? bookmarkData,
   }) {
     return SelectedFolderState(
       current: current ?? this.current,
@@ -61,6 +67,7 @@ class SelectedFolderState {
       isMinimapAlwaysVisible:
           isMinimapAlwaysVisible ?? this.isMinimapAlwaysVisible,
       scrollToTopRequested: scrollToTopRequested ?? this.scrollToTopRequested,
+      bookmarkData: bookmarkData ?? this.bookmarkData,
     );
   }
 
@@ -75,6 +82,7 @@ class SelectedFolderState {
       'viewDirectory': viewDirectory?.path,
       'isMinimapAlwaysVisible': isMinimapAlwaysVisible,
       'scrollToTopRequested': scrollToTopRequested,
+      'bookmarkData': bookmarkData,
     };
   }
 
@@ -102,6 +110,7 @@ class SelectedFolderState {
           : (currentPath != null ? Directory(currentPath) : null),
       isMinimapAlwaysVisible: json['isMinimapAlwaysVisible'] as bool? ?? false,
       scrollToTopRequested: json['scrollToTopRequested'] as bool? ?? false,
+      bookmarkData: json['bookmarkData'] as String?,
     );
   }
 
@@ -120,7 +129,8 @@ class SelectedFolderState {
         other.isValid == isValid &&
         other.viewDirectory?.path == viewDirectory?.path &&
         other.isMinimapAlwaysVisible == isMinimapAlwaysVisible &&
-        other.scrollToTopRequested == scrollToTopRequested;
+        other.scrollToTopRequested == scrollToTopRequested &&
+        other.bookmarkData == bookmarkData;
   }
 
   @override
@@ -134,5 +144,6 @@ class SelectedFolderState {
         viewDirectory?.path,
         isMinimapAlwaysVisible,
         scrollToTopRequested,
+        bookmarkData,
       );
 }

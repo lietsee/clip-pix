@@ -7,18 +7,21 @@ import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
 import 'package:state_notifier/state_notifier.dart';
 
+import '../bookmark/bookmark_service.dart';
 import 'folder_view_mode.dart';
 import 'selected_folder_state.dart';
 
 class SelectedFolderNotifier extends StateNotifier<SelectedFolderState> {
-  SelectedFolderNotifier(this._box)
+  SelectedFolderNotifier(this._box, {BookmarkService? bookmarkService})
       : _logger = Logger('SelectedFolderNotifier'),
+        _bookmarkService = bookmarkService ?? BookmarkServiceFactory.create(),
         super(SelectedFolderState.initial()) {
     restoreFromHive();
   }
 
   final Box<dynamic> _box;
   final Logger _logger;
+  final BookmarkService _bookmarkService;
   Timer? _scrollPersistTimer; // Debounce scroll position persistence
 
   static const _storageKey = 'selected_folder';
@@ -34,7 +37,40 @@ class SelectedFolderNotifier extends StateNotifier<SelectedFolderState> {
         _logger.warning('Failed to restore folder state', error, stackTrace);
       }
     }
+
+    // On macOS, resolve security-scoped bookmark to restore folder access
+    await _resolveBookmarkIfNeeded();
+
     _validateCurrentFolder();
+  }
+
+  /// Resolves security-scoped bookmark to restore folder access on macOS.
+  Future<void> _resolveBookmarkIfNeeded() async {
+    final bookmarkData = state.bookmarkData;
+    if (bookmarkData == null || bookmarkData.isEmpty) {
+      return;
+    }
+
+    final result = await _bookmarkService.resolveBookmark(bookmarkData);
+    if (result == null) {
+      _logger.warning('Failed to resolve bookmark, clearing bookmark data');
+      state = state.copyWith(bookmarkData: null);
+      await persist();
+      return;
+    }
+
+    _logger.info('Bookmark resolved: ${result.path}, isStale=${result.isStale}');
+
+    // If bookmark is stale, we might need to re-save it
+    if (result.isStale) {
+      _logger.info('Bookmark is stale, will re-save on next folder access');
+      // The folder access should still work, but we should re-save the bookmark
+      final newBookmark = await _bookmarkService.saveBookmark(result.path);
+      if (newBookmark != null) {
+        state = state.copyWith(bookmarkData: newBookmark);
+        await persist();
+      }
+    }
   }
 
   Future<void> persist() async {
@@ -43,6 +79,13 @@ class SelectedFolderNotifier extends StateNotifier<SelectedFolderState> {
 
   Future<void> setFolder(Directory directory) async {
     final sanitizedHistory = _buildHistory(directory);
+
+    // Save security-scoped bookmark for macOS
+    final bookmarkData = await _bookmarkService.saveBookmark(directory.path);
+    if (bookmarkData != null) {
+      _logger.info('Bookmark saved for: ${directory.path}');
+    }
+
     state = state.copyWith(
       current: directory,
       history: sanitizedHistory,
@@ -51,6 +94,7 @@ class SelectedFolderNotifier extends StateNotifier<SelectedFolderState> {
       rootScrollOffset: 0,
       isValid: _isDirectoryWritable(directory),
       viewDirectory: directory,
+      bookmarkData: bookmarkData,
     );
     await persist();
   }
@@ -165,6 +209,7 @@ class SelectedFolderNotifier extends StateNotifier<SelectedFolderState> {
   @override
   void dispose() {
     _scrollPersistTimer?.cancel();
+    _bookmarkService.dispose();
     super.dispose();
   }
 }
