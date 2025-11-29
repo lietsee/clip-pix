@@ -11,12 +11,18 @@ import 'package:window_manager/window_manager.dart';
 ///
 /// Uses the `window_manager` package for cross-platform support (Windows/macOS).
 /// Window bounds are stored in a JSON file in the current directory.
-class WindowBoundsService with WidgetsBindingObserver {
+///
+/// Implements [WindowListener] to receive window resize/move events directly,
+/// avoiding race conditions with [windowManager.getBounds()] during resize.
+class WindowBoundsService
+    with WidgetsBindingObserver
+    implements WindowListener {
   WindowBoundsService() : _logger = Logger('WindowBoundsService');
 
   final Logger _logger;
   Timer? _debounce;
   late final String _configPath;
+  Rect? _lastKnownBounds;
 
   static const _configFileName = 'clip_pix_settings.json';
   static const _debounceDuration = Duration(milliseconds: 200);
@@ -33,6 +39,8 @@ class WindowBoundsService with WidgetsBindingObserver {
     _logger.info('Window bounds config path: $_configPath');
     debugPrint('[WindowBoundsService] init -> $_configPath');
     WidgetsBinding.instance.addObserver(this);
+    windowManager.addListener(this);
+    unawaited(windowManager.setPreventClose(true));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_restoreBounds());
     });
@@ -43,24 +51,79 @@ class WindowBoundsService with WidgetsBindingObserver {
       return;
     }
     WidgetsBinding.instance.removeObserver(this);
+    windowManager.removeListener(this);
     _debounce?.cancel();
     _debounce = null;
-    _logger.info('Window bounds service disposed; persisting final bounds');
-    debugPrint('[WindowBoundsService] dispose -> flushing');
-    try {
-      _persistCurrentBoundsSync();
-    } catch (error, stackTrace) {
-      _logger.warning(
-          'Failed to persist bounds during dispose', error, stackTrace);
-    }
+    _logger.info('Window bounds service disposed');
+    debugPrint('[WindowBoundsService] dispose');
+  }
+
+  // WindowListener implementation
+
+  @override
+  void onWindowResized() {
+    _scheduleBoundsPersist();
   }
 
   @override
-  void didChangeMetrics() {
+  void onWindowMoved() {
+    _scheduleBoundsPersist();
+  }
+
+  @override
+  void onWindowClose() async {
+    _logger.info('Window closing; persisting final bounds');
+    debugPrint('[WindowBoundsService] onWindowClose -> persisting');
+    _debounce?.cancel();
+    await _persistCurrentBounds();
+    await windowManager.destroy();
+  }
+
+  // Empty implementations for other WindowListener methods
+  @override
+  void onWindowFocus() {}
+
+  @override
+  void onWindowBlur() {}
+
+  @override
+  void onWindowMaximize() {}
+
+  @override
+  void onWindowUnmaximize() {}
+
+  @override
+  void onWindowMinimize() {}
+
+  @override
+  void onWindowRestore() {}
+
+  @override
+  void onWindowResize() {}
+
+  @override
+  void onWindowMove() {}
+
+  @override
+  void onWindowEnterFullScreen() {}
+
+  @override
+  void onWindowLeaveFullScreen() {}
+
+  @override
+  void onWindowEvent(String eventName) {}
+
+  @override
+  void onWindowDocked() {}
+
+  @override
+  void onWindowUndocked() {}
+
+  void _scheduleBoundsPersist() {
     if (!_isSupported) {
       return;
     }
-    _logger.info('Window metrics changed; scheduling bounds persist');
+    _logger.info('Window bounds changed; scheduling persist');
     _debounce?.cancel();
     _debounce = Timer(_debounceDuration, () {
       _debounce = null;
@@ -98,6 +161,7 @@ class WindowBoundsService with WidgetsBindingObserver {
         return;
       }
       final desired = Rect.fromLTWH(left, top, width, height);
+      _lastKnownBounds = desired;
       _logger.info('Attempting to restore window bounds: $desired');
       for (var attempt = 0; attempt < 5; attempt++) {
         debugPrint(
@@ -120,10 +184,23 @@ class WindowBoundsService with WidgetsBindingObserver {
   Future<void> _persistCurrentBounds() async {
     final rect = await _readWindowRect();
     if (rect == null) {
-      _logger.finer('Skipping persist; could not read window rect');
-      debugPrint('[WindowBoundsService] skip persist; rect null');
+      // Fallback: use last known valid bounds
+      if (_lastKnownBounds != null) {
+        _logger.info('Using last known bounds: $_lastKnownBounds');
+        debugPrint(
+            '[WindowBoundsService] fallback to last known: $_lastKnownBounds');
+        await _writeBoundsToFile(_lastKnownBounds!);
+      } else {
+        _logger.warning('No valid bounds available to persist');
+        debugPrint('[WindowBoundsService] skip persist; no valid bounds');
+      }
       return;
     }
+    _lastKnownBounds = rect;
+    await _writeBoundsToFile(rect);
+  }
+
+  Future<void> _writeBoundsToFile(Rect rect) async {
     final map = <String, double>{
       'left': rect.left,
       'top': rect.top,
@@ -142,25 +219,18 @@ class WindowBoundsService with WidgetsBindingObserver {
     }
   }
 
-  /// Synchronous version for use in dispose()
-  void _persistCurrentBoundsSync() {
-    // Use a blocking approach for dispose - try to get current bounds
-    // Note: window_manager doesn't have a sync API, so we skip persist on dispose
-    // The async version will have been called via debounce before dispose
-    _logger.fine('Synchronous persist skipped; async version handles most cases');
-  }
-
   /// Read current window bounds using window_manager
   Future<Rect?> _readWindowRect() async {
     try {
       final bounds = await windowManager.getBounds();
+      _logger.fine('Read bounds: $bounds');
       if (bounds.width <= 0 || bounds.height <= 0) {
-        _logger.finer('Read rect has non-positive dimensions: $bounds');
+        _logger.warning('Read rect has non-positive dimensions: $bounds');
         return null;
       }
       return bounds;
     } catch (error) {
-      _logger.finer('Failed to read window bounds: $error');
+      _logger.warning('Failed to read window bounds: $error');
       return null;
     }
   }

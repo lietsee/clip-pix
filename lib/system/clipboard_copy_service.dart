@@ -101,7 +101,8 @@ class ClipboardCopyService {
     if (guard != null) {
       guard.setGuardToken(token, _guardTtl);
     } else {
-      _logger.fine('Clipboard guard not registered');
+      _logger
+          .finest('Clipboard guard not registered (expected in preview mode)');
     }
     return token;
   }
