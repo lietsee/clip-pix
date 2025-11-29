@@ -21,6 +21,7 @@ class WindowBoundsService with WidgetsBindingObserver {
   Timer? _debounce;
   late final String _configPath;
   Rect? _lastKnownBounds;
+  Rect? _pendingBounds; // Cached bounds from didChangeMetrics callback
 
   static const _configFileName = 'clip_pix_settings.json';
   static const _debounceDuration = Duration(milliseconds: 200);
@@ -61,7 +62,20 @@ class WindowBoundsService with WidgetsBindingObserver {
   @override
   void didChangeMetrics() {
     debugPrint('[WindowBoundsService] didChangeMetrics');
+    // Read bounds immediately during callback (more reliable than after debounce)
+    unawaited(_readAndCacheBounds());
     _scheduleBoundsPersist();
+  }
+
+  /// Read bounds immediately and cache for later persistence.
+  /// window_manager reads are more reliable during the callback than after debounce.
+  Future<void> _readAndCacheBounds() async {
+    final rect = await _readWindowRect();
+    if (rect != null) {
+      _pendingBounds = rect;
+      _lastKnownBounds = rect;
+      debugPrint('[WindowBoundsService] cached: $rect');
+    }
   }
 
   void _scheduleBoundsPersist() {
@@ -129,22 +143,15 @@ class WindowBoundsService with WidgetsBindingObserver {
   }
 
   Future<void> _persistCurrentBounds() async {
-    final rect = await _readWindowRect();
+    // Use cached bounds (read during didChangeMetrics callback is more reliable)
+    final rect = _pendingBounds ?? _lastKnownBounds;
     if (rect == null) {
-      // Fallback: use last known valid bounds
-      if (_lastKnownBounds != null) {
-        _logger.info('Using last known bounds: $_lastKnownBounds');
-        debugPrint(
-            '[WindowBoundsService] fallback to last known: $_lastKnownBounds');
-        await _writeBoundsToFile(_lastKnownBounds!);
-      } else {
-        _logger.warning('No valid bounds available to persist');
-        debugPrint('[WindowBoundsService] skip persist; no valid bounds');
-      }
+      _logger.warning('No valid bounds available to persist');
+      debugPrint('[WindowBoundsService] skip persist; no valid bounds');
       return;
     }
-    _lastKnownBounds = rect;
     await _writeBoundsToFile(rect);
+    _pendingBounds = null; // Clear after writing
   }
 
   Future<void> _writeBoundsToFile(Rect rect) async {
