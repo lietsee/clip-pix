@@ -1,5 +1,5 @@
 # GridView 詳細設計
-最終更新: 2025-11-02
+最終更新: 2025-11-29
 
 ## 1. 概要
 指定フォルダ内の画像を Pinterest 風に配置し、カードの列スパン・高さを尊重したタイルレイアウトを提供する。
@@ -146,3 +146,32 @@ final willReconcile = _entries.isEmpty || orderChanged || itemCountChanged;
 - お気に入りクリックなどプロパティのみ変更時は`_updateEntriesProperties()`を使用
 - アイテム追加/削除時のみ`_reconcileEntries()`を使用
 - これにより不要なリビルドを最小化
+
+### 12.6 ディレクトリ切り替え時の_entries管理 (2025-11-29追加)
+
+#### 問題
+タブ切り替え時、古いディレクトリの`_entries`と新しいディレクトリの`images`が混在し、レンダリング破損が発生していた。
+
+#### 解決策
+1. **ディレクトリ変更の即座検出**: `didUpdateWidget` でディレクトリパス変更を検出
+2. **_entriesの即座クリア**: 古いエントリーをすぐにクリアして不整合を防止
+3. **p.dirname()によるマッチング**: `startsWith` の代わりに `p.dirname()` を使用して正確なディレクトリ判定
+
+#### 実装 (commit e05ff54, 4072ed0)
+```dart
+// grid_view_module.dart didUpdateWidget
+if (directoryChanged && widget.state.images.isNotEmpty) {
+  final newDirPath = widget.state.activeDirectory?.path;
+  if (newDirPath != null) {
+    final imageParentDir = p.dirname(widget.state.images.first.id);
+    final imagesMatchDirectory = imageParentDir == newDirPath;
+    if (!imagesMatchDirectory) {
+      return; // 画像がまだ古いディレクトリのもの → 次のdidUpdateWidgetを待つ
+    }
+  }
+}
+```
+
+#### 関連修正
+- **ミニマップの再作成** (commit 2817932): viewMode変更時に正しいScrollControllerでミニマップを再作成
+- **hasClientsリトライ** (commit a75a96d): ScrollControllerにクライアントがアタッチされるまでリトライ

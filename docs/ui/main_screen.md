@@ -1,6 +1,6 @@
 # MainScreen 詳細設計
 
-**最終更新**: 2025-11-27
+**最終更新**: 2025-11-29
 
 ## 1. 概要
 アプリのルート画面。フォルダ選択・タブ表示・GridView呼び出しを管理。
@@ -139,3 +139,57 @@ class DeletionModeState {
 
 ### 13.4 永続化
 `OpenPreviewsRepository` でオープン中のプレビュー情報を保存し、アプリ再起動時に復元可能。
+
+## 14. ミニマップオーバーレイ (2025-11-29追加)
+
+### 14.1 概要
+グリッドの全体像とビューポート位置を表示するミニマップ機能。右下に常時表示可能。
+
+### 14.2 コンポーネント
+| クラス | 責務 |
+|--------|------|
+| `MinimapOverlayService` | オーバーレイの表示・非表示管理 |
+| `_MinimapWidget` | ミニマップのUI描画 |
+| `_MinimapPainter` | カード位置とビューポートの描画 |
+
+### 14.3 状態管理
+- `_minimapService`: ミニマップオーバーレイサービスのインスタンス
+- `_lastMinimapViewMode`: ミニマップ作成時のviewMode（コントローラー選択に使用）
+
+### 14.4 viewMode変更時の再作成
+ルート⇔サブフォルダ切り替え時、異なるScrollControllerを使用するためミニマップを再作成:
+
+```dart
+final viewModeChanged = _lastMinimapViewMode != null &&
+    _lastMinimapViewMode != selectedState.viewMode;
+
+if (viewModeChanged) {
+  _hideMinimap();  // 古いミニマップを破棄
+}
+_lastMinimapViewMode = selectedState.viewMode;
+_showMinimap(context, selectedState);  // 正しいコントローラーで再作成
+```
+
+### 14.5 ScrollController選択
+- `FolderViewMode.root`: `_rootScrollController`
+- `FolderViewMode.subfolder`: `_gridSubfolderScrollController`
+
+### 14.6 hasClients リトライ
+ScrollControllerにクライアントがまだアタッチされていない場合、次フレームでリトライ。
+
+```dart
+if (!scrollController.hasClients) {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (mounted) {
+      setState(() {}); // 再ビルドをトリガー
+    }
+  });
+  return const SizedBox.shrink();
+}
+```
+
+### 14.7 ミニマップ機能
+- カード位置の縮小表示（お気に入りは色分け・ハートアイコン付き）
+- ビューポート位置の黄色ボックス表示
+- クリック/ドラッグでスクロール位置変更
+- ホイールスクロール対応

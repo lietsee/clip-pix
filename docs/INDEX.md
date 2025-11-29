@@ -1,6 +1,6 @@
 # ClipPix ドキュメント一覧
 
-**最終更新**: 2025-11-27
+**最終更新**: 2025-11-29
 
 ClipPixプロジェクトの全ドキュメントとその概要です。
 
@@ -96,6 +96,7 @@ ClipPixプロジェクトの全ドキュメントとその概要です。
 | ファイル | 概要 |
 |---------|------|
 | known_issue_grid_semantics.md | グリッドレイアウト問題の既知の課題（解決済み・セマンティクス機能は2025-11-28に削除） |
+| known_issue_tab_switch_interaction.md | ディレクトリタブ切り替え後の操作不能バグ（解決済み 2025-11-29） |
 | grid_semantics_double_buffer_plan.md | ダブルバッファ導入計画（実装完了） |
 | grid_semantics_rebuild_plan.md | レイアウト再構築計画（履歴・セマンティクス機能は削除済み） |
 | pinterest_grid_migration.md | PinterestSliverGrid移行計画（実装完了） |
@@ -164,6 +165,7 @@ docs/
 | テキスト保存 | text_saver.md, file_watcher.md |
 | URL画像ダウンロード | url_download_service.md, clipboard_monitor.md |
 | グリッド表示 | grid_view.md, image_card.md, grid_rendering_pipeline.md |
+| ミニマップ | main_screen.md (セクション14), grid_minimap_overlay.dart |
 | グリッドレイアウト計算 | grid_layout_layout_engine.md, grid_layout_surface.md |
 | 設定管理 | grid_settings_dialog.md, state_management.md, repositories.md |
 | プレビューウィンドウ | image_preview_window.md, main_screen.md |
@@ -188,4 +190,5 @@ docs/
 | `lib/ui/image_preview_window.dart` | image_preview_window.md |
 | `lib/ui/widgets/grid_layout_surface.dart` | grid_layout_surface.md |
 | `lib/ui/widgets/grid_settings_dialog.dart` | grid_settings_dialog.md |
+| `lib/ui/widgets/grid_minimap_overlay.dart` | main_screen.md (セクション14) |
 | `lib/data/grid_card_preferences_repository.dart` | repositories.md |
