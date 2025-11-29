@@ -6,16 +6,11 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../window_bounds_provider_stub.dart' show WindowBoundsProvider;
+
 /// Creates a macOS window bounds provider.
 WindowBoundsProvider createWindowBoundsProvider() {
   return _MacOSWindowBoundsProvider();
-}
-
-/// Abstract interface for window bounds provider.
-abstract class WindowBoundsProvider {
-  Rect? readBounds();
-  bool applyBounds(Rect rect);
-  void dispose();
 }
 
 class _MacOSWindowBoundsProvider implements WindowBoundsProvider {

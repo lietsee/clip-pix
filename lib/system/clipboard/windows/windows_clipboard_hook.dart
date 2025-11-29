@@ -10,6 +10,8 @@ import 'dart:isolate';
 import 'package:logging/logging.dart';
 import 'package:win32/win32.dart';
 
+import '../clipboard_hook_stub.dart' show ClipboardHook;
+
 const int _eventSystemClipboard = 0x00000006;
 const int _wineventOutOfContext = 0x0000;
 const int _wineventSkipOwnProcess = 0x0002;
@@ -22,12 +24,6 @@ ClipboardHook createClipboardHook(
   Logger logger,
 ) {
   return _Win32ClipboardHook(onEvent, logger);
-}
-
-/// Abstract interface for clipboard hooks.
-abstract class ClipboardHook {
-  Future<bool> start();
-  Future<void> stop();
 }
 
 class _Win32ClipboardHook implements ClipboardHook {

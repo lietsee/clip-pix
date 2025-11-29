@@ -2,10 +2,12 @@
 library;
 
 import 'dart:io';
-import 'dart:ui';
 
 import 'macos/macos_bounds_provider.dart' as macos;
+import 'window_bounds_provider_stub.dart' show WindowBoundsProvider;
 import 'windows/windows_bounds_provider.dart' as windows;
+
+export 'window_bounds_provider_stub.dart' show WindowBoundsProvider;
 
 /// Creates a platform-specific window bounds provider.
 ///
@@ -18,11 +20,4 @@ WindowBoundsProvider? createPlatformWindowBoundsProvider() {
     return macos.createWindowBoundsProvider();
   }
   return null;
-}
-
-/// Abstract interface for window bounds provider.
-abstract class WindowBoundsProvider {
-  Rect? readBounds();
-  bool applyBounds(Rect rect);
-  void dispose();
 }

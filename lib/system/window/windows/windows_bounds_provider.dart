@@ -8,16 +8,11 @@ import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 import 'package:win32/win32.dart';
 
+import '../window_bounds_provider_stub.dart' show WindowBoundsProvider;
+
 /// Creates a Windows window bounds provider.
 WindowBoundsProvider createWindowBoundsProvider() {
   return _WindowsWindowBoundsProvider();
-}
-
-/// Abstract interface for window bounds provider.
-abstract class WindowBoundsProvider {
-  Rect? readBounds();
-  bool applyBounds(Rect rect);
-  void dispose();
 }
 
 class _WindowsWindowBoundsProvider implements WindowBoundsProvider {

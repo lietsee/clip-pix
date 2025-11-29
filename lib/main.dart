@@ -763,7 +763,7 @@ class ClipPixApp extends StatelessWidget {
           metadataWriter: context.read<MetadataWriter>(),
         ),
       ),
-      if (Platform.isWindows)
+      if (Platform.isWindows || Platform.isMacOS)
         Provider<WindowBoundsService>(
           lazy: false,
           create: (_) {
