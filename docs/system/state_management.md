@@ -1,5 +1,5 @@
 # State Management 詳細設計
-最終更新: 2025-11-27
+最終更新: 2025-11-30
 
 ## 1. 目的
 Provider + StateNotifier を用いて、フォルダ選択・監視制御・UI 更新を一元管理する。
@@ -23,6 +23,7 @@ Provider + StateNotifier を用いて、フォルダ選択・監視制御・UI �
 | `currentTab` | `String?` | 選択中のサブフォルダ名（`viewMode=subfolder` の時に有効） |
 | `rootScrollOffset` | `double` | ルート表示時のスクロール位置 |
 | `isValid` | `bool` | フォルダが存在し書き込み可能か |
+| `bookmarkData` | `String?` | macOS Security-Scoped Bookmark（Base64エンコード） |
 
 ### 3.1 アクション
 - `pickFolder()` : `file_selector` でディレクトリを取得し、`current`/`history` 更新。`viewMode` を `root` に初期化。
@@ -32,6 +33,48 @@ Provider + StateNotifier を用いて、フォルダ選択・監視制御・UI �
 - `clearFolder()` : フォルダを解除し、監視を停止。
 - `restoreFromHive(HiveBox box)` : アプリ起動時に履歴と表示モードを復元。
 - `persist()` : 状態更新毎に Hive へ保存。
+
+### 3.2 Security-Scoped Bookmarks (2025-11-30追加)
+
+macOSサンドボックス環境では、ユーザーが選択したフォルダへのアクセス権限はアプリ再起動後に失われる。
+`BookmarkService`を使用してSecurity-Scoped Bookmarksを保存・復元することで、永続的なフォルダアクセスを実現。
+
+**ファイル**:
+- `lib/system/bookmark/bookmark_service.dart` - 抽象インターフェース
+- `lib/system/bookmark/macos_bookmark_service.dart` - macOS実装（MethodChannel経由）
+- `macos/Runner/BookmarkPlugin.swift` - ネイティブSwift実装
+
+**フロー**:
+```
+[フォルダ選択時]
+setFolder(directory)
+  → _bookmarkService.saveBookmark(path)
+  → Swift: URL.bookmarkData(options: .withSecurityScope)
+  → Base64エンコードしてHiveに保存
+
+[アプリ起動時]
+restoreFromHive()
+  → _resolveBookmarkIfNeeded()
+  → _bookmarkService.resolveBookmark(bookmarkData)
+  → Swift: URL(resolvingBookmarkData:, bookmarkDataIsStale:)
+  → url.startAccessingSecurityScopedResource()
+  → フォルダアクセス権限を復元
+```
+
+**BookmarkServiceインターフェース**:
+```dart
+abstract class BookmarkService {
+  Future<String?> saveBookmark(String path);
+  Future<BookmarkResolveResult?> resolveBookmark(String bookmarkData);
+  Future<void> stopAccess(String path);
+  Future<void> stopAllAccess();
+  void dispose();
+}
+```
+
+**プラットフォーム対応**:
+- macOS: `MacOSBookmarkService` - MethodChannel経由でSwiftコードを呼び出し
+- Windows: `_NoOpBookmarkService` - 何もしない（サンドボックス制限なし）
 
 ## 4. WatcherStatusState
 | フィールド | 型 | 説明 |

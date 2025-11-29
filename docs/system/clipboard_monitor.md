@@ -1,6 +1,6 @@
 # ClipboardMonitor 詳細設計
 
-**最終更新**: 2025-11-27
+**最終更新**: 2025-11-30
 **実装ファイル**: `lib/system/clipboard_monitor.dart`
 
 ## 1. 概要
@@ -72,6 +72,33 @@ void _checkClipboardSequence() {
 - **起動直後**: ベースライン番号を記録し、最初の変更が発生するまでスキップ
 - **変更検出**: シーケンス番号が変わったらスナップショット読み取り
 
+### 6.1 ClipboardReader初期化 (2025-11-30追加)
+
+macOSでは`NSPasteboard.changeCount`が非同期で取得されるため、監視開始前にキャッシュを初期化する必要がある:
+
+```dart
+// ClipboardReader インターフェース
+abstract class ClipboardReader {
+  Future<void> ensureInitialized();  // 監視開始前に呼び出す
+  int getChangeCount();
+  // ...
+}
+
+// ClipboardMonitor.start()
+Future<void> start() async {
+  await _reader.ensureInitialized();  // ← キャッシュ初期化を待機
+  _baselineSequenceNumber = _reader.getChangeCount();
+  // ...
+}
+```
+
+**問題の背景**:
+- macOS版は`NSPasteboard.changeCount`をMethodChannel経由で非同期取得
+- キャッシュ初期化前に`getChangeCount()`が0を返すと、正しいベースラインが設定されない
+- 後続のキャッシュ更新で「変更あり」と誤検出し、重複保存が発生
+
+**修正**: `ensureInitialized()`を追加し、監視開始前にキャッシュ初期化完了を保証
+
 ## 7. ガードトークン
 
 `ClipboardCopyService` による自己トリガー防止:
@@ -91,8 +118,8 @@ abstract class ClipboardMonitorGuard {
 
 ```dart
 // SHA-1 ハッシュで重複判定
-final Map<String, DateTime> _recentHashes;  // 直近2秒以内
-final Set<String> _sessionHashes;           // セッション全体
+final Map<String, DateTime> _recentHashes;  // 直近2秒以内（連続コピー対策）
+final Set<String> _sessionHashes;           // セッション全体（URL対策）
 
 bool _isDuplicate(String hash) {
   // 2秒以内の重複は無視
@@ -100,6 +127,38 @@ bool _isDuplicate(String hash) {
   return _recentHashes.containsKey(hash);
 }
 ```
+
+### 8.1 画像の重複検出
+- `_recentHashes`: 2秒以内の再コピー防止
+- `_sessionHashes`: セッション中の完全重複防止
+
+### 8.2 URLの重複検出 (2025-11-30更新)
+
+URLは画像と同様に`_sessionHashes`でセッション中の重複を防止:
+
+```dart
+Future<void> handleClipboardUrl(String url) async {
+  final hash = sha1.convert(utf8.encode(url)).toString();
+
+  // セッション中の重複チェック
+  if (_sessionHashes.contains(hash)) {
+    _logger.fine('Clipboard URL ignored due to session duplicate');
+    return;
+  }
+
+  // ハッシュを記録
+  _recentHashes[hash] = DateTime.now();
+  _sessionHashes.add(hash);
+
+  // URL処理を続行...
+}
+```
+
+**問題の背景**:
+- URLが2秒以上クリップボードに残っている場合、`_recentHashes`のみでは検出漏れ
+- ポーリングで同じURLが繰り返しダウンロードされる無限ループが発生
+
+**修正**: URLも`_sessionHashes`に記録し、セッション中の再処理を完全にブロック
 
 ## 9. イベントキュー
 
@@ -190,5 +249,6 @@ WatcherStatusNotifier.setClipboardActive(bool isActive)
 
 | 日付 | 内容 |
 |------|------|
+| 2025-11-30 | ClipboardReader初期化（ensureInitialized）、URL重複検出の_sessionHashes対応を追記 |
 | 2025-11-27 | TEXT対応、シーケンス番号監視、設定UI連携を追記 |
 | 2025-10-20 | 初版作成 |
