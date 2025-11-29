@@ -149,7 +149,15 @@ class _MinimapWidgetState extends State<_MinimapWidget> {
         final libraryState = context.watch<ImageLibraryState>();
 
         if (!scrollController.hasClients) {
-          print('[Minimap] hasClients=false, returning SizedBox.shrink');
+          print('[Minimap] hasClients=false, scheduling retry');
+          // 次フレームで再チェック
+          // グリッドがビルドされて ScrollController にクライアントがアタッチされるのを待つ
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              print('[Minimap] retry: hasClients=${scrollController.hasClients}');
+              setState(() {}); // 再ビルドをトリガー
+            }
+          });
           return const SizedBox.shrink();
         }
 
