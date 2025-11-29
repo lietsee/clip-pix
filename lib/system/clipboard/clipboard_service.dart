@@ -57,6 +57,13 @@ abstract class ClipboardReader {
   /// 読み取り不可または空の場合は null を返す。
   Future<ClipboardContent?> read();
 
+  /// キャッシュの初期化を保証する
+  ///
+  /// 非同期APIを使用するプラットフォーム（macOS）では、
+  /// getChangeCount() 呼び出し前にキャッシュを初期化する必要がある。
+  /// Windows では同期APIを使用するため、何もしない。
+  Future<void> ensureInitialized() async {}
+
   /// リソース解放
   void dispose();
 }

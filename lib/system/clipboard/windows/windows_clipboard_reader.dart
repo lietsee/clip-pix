@@ -74,6 +74,11 @@ class WindowsClipboardReader implements ClipboardReader {
   }
 
   @override
+  Future<void> ensureInitialized() async {
+    // Windows uses synchronous Win32 API, no initialization needed
+  }
+
+  @override
   void dispose() {
     // No persistent resources to release
   }

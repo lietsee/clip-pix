@@ -130,6 +130,10 @@ class ClipboardMonitor extends ChangeNotifier implements ClipboardMonitorGuard {
       return;
     }
     _isRunning = true;
+
+    // Ensure reader cache is initialized before capturing baseline
+    await _reader.ensureInitialized();
+
     _baselineSequenceNumber = _reader.getChangeCount();
     _hasSequenceAdvanced = false;
     _startSequenceWatcher();
@@ -251,7 +255,13 @@ class ClipboardMonitor extends ChangeNotifier implements ClipboardMonitorGuard {
       return;
     }
 
+    if (_sessionHashes.contains(hash)) {
+      _logger.fine('Clipboard URL ignored due to session duplicate');
+      return;
+    }
+
     _recentHashes[hash] = DateTime.now();
+    _sessionHashes.add(hash);
     _enqueueEvent(
       _ClipboardEvent.url(
         timestamp: DateTime.now(),
