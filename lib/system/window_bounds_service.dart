@@ -12,11 +12,9 @@ import 'package:window_manager/window_manager.dart';
 /// Uses the `window_manager` package for cross-platform support (Windows/macOS).
 /// Window bounds are stored in a JSON file in the current directory.
 ///
-/// Implements [WindowListener] to receive window resize/move events directly,
-/// avoiding race conditions with [windowManager.getBounds()] during resize.
-class WindowBoundsService
-    with WidgetsBindingObserver
-    implements WindowListener {
+/// Uses [WidgetsBindingObserver.didChangeMetrics] to detect window changes,
+/// which is more reliable than WindowListener on Windows.
+class WindowBoundsService with WidgetsBindingObserver {
   WindowBoundsService() : _logger = Logger('WindowBoundsService');
 
   final Logger _logger;
@@ -39,8 +37,7 @@ class WindowBoundsService
     _logger.info('Window bounds config path: $_configPath');
     debugPrint('[WindowBoundsService] init -> $_configPath');
     WidgetsBinding.instance.addObserver(this);
-    windowManager.addListener(this);
-    unawaited(windowManager.setPreventClose(true));
+    // Note: WindowListener is not used because it doesn't work on Windows
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_restoreBounds());
     });
@@ -51,91 +48,28 @@ class WindowBoundsService
       return;
     }
     WidgetsBinding.instance.removeObserver(this);
-    windowManager.removeListener(this);
     _debounce?.cancel();
     _debounce = null;
     _logger.info('Window bounds service disposed');
     debugPrint('[WindowBoundsService] dispose');
   }
 
-  // WindowListener implementation
+  // WidgetsBindingObserver implementation
 
+  /// Called when window metrics change (size, position, etc.)
+  /// This is more reliable than WindowListener on Windows.
   @override
-  void onWindowResized() {
+  void didChangeMetrics() {
+    debugPrint('[WindowBoundsService] didChangeMetrics');
     _scheduleBoundsPersist();
   }
-
-  @override
-  void onWindowMoved() {
-    _scheduleBoundsPersist();
-  }
-
-  @override
-  void onWindowClose() {
-    _logger.info('Window closing; persisting final bounds');
-    debugPrint('[WindowBoundsService] onWindowClose -> persisting');
-    _debounce?.cancel();
-
-    // Persist bounds with timeout to avoid blocking window close indefinitely
-    _persistCurrentBounds().then((_) {
-      _logger.info('Bounds persisted, destroying window');
-      debugPrint('[WindowBoundsService] bounds persisted, destroying window');
-      windowManager.destroy();
-    }).timeout(
-      const Duration(seconds: 2),
-      onTimeout: () {
-        _logger.warning('Persist timed out, forcing destroy');
-        debugPrint('[WindowBoundsService] persist timed out, forcing destroy');
-        windowManager.destroy();
-      },
-    );
-  }
-
-  // Empty implementations for other WindowListener methods
-  @override
-  void onWindowFocus() {}
-
-  @override
-  void onWindowBlur() {}
-
-  @override
-  void onWindowMaximize() {}
-
-  @override
-  void onWindowUnmaximize() {}
-
-  @override
-  void onWindowMinimize() {}
-
-  @override
-  void onWindowRestore() {}
-
-  @override
-  void onWindowResize() {}
-
-  @override
-  void onWindowMove() {}
-
-  @override
-  void onWindowEnterFullScreen() {}
-
-  @override
-  void onWindowLeaveFullScreen() {}
-
-  @override
-  void onWindowEvent(String eventName) {}
-
-  @override
-  void onWindowDocked() {}
-
-  @override
-  void onWindowUndocked() {}
 
   void _scheduleBoundsPersist() {
     if (!_isSupported) {
       return;
     }
     _logger.info('Window bounds changed; scheduling persist');
+    debugPrint('[WindowBoundsService] scheduling persist');
     _debounce?.cancel();
     _debounce = Timer(_debounceDuration, () {
       _debounce = null;
@@ -221,12 +155,12 @@ class WindowBoundsService
       'height': rect.height,
     };
     _logger.info('Persisting window bounds: $map');
+    debugPrint('[WindowBoundsService] persisting: $map');
     final file = File(_configPath);
     try {
       final jsonString = const JsonEncoder.withIndent('  ').convert(map);
       await file.writeAsString(jsonString, flush: true);
       _logger.info('Persisted window bounds: $map');
-      debugPrint('[WindowBoundsService] persisted bounds $map');
     } catch (error, stackTrace) {
       _logger.warning('Failed to persist window bounds', error, stackTrace);
     }
@@ -242,6 +176,7 @@ class WindowBoundsService
       final size = await windowManager.getSize();
 
       _logger.fine('Read position: $position, size: $size');
+      debugPrint('[WindowBoundsService] read: position=$position, size=$size');
 
       if (size.width <= 0 || size.height <= 0) {
         _logger.warning('Read rect has non-positive dimensions: $size');
@@ -251,6 +186,7 @@ class WindowBoundsService
       return Rect.fromLTWH(position.dx, position.dy, size.width, size.height);
     } catch (error) {
       _logger.warning('Failed to read window bounds: $error');
+      debugPrint('[WindowBoundsService] read error: $error');
       return null;
     }
   }
