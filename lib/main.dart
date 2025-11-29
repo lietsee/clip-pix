@@ -328,7 +328,7 @@ Future<void> _launchPreviewMode(String payload) async {
             savedState.width!,
             savedState.height!,
           );
-          restoredBounds = validator.adjustIfOffScreen(bounds);
+          restoredBounds = await validator.adjustIfOffScreen(bounds);
           debugPrint('[ImagePreviewMode] Loaded saved bounds: $restoredBounds');
         }
       } catch (error, stackTrace) {
@@ -537,7 +537,7 @@ Future<void> _launchTextPreviewMode(String payload) async {
             savedState.width!,
             savedState.height!,
           );
-          restoredBounds = validator.adjustIfOffScreen(bounds);
+          restoredBounds = await validator.adjustIfOffScreen(bounds);
           debugPrint('[TextPreviewMode] Loaded saved bounds: $restoredBounds');
         }
       } catch (error, stackTrace) {

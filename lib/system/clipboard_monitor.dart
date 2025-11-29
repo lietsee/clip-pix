@@ -3,16 +3,14 @@ import 'dart:collection';
 import 'dart:ffi' as ffi;
 import 'dart:isolate';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
-import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
-import 'package:image/image.dart' as img;
 import 'package:logging/logging.dart';
 import 'package:win32/win32.dart';
 
 import '../data/models/image_source_type.dart';
+import 'clipboard/clipboard_service.dart';
 import 'image_saver.dart';
 
 typedef ImageCapturedCallback = Future<void> Function(
@@ -81,6 +79,7 @@ class ClipboardMonitor extends ChangeNotifier implements ClipboardMonitorGuard {
     required ImageCapturedCallback onImageCaptured,
     required UrlCapturedCallback onUrlCaptured,
     required TextCapturedCallback onTextCaptured,
+    ClipboardReader? reader,
     Logger? logger,
     Duration duplicateWindow = const Duration(seconds: 2),
     Duration queueResumeDelay = const Duration(milliseconds: 150),
@@ -89,6 +88,7 @@ class ClipboardMonitor extends ChangeNotifier implements ClipboardMonitorGuard {
         _onImageCaptured = onImageCaptured,
         _onUrlCaptured = onUrlCaptured,
         _onTextCaptured = onTextCaptured,
+        _reader = reader ?? ClipboardServiceFactory.createReader(),
         _logger = logger ?? Logger('ClipboardMonitor'),
         _duplicateWindow = duplicateWindow,
         _queueResumeDelay = queueResumeDelay,
@@ -98,6 +98,7 @@ class ClipboardMonitor extends ChangeNotifier implements ClipboardMonitorGuard {
   final ImageCapturedCallback _onImageCaptured;
   final UrlCapturedCallback _onUrlCaptured;
   final TextCapturedCallback _onTextCaptured;
+  final ClipboardReader _reader;
   final Logger _logger;
   final Duration _duplicateWindow;
   final Duration _queueResumeDelay;
@@ -121,7 +122,6 @@ class ClipboardMonitor extends ChangeNotifier implements ClipboardMonitorGuard {
   bool _sequenceCheckInProgress = false;
   final Set<String> _sessionHashes = <String>{};
   _Win32ClipboardHook? _hook;
-  int? _pngClipboardFormat;
 
   ClipboardMonitorMode get mode => _mode;
   bool get isRunning => _isRunning;
@@ -136,7 +136,7 @@ class ClipboardMonitor extends ChangeNotifier implements ClipboardMonitorGuard {
       return;
     }
     _isRunning = true;
-    _baselineSequenceNumber = GetClipboardSequenceNumber();
+    _baselineSequenceNumber = _reader.getChangeCount();
     _hasSequenceAdvanced = false;
     _startSequenceWatcher();
     await _initializeHook();
@@ -300,8 +300,11 @@ class ClipboardMonitor extends ChangeNotifier implements ClipboardMonitorGuard {
     );
   }
 
+  @override
   void dispose() {
     stop();
+    _reader.dispose();
+    super.dispose();
   }
 
   Future<void> _initializeHook() async {
@@ -359,7 +362,7 @@ class ClipboardMonitor extends ChangeNotifier implements ClipboardMonitorGuard {
     }
     _sequenceCheckInProgress = true;
     try {
-      final currentSequence = GetClipboardSequenceNumber();
+      final currentSequence = _reader.getChangeCount();
       if (!_hasSequenceAdvanced) {
         if (_baselineSequenceNumber == null) {
           _baselineSequenceNumber = currentSequence;
@@ -375,376 +378,23 @@ class ClipboardMonitor extends ChangeNotifier implements ClipboardMonitorGuard {
       if (currentSequence != 0) {
         _lastSequenceNumber = currentSequence;
       }
-      final snapshot = _readClipboardSnapshot();
-      if (snapshot == null) {
+      final content = await _reader.read();
+      if (content == null) {
         return;
       }
-      if (snapshot.imageData != null) {
-        await handleClipboardImage(snapshot.imageData!,
-            sourceType: snapshot.sourceType);
+      if (content.hasImage) {
+        await handleClipboardImage(content.imageData!,
+            sourceType: content.sourceType);
         return;
       }
-      if (snapshot.text != null) {
-        await handleClipboardText(snapshot.text!);
+      if (content.hasText) {
+        await handleClipboardText(content.text!);
       }
     } catch (error, stackTrace) {
       _logger.warning(
           'Failed to process clipboard snapshot', error, stackTrace);
     } finally {
       _sequenceCheckInProgress = false;
-    }
-  }
-
-  _ClipboardSnapshot? _readClipboardSnapshot() {
-    final open = OpenClipboard(NULL);
-    if (open == 0) {
-      final code = GetLastError();
-      _logger.fine('OpenClipboard failed with code $code');
-      return null;
-    }
-    try {
-      _logAvailableFormats();
-      final dibV5Image = _readDibV5FromClipboardLocked();
-      if (dibV5Image != null) {
-        return _ClipboardSnapshot(
-            imageData: dibV5Image, sourceType: ImageSourceType.local);
-      }
-      final image = _readPngFromClipboardLocked();
-      if (image != null) {
-        return _ClipboardSnapshot(
-            imageData: image, sourceType: ImageSourceType.local);
-      }
-      final dibImage = _readDibFromClipboardLocked();
-      if (dibImage != null) {
-        return _ClipboardSnapshot(
-            imageData: dibImage, sourceType: ImageSourceType.local);
-      }
-      final text = _readUnicodeTextFromClipboardLocked();
-      if (text != null && text.isNotEmpty) {
-        return _ClipboardSnapshot(text: text);
-      }
-      return null;
-    } finally {
-      CloseClipboard();
-    }
-  }
-
-  void _logAvailableFormats() {
-    var format = EnumClipboardFormats(0);
-    if (format == 0) {
-      _logger.fine('Clipboard contains no additional formats');
-      return;
-    }
-    final formats = <String>[];
-    const known = {
-      CF_BITMAP: 'CF_BITMAP',
-      CF_DIB: 'CF_DIB',
-      CF_DIBV5: 'CF_DIBV5',
-      CF_UNICODETEXT: 'CF_UNICODETEXT',
-    };
-    while (format != 0) {
-      final name = known[format] ?? format.toString();
-      formats.add(name);
-      format = EnumClipboardFormats(format);
-    }
-    _logger.fine('Clipboard formats enumerated: ${formats.join(', ')}');
-  }
-
-  Uint8List? _readDibV5FromClipboardLocked() {
-    final handleValue = GetClipboardData(CF_DIBV5);
-    if (handleValue == 0) {
-      return null;
-    }
-    final handle = ffi.Pointer<ffi.Void>.fromAddress(handleValue);
-    final rawPointer = GlobalLock(handle);
-    if (rawPointer.address == 0) {
-      return null;
-    }
-    try {
-      final size = GlobalSize(handle);
-      if (size <= 0) {
-        return null;
-      }
-      final data = rawPointer.cast<ffi.Uint8>().asTypedList(size);
-      return _convertDibV5ToPng(data);
-    } finally {
-      GlobalUnlock(handle);
-    }
-  }
-
-  Uint8List? _readPngFromClipboardLocked() {
-    final format = _ensurePngFormat();
-    if (format == 0) {
-      return null;
-    }
-    final handleValue = GetClipboardData(format);
-    if (handleValue == 0) {
-      return null;
-    }
-    final handle = ffi.Pointer<ffi.Void>.fromAddress(handleValue);
-    final rawPointer = GlobalLock(handle);
-    if (rawPointer.address == 0) {
-      return null;
-    }
-    final size = GlobalSize(handle);
-    if (size <= 0) {
-      GlobalUnlock(handle);
-      return null;
-    }
-    final pointer = rawPointer.cast<ffi.Uint8>();
-    final data = pointer.asTypedList(size);
-    final bytes = Uint8List.fromList(data);
-    GlobalUnlock(handle);
-    return bytes;
-  }
-
-  Uint8List? _readDibFromClipboardLocked() {
-    final handleValue = GetClipboardData(CF_DIB);
-    if (handleValue == 0) {
-      return null;
-    }
-    final handle = ffi.Pointer<ffi.Void>.fromAddress(handleValue);
-    final rawPointer = GlobalLock(handle);
-    if (rawPointer.address == 0) {
-      return null;
-    }
-    try {
-      final size = GlobalSize(handle);
-      if (size <= 0) {
-        return null;
-      }
-      final data = rawPointer.cast<ffi.Uint8>().asTypedList(size);
-      final bytes = Uint8List.fromList(data);
-      return _convertDibToPng(bytes);
-    } finally {
-      GlobalUnlock(handle);
-    }
-  }
-
-  String? _readUnicodeTextFromClipboardLocked() {
-    final handleValue = GetClipboardData(CF_UNICODETEXT);
-    if (handleValue == 0) {
-      return null;
-    }
-    final handle = ffi.Pointer<ffi.Void>.fromAddress(handleValue);
-    final rawPointer = GlobalLock(handle);
-    if (rawPointer.address == 0) {
-      return null;
-    }
-    final pointer = rawPointer.cast<Utf16>();
-    final text = pointer.toDartString();
-    GlobalUnlock(handle);
-    return text;
-  }
-
-  Uint8List? _convertDibV5ToPng(Uint8List dibBytes) {
-    const int biAlphabitfields = 6;
-    if (dibBytes.length < 124) {
-      return null;
-    }
-    final byteData = ByteData.view(dibBytes.buffer);
-    final headerSize = byteData.getUint32(0, Endian.little);
-    if (headerSize < 124 || headerSize > dibBytes.length) {
-      return null;
-    }
-    final width = byteData.getInt32(4, Endian.little);
-    final heightRaw = byteData.getInt32(8, Endian.little);
-    final planes = byteData.getUint16(12, Endian.little);
-    final bitCount = byteData.getUint16(14, Endian.little);
-    final compression = byteData.getUint32(16, Endian.little);
-    var imageSize = byteData.getUint32(20, Endian.little);
-    final redMask = byteData.getUint32(40, Endian.little);
-    final greenMask = byteData.getUint32(44, Endian.little);
-    final blueMask = byteData.getUint32(48, Endian.little);
-    final alphaMask = byteData.getUint32(52, Endian.little);
-    final pixelDataOffset = byteData.getUint32(96, Endian.little);
-
-    if (planes != 1) {
-      return null;
-    }
-    if (compression != biAlphabitfields) {
-      return null;
-    }
-    if (bitCount != 32) {
-      return null;
-    }
-
-    final widthAbs = width.abs();
-    final heightAbs = heightRaw.abs();
-    if (widthAbs == 0 || heightAbs == 0) {
-      return null;
-    }
-
-    final stride = widthAbs * 4;
-    if (imageSize == 0) {
-      imageSize = stride * heightAbs;
-    }
-    final pixelOffset = headerSize + pixelDataOffset;
-    if (pixelOffset + imageSize > dibBytes.length) {
-      return null;
-    }
-
-    final pixels = dibBytes.sublist(pixelOffset, pixelOffset + imageSize);
-    final output = Uint8List(widthAbs * heightAbs * 4);
-    final bottomUp = heightRaw > 0;
-
-    for (var y = 0; y < heightAbs; y++) {
-      final srcY = bottomUp ? heightAbs - 1 - y : y;
-      final srcRowStart = srcY * stride;
-      final dstRowStart = y * widthAbs * 4;
-      for (var x = 0; x < widthAbs; x++) {
-        final srcIndex = srcRowStart + x * 4;
-        if (srcIndex + 4 > pixels.length) {
-          return null;
-        }
-        final pixel = ByteData.sublistView(pixels, srcIndex, srcIndex + 4)
-            .getUint32(0, Endian.little);
-        final red = _applyMask(pixel, redMask);
-        final green = _applyMask(pixel, greenMask);
-        final blue = _applyMask(pixel, blueMask);
-        final alpha = alphaMask == 0 ? 0xFF : _applyMask(pixel, alphaMask);
-        final dstIndex = dstRowStart + x * 4;
-        output[dstIndex] = red;
-        output[dstIndex + 1] = green;
-        output[dstIndex + 2] = blue;
-        output[dstIndex + 3] = alpha;
-      }
-    }
-
-    final image = img.Image.fromBytes(
-      width: widthAbs,
-      height: heightAbs,
-      bytes: output.buffer,
-      numChannels: 4,
-    );
-    return Uint8List.fromList(img.encodePng(image));
-  }
-
-  int _applyMask(int pixel, int mask) {
-    if (mask == 0) {
-      return 0;
-    }
-    var shift = 0;
-    while ((mask & 1) == 0) {
-      mask >>= 1;
-      shift++;
-    }
-    final component = (pixel & mask) >> shift;
-    final bits = _maskBitCount(mask);
-    if (bits >= 8) {
-      return component & 0xFF;
-    }
-    return ((component * 255) ~/ ((1 << bits) - 1)) & 0xFF;
-  }
-
-  int _maskBitCount(int mask) {
-    var count = 0;
-    while (mask != 0) {
-      if ((mask & 1) == 1) {
-        count++;
-      }
-      mask >>= 1;
-    }
-    return count;
-  }
-
-  Uint8List? _convertDibToPng(Uint8List dibBytes) {
-    const int biRgb = 0;
-    const int biBitfields = 3;
-
-    if (dibBytes.length < 40) {
-      return null;
-    }
-    final byteData = ByteData.view(dibBytes.buffer);
-    final headerSize = byteData.getUint32(0, Endian.little);
-    if (headerSize < 40 || headerSize > dibBytes.length) {
-      return null;
-    }
-
-    final width = byteData.getInt32(4, Endian.little);
-    final heightRaw = byteData.getInt32(8, Endian.little);
-    final planes = byteData.getUint16(12, Endian.little);
-    final bitCount = byteData.getUint16(14, Endian.little);
-    final compression = byteData.getUint32(16, Endian.little);
-    var imageSize = byteData.getUint32(20, Endian.little);
-
-    if (planes != 1) {
-      return null;
-    }
-    if (bitCount != 24 && bitCount != 32) {
-      return null;
-    }
-    if (compression != biRgb && compression != biBitfields) {
-      return null;
-    }
-
-    final widthAbs = width.abs();
-    final heightAbs = heightRaw.abs();
-    if (widthAbs == 0 || heightAbs == 0) {
-      return null;
-    }
-
-    final bytesPerPixel = bitCount ~/ 8;
-    final stride = ((widthAbs * bytesPerPixel + 3) ~/ 4) * 4;
-    final pixelOffset = headerSize;
-    if (imageSize == 0) {
-      imageSize = stride * heightAbs;
-    }
-    if (pixelOffset + imageSize > dibBytes.length) {
-      return null;
-    }
-
-    final pixels = dibBytes.sublist(pixelOffset, pixelOffset + imageSize);
-    final output = Uint8List(widthAbs * heightAbs * 4);
-    final bottomUp = heightRaw > 0;
-
-    for (var y = 0; y < heightAbs; y++) {
-      final srcY = bottomUp ? heightAbs - 1 - y : y;
-      final srcRowStart = srcY * stride;
-      final dstRowStart = y * widthAbs * 4;
-      for (var x = 0; x < widthAbs; x++) {
-        final srcIndex = srcRowStart + x * bytesPerPixel;
-        if (srcIndex + bytesPerPixel > pixels.length) {
-          return null;
-        }
-        final blue = pixels[srcIndex];
-        final green = pixels[srcIndex + 1];
-        final red = pixels[srcIndex + 2];
-        final alpha = bytesPerPixel == 4 ? pixels[srcIndex + 3] : 0xFF;
-        final dstIndex = dstRowStart + x * 4;
-        output[dstIndex] = red;
-        output[dstIndex + 1] = green;
-        output[dstIndex + 2] = blue;
-        output[dstIndex + 3] = alpha;
-      }
-    }
-
-    final image = img.Image.fromBytes(
-      width: widthAbs,
-      height: heightAbs,
-      bytes: output.buffer,
-      numChannels: 4,
-    );
-    return Uint8List.fromList(img.encodePng(image));
-  }
-
-  int _ensurePngFormat() {
-    final cached = _pngClipboardFormat;
-    if (cached != null) {
-      return cached;
-    }
-    final name = 'PNG'.toNativeUtf16();
-    try {
-      final format = RegisterClipboardFormat(name);
-      if (format == 0) {
-        final code = GetLastError();
-        _logger.fine('RegisterClipboardFormat failed with code $code');
-      } else {
-        _pngClipboardFormat = format;
-      }
-      return format;
-    } finally {
-      calloc.free(name);
     }
   }
 
@@ -828,7 +478,7 @@ class ClipboardMonitor extends ChangeNotifier implements ClipboardMonitorGuard {
     if (!_isRunning) {
       return;
     }
-    final sequence = GetClipboardSequenceNumber();
+    final sequence = _reader.getChangeCount();
     if (sequence == 0) {
       return;
     }
@@ -876,15 +526,6 @@ class ClipboardMonitor extends ChangeNotifier implements ClipboardMonitorGuard {
     }
     return uri.toString();
   }
-}
-
-class _ClipboardSnapshot {
-  const _ClipboardSnapshot(
-      {this.imageData, this.text, this.sourceType = ImageSourceType.local});
-
-  final Uint8List? imageData;
-  final String? text;
-  final ImageSourceType sourceType;
 }
 
 class _Win32ClipboardHook {
