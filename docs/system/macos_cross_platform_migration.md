@@ -420,42 +420,51 @@ class ClipboardMonitor extends ChangeNotifier implements ClipboardMonitorGuard {
 }
 ```
 
-### Phase 2: ウィンドウサービス統一 (P1)
+### Phase 2: ウィンドウサービス (P1)
 
-#### 3.2.1 window_manager パッケージへの移行
+#### 3.2.1 プラットフォーム別実装
 
-`window_manager`パッケージは既にmacOS対応済み。
+> **重要**: `window_manager` パッケージ v0.3.9 は Windows で `getPosition()` / `getSize()` が
+> 常に null を返す不具合があるため、Windows 版は Win32 API を継続使用する。
+> （2025-11-29 検証済み、コミット d677633 参照）
 
-**変更**: `lib/system/window_bounds_service.dart`
+**現在の実装** (`lib/system/window_bounds_service.dart`):
 
 ```dart
-// Before
+// Windows: Win32 API使用（window_managerは読み取り不可）
 import 'package:win32/win32.dart';
 
-bool get _isSupported => Platform.isWindows;
+bool get _isSupported => Platform.isWindows;  // 現在はWindowsのみ
 
 Rect? _readWindowRect() {
   final hwnd = _resolveWindowHandle();
-  // win32 API使用...
+  // GetWindowRect使用
 }
 
 bool _applyBounds(Rect rect) {
-  // SetWindowPos使用...
+  // SetWindowPos使用
 }
+```
 
-// After
-import 'package:window_manager/window_manager.dart';
+**macOS対応時の拡張案**:
 
+```dart
 bool get _isSupported => Platform.isWindows || Platform.isMacOS;
 
-Future<Rect?> _readWindowRect() async {
-  final bounds = await windowManager.getBounds();
-  return bounds;
+// プラットフォーム別の読み取り
+Rect? _readWindowRect() {
+  if (Platform.isWindows) {
+    return _readWindowRectWin32();  // 現在の実装
+  } else if (Platform.isMacOS) {
+    return _readWindowRectMacOS();  // 要実装
+  }
+  return null;
 }
 
-Future<bool> _applyBounds(Rect rect) async {
-  await windowManager.setBounds(rect);
-  return true;
+// macOS: window_manager または NSWindow API
+Future<Rect?> _readWindowRectMacOS() async {
+  // 選択肢1: window_manager（macOSでは動作する可能性あり、要検証）
+  // 選択肢2: MethodChannel経由でNSWindow API呼び出し
 }
 ```
 
@@ -697,3 +706,4 @@ case .denied:
 |------|------|
 | 2025-11-27 | 初版作成 |
 | 2025-11-29 | macOS 15.4+クリップボードプライバシー対応を追加（セクション8.1）、Info.plist説明文更新、参考資料追加 |
+| 2025-11-29 | Phase 2「ウィンドウサービス」を修正: `window_manager`がWindowsで動作しないことを反映、プラットフォーム別実装に変更 |

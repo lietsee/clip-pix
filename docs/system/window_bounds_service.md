@@ -221,13 +221,39 @@ void init() {
 
 **他のプラットフォーム**: 何もしない（警告なし）
 
+## 技術的背景
+
+### なぜ window_manager ではなく Win32 API を使用するのか
+
+`window_manager` パッケージ（v0.3.9）には以下の問題がある：
+
+- `windowManager.getPosition()` / `getSize()` がWindowsで常にnullを返す
+- 書き込み（`setBounds()`）は動作するが、読み取りが壊れている
+- この問題はコミット 70bd172 で `window_manager` への移行を試行した際に発見された
+
+したがってWindows版ではWin32 API（`GetWindowRect`/`SetWindowPos`）を直接使用する。
+
+### macOS対応計画
+
+現在のWindowBoundsServiceはWindows専用（`_isSupported => Platform.isWindows`）。
+macOS対応は以下の選択肢がある：
+
+1. **`window_manager`使用** - macOSでは動作する可能性あり（要検証）
+2. **NSWindow API使用** - Swift経由でMethodChannelで呼び出し
+
+詳細は `docs/system/macos_cross_platform_migration.md` を参照。
+
+---
+
 ## 今後の拡張
 
 1. **マルチモニター対応**: モニター境界を超えた場合の調整
 2. **最大化状態の保存**: IsZoomed/IsIconic 状態の記録
-3. **クロスプラットフォーム**: macOS/Linux対応
+3. **クロスプラットフォーム**: macOS対応（上記「macOS対応計画」参照）
 
 ## 実装履歴
 
-- **2025-10-27**: 初期実装
+- **2025-10-27**: 初期実装（Win32 API使用）
 - **2025-10-28**: ドキュメント作成
+- **2025-11-27**: `window_manager`パッケージへの移行を試行（コミット 70bd172）
+- **2025-11-29**: `window_manager`の読み取り不具合を発見、Win32 APIに戻す（コミット d677633）
