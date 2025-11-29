@@ -60,6 +60,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
 
   // Minimap overlay service
   MinimapOverlayService? _minimapService;
+  FolderViewMode? _lastMinimapViewMode;
 
   late final FocusNode _keyboardFocusNode;
 
@@ -218,11 +219,25 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     if (selectedState.isMinimapAlwaysVisible && libraryInfo.hasImages) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
+
+        // Check if viewMode changed - need to recreate minimap with correct controller
+        final viewModeChanged = _lastMinimapViewMode != null &&
+            _lastMinimapViewMode != selectedState.viewMode;
+
         // Re-verify visibility on every build and re-show if invalidated
         // This handles cases where scroll controller was recreated
-        if (_minimapService == null || !_minimapService!.isVisible) {
-          debugPrint(
-              '[MainScreen] Re-showing minimap (service=${_minimapService != null}, visible=${_minimapService?.isVisible})');
+        if (_minimapService == null ||
+            !_minimapService!.isVisible ||
+            viewModeChanged) {
+          if (viewModeChanged) {
+            debugPrint(
+                '[MainScreen] viewMode changed from $_lastMinimapViewMode to ${selectedState.viewMode}, recreating minimap');
+            _hideMinimap();
+          } else {
+            debugPrint(
+                '[MainScreen] Re-showing minimap (service=${_minimapService != null}, visible=${_minimapService?.isVisible})');
+          }
+          _lastMinimapViewMode = selectedState.viewMode;
           _showMinimap(context, selectedState);
         }
       });
