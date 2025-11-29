@@ -6,11 +6,11 @@ import 'package:flutter/services.dart';
 import 'package:hive/hive.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
-import 'package:win32/win32.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../data/image_preview_state_repository.dart';
 import '../data/models/image_item.dart';
+import '../system/window/always_on_top_helper.dart';
 
 class ImagePreviewWindow extends StatefulWidget {
   const ImagePreviewWindow({
@@ -52,11 +52,14 @@ class _ImagePreviewWindowState extends State<ImagePreviewWindow>
     windowManager.addListener(this);
     _isAlwaysOnTop = widget.initialAlwaysOnTop;
     if (_isAlwaysOnTop) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && !_applyAlwaysOnTop(true)) {
-          setState(() {
-            _isAlwaysOnTop = false;
-          });
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (mounted) {
+          final success = await _applyAlwaysOnTop(true);
+          if (!success && mounted) {
+            setState(() {
+              _isAlwaysOnTop = false;
+            });
+          }
         }
       });
     }
@@ -68,7 +71,8 @@ class _ImagePreviewWindowState extends State<ImagePreviewWindow>
     _boundsDebounceTimer?.cancel();
     windowManager.removeListener(this);
     if (_isAlwaysOnTop) {
-      _applyAlwaysOnTop(false);
+      // Fire-and-forget since window is closing
+      unawaited(_applyAlwaysOnTop(false));
     }
     super.dispose();
   }
@@ -355,7 +359,12 @@ class _ImagePreviewWindowState extends State<ImagePreviewWindow>
 
   void _toggleAlwaysOnTop() {
     final desired = !_isAlwaysOnTop;
-    final applied = _applyAlwaysOnTop(desired);
+    unawaited(_applyAlwaysOnTopAndUpdate(desired));
+  }
+
+  Future<void> _applyAlwaysOnTopAndUpdate(bool desired) async {
+    final applied = await _applyAlwaysOnTop(desired);
+    if (!mounted) return;
     if (applied) {
       setState(() {
         _isAlwaysOnTop = desired;
@@ -371,30 +380,8 @@ class _ImagePreviewWindowState extends State<ImagePreviewWindow>
     }
   }
 
-  bool _applyAlwaysOnTop(bool enable) {
-    if (!Platform.isWindows) {
-      return true;
-    }
-    final hwnd = GetForegroundWindow();
-    if (hwnd == 0) {
-      _logger.warning('Failed to resolve window handle for preview window');
-      return false;
-    }
-    final result = SetWindowPos(
-      hwnd,
-      enable ? HWND_TOPMOST : HWND_NOTOPMOST,
-      0,
-      0,
-      0,
-      0,
-      SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-    );
-    if (result == 0) {
-      final error = GetLastError();
-      _logger.severe('SetWindowPos failed error=$error');
-      return false;
-    }
-    return true;
+  Future<bool> _applyAlwaysOnTop(bool enable) async {
+    return applyAlwaysOnTop(enable);
   }
 
   Future<void> _handleClose() async {

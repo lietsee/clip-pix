@@ -6,11 +6,11 @@ import 'package:flutter/services.dart';
 import 'package:hive/hive.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
-import 'package:win32/win32.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../../data/models/text_content_item.dart';
 import '../../data/text_preview_state_repository.dart';
+import '../../system/window/always_on_top_helper.dart';
 
 /// テキストコンテンツを別ウィンドウで表示・編集する
 class TextPreviewWindow extends StatefulWidget {
@@ -64,11 +64,14 @@ class _TextPreviewWindowState extends State<TextPreviewWindow>
     _isAlwaysOnTop = widget.initialAlwaysOnTop;
     _loadTextContent();
     if (_isAlwaysOnTop) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && !_applyAlwaysOnTop(true)) {
-          setState(() {
-            _isAlwaysOnTop = false;
-          });
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (mounted) {
+          final success = await _applyAlwaysOnTop(true);
+          if (!success && mounted) {
+            setState(() {
+              _isAlwaysOnTop = false;
+            });
+          }
         }
       });
     }
@@ -81,7 +84,8 @@ class _TextPreviewWindowState extends State<TextPreviewWindow>
     _boundsDebounceTimer?.cancel();
     windowManager.removeListener(this);
     if (_isAlwaysOnTop) {
-      _applyAlwaysOnTop(false);
+      // Fire-and-forget since window is closing
+      unawaited(_applyAlwaysOnTop(false));
     }
     _controller.dispose();
     _focusNode.dispose();
@@ -228,48 +232,30 @@ class _TextPreviewWindowState extends State<TextPreviewWindow>
   }
 
   void _toggleAlwaysOnTop() {
-    final newValue = !_isAlwaysOnTop;
-    if (_applyAlwaysOnTop(newValue)) {
+    final desired = !_isAlwaysOnTop;
+    unawaited(_applyAlwaysOnTopAndUpdate(desired));
+  }
+
+  Future<void> _applyAlwaysOnTopAndUpdate(bool desired) async {
+    final applied = await _applyAlwaysOnTop(desired);
+    if (!mounted) return;
+    if (applied) {
       setState(() {
-        _isAlwaysOnTop = newValue;
+        _isAlwaysOnTop = desired;
       });
       _needsSave =
           true; // Mark that bounds need to be saved (alwaysOnTop state changed)
-      widget.onToggleAlwaysOnTop?.call(newValue);
+      widget.onToggleAlwaysOnTop?.call(desired);
+    } else {
+      widget.onToggleAlwaysOnTop?.call(false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('最前面の切り替えに失敗しました')),
+      );
     }
   }
 
-  bool _applyAlwaysOnTop(bool enable) {
-    if (!Platform.isWindows) {
-      _logger.warning('Always on top is only supported on Windows');
-      return false;
-    }
-    try {
-      final hwnd = GetActiveWindow();
-      if (hwnd == 0) {
-        _logger.warning('Failed to get window handle');
-        return false;
-      }
-      final flag = enable ? HWND_TOPMOST : HWND_NOTOPMOST;
-      final result = SetWindowPos(
-        hwnd,
-        flag,
-        0,
-        0,
-        0,
-        0,
-        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-      );
-      if (result == 0) {
-        _logger.warning('SetWindowPos failed');
-        return false;
-      }
-      _logger.info('Always on top: $enable');
-      return true;
-    } catch (error, stackTrace) {
-      _logger.warning('Failed to apply always on top', error, stackTrace);
-      return false;
-    }
+  Future<bool> _applyAlwaysOnTop(bool enable) async {
+    return applyAlwaysOnTop(enable);
   }
 
   void _handleZoomIn() {

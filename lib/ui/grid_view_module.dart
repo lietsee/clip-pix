@@ -1,17 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:ffi' hide Size;
 import 'dart:io';
 import 'dart:math' as math;
 
-import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:logging/logging.dart';
 import 'package:provider/provider.dart';
-import 'package:win32/win32.dart';
 
 import '../data/file_info_manager.dart';
 import '../data/grid_card_preferences_repository.dart';
@@ -33,6 +30,7 @@ import '../system/state/grid_layout_store.dart';
 import '../system/state/image_library_notifier.dart';
 import '../system/state/image_library_state.dart';
 import '../system/state/selected_folder_state.dart';
+import '../system/window/window_finder.dart';
 import 'image_card.dart';
 import 'widgets/grid_layout_surface.dart';
 import 'widgets/pinterest_grid.dart';
@@ -1550,110 +1548,17 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   bool _isTextPreviewWindowOpen(String textId) {
-    if (!Platform.isWindows) return false;
-
-    try {
-      final titleHash = 'clip_pix_text_${textId.hashCode}';
-      final titlePtr = TEXT(titleHash);
-      // Search by window title only (class name = nullptr)
-      final hwnd = FindWindow(Pointer.fromAddress(0), titlePtr);
-      calloc.free(titlePtr);
-
-      debugPrint(
-          '[GridViewModule] _isTextPreviewWindowOpen: textId="$textId", hashCode=${textId.hashCode}, titleHash="$titleHash", hwnd=$hwnd');
-
-      if (hwnd == 0) {
-        return false;
-      }
-
-      // Verify the window handle is still valid
-      final isValid = IsWindow(hwnd) != 0;
-      debugPrint('[GridViewModule] IsWindow result: $isValid for hwnd=$hwnd');
-
-      if (!isValid) {
-        // Window was closed (cleanup handled by process manager)
-        debugPrint('[GridViewModule] Window $textId is no longer valid');
-      }
-
-      return isValid;
-    } catch (e) {
-      debugPrint('[GridViewModule] Error checking window existence: $e');
-      return false;
-    }
+    final titleHash = 'clip_pix_text_${textId.hashCode}';
+    final result = isWindowOpen(titleHash);
+    debugPrint(
+        '[GridViewModule] _isTextPreviewWindowOpen: textId="$textId", titleHash="$titleHash", result=$result');
+    return result;
   }
 
   void _activateTextPreviewWindow(String textId) {
-    if (!Platform.isWindows) return;
-
-    try {
-      // Window title hash used for FindWindow
-      final titleHash = 'clip_pix_text_${textId.hashCode}';
-      final titlePtr = TEXT(titleHash);
-      // Search by window title only (class name = nullptr)
-      final hwnd = FindWindow(Pointer.fromAddress(0), titlePtr);
-      calloc.free(titlePtr);
-
-      if (hwnd == 0) {
-        debugPrint('[GridViewModule] Window not found: $titleHash');
-        return;
-      }
-
-      // Verify window is still valid
-      if (IsWindow(hwnd) == 0) {
-        debugPrint(
-            '[GridViewModule] IsWindow returned invalid: $titleHash (hwnd=$hwnd)');
-        return;
-      }
-
-      // Restore if minimized
-      if (IsIconic(hwnd) != 0) {
-        final restoreResult = ShowWindow(hwnd, SW_RESTORE);
-        debugPrint(
-            '[GridViewModule] ShowWindow(SW_RESTORE) result: $restoreResult');
-      }
-
-      // Get thread IDs for input attachment
-      final foregroundHwnd = GetForegroundWindow();
-      final foregroundThreadId = GetWindowThreadProcessId(
-          foregroundHwnd, Pointer<Uint32>.fromAddress(0));
-      final targetThreadId =
-          GetWindowThreadProcessId(hwnd, Pointer<Uint32>.fromAddress(0));
-
-      debugPrint(
-          '[GridViewModule] Thread IDs: foreground=$foregroundThreadId, target=$targetThreadId');
-
-      // Attach input if different threads
-      int attachResult = 0;
-      if (foregroundThreadId != targetThreadId && foregroundThreadId != 0) {
-        attachResult = AttachThreadInput(foregroundThreadId, targetThreadId, 1);
-        debugPrint('[GridViewModule] AttachThreadInput result: $attachResult');
-      }
-
-      // Multiple activation attempts for reliability
-      final bringToTopResult = BringWindowToTop(hwnd);
-      final showResult = ShowWindow(hwnd, SW_SHOW);
-      final setForegroundResult = SetForegroundWindow(hwnd);
-      final setFocusResult = SetFocus(hwnd);
-
-      debugPrint('[GridViewModule] Activation results: '
-          'BringWindowToTop=$bringToTopResult, ShowWindow=$showResult, '
-          'SetForegroundWindow=$setForegroundResult, SetFocus=$setFocusResult');
-
-      // Detach input
-      if (foregroundThreadId != targetThreadId && foregroundThreadId != 0) {
-        final detachResult =
-            AttachThreadInput(foregroundThreadId, targetThreadId, 0);
-        debugPrint('[GridViewModule] DetachThreadInput result: $detachResult');
-      }
-
-      debugPrint('[GridViewModule] Activated window: $titleHash (hwnd=$hwnd)');
-    } catch (e, stackTrace) {
-      Logger('GridViewModule').warning(
-        'Failed to activate text preview window',
-        e,
-        stackTrace,
-      );
-    }
+    final titleHash = 'clip_pix_text_${textId.hashCode}';
+    debugPrint('[GridViewModule] Activating text preview: $titleHash');
+    activateWindow(titleHash);
   }
 
   String? _resolveExecutablePath() {
@@ -2295,111 +2200,18 @@ class _GridViewModuleState extends State<GridViewModule> {
 
   /// Check if image preview window is open by finding its window handle
   bool _isImagePreviewWindowOpen(String imageId) {
-    if (!Platform.isWindows) return false;
-
-    try {
-      final titleHash = 'clip_pix_image_${imageId.hashCode}';
-      final titlePtr = TEXT(titleHash);
-      // Search by window title only (class name = nullptr)
-      final hwnd = FindWindow(Pointer.fromAddress(0), titlePtr);
-      calloc.free(titlePtr);
-
-      debugPrint(
-          '[GridViewModule] _isImagePreviewWindowOpen: imageId="$imageId", hashCode=${imageId.hashCode}, titleHash="$titleHash", hwnd=$hwnd');
-
-      if (hwnd == 0) {
-        return false;
-      }
-
-      // Verify the window handle is still valid
-      final isValid = IsWindow(hwnd) != 0;
-      debugPrint('[GridViewModule] IsWindow result: $isValid for hwnd=$hwnd');
-
-      if (!isValid) {
-        // Window was closed (cleanup handled by process manager)
-        debugPrint('[GridViewModule] Window $imageId is no longer valid');
-      }
-
-      return isValid;
-    } catch (e) {
-      debugPrint('[GridViewModule] Error checking window existence: $e');
-      return false;
-    }
+    final titleHash = 'clip_pix_image_${imageId.hashCode}';
+    final result = isWindowOpen(titleHash);
+    debugPrint(
+        '[GridViewModule] _isImagePreviewWindowOpen: imageId="$imageId", titleHash="$titleHash", result=$result');
+    return result;
   }
 
   /// Activate existing image preview window
   void _activateImagePreviewWindow(String imageId) {
-    if (!Platform.isWindows) return;
-
-    try {
-      // Window title hash used for FindWindow
-      final titleHash = 'clip_pix_image_${imageId.hashCode}';
-      final titlePtr = TEXT(titleHash);
-      // Search by window title only (class name = nullptr)
-      final hwnd = FindWindow(Pointer.fromAddress(0), titlePtr);
-      calloc.free(titlePtr);
-
-      if (hwnd == 0) {
-        debugPrint('[GridViewModule] Window not found: $titleHash');
-        return;
-      }
-
-      // Verify window is still valid
-      if (IsWindow(hwnd) == 0) {
-        debugPrint(
-            '[GridViewModule] IsWindow returned invalid: $titleHash (hwnd=$hwnd)');
-        return;
-      }
-
-      // Restore if minimized
-      if (IsIconic(hwnd) != 0) {
-        final restoreResult = ShowWindow(hwnd, SW_RESTORE);
-        debugPrint(
-            '[GridViewModule] ShowWindow(SW_RESTORE) result: $restoreResult');
-      }
-
-      // Get thread IDs for input attachment
-      final foregroundHwnd = GetForegroundWindow();
-      final foregroundThreadId = GetWindowThreadProcessId(
-          foregroundHwnd, Pointer<Uint32>.fromAddress(0));
-      final targetThreadId =
-          GetWindowThreadProcessId(hwnd, Pointer<Uint32>.fromAddress(0));
-
-      debugPrint(
-          '[GridViewModule] Thread IDs: foreground=$foregroundThreadId, target=$targetThreadId');
-
-      // Attach input if different threads
-      int attachResult = 0;
-      if (foregroundThreadId != targetThreadId && foregroundThreadId != 0) {
-        attachResult = AttachThreadInput(foregroundThreadId, targetThreadId, 1);
-        debugPrint('[GridViewModule] AttachThreadInput result: $attachResult');
-      }
-
-      // Multiple activation attempts for reliability
-      final bringToTopResult = BringWindowToTop(hwnd);
-      final showResult = ShowWindow(hwnd, SW_SHOW);
-      final setForegroundResult = SetForegroundWindow(hwnd);
-      final setFocusResult = SetFocus(hwnd);
-
-      debugPrint('[GridViewModule] Activation results: '
-          'BringWindowToTop=$bringToTopResult, ShowWindow=$showResult, '
-          'SetForegroundWindow=$setForegroundResult, SetFocus=$setFocusResult');
-
-      // Detach input
-      if (foregroundThreadId != targetThreadId && foregroundThreadId != 0) {
-        final detachResult =
-            AttachThreadInput(foregroundThreadId, targetThreadId, 0);
-        debugPrint('[GridViewModule] DetachThreadInput result: $detachResult');
-      }
-
-      debugPrint('[GridViewModule] Activated window: $titleHash (hwnd=$hwnd)');
-    } catch (e, stackTrace) {
-      Logger('GridViewModule').warning(
-        'Failed to activate image preview window',
-        e,
-        stackTrace,
-      );
-    }
+    final titleHash = 'clip_pix_image_${imageId.hashCode}';
+    debugPrint('[GridViewModule] Activating image preview: $titleHash');
+    activateWindow(titleHash);
   }
 
   /// Restore image preview windows from previous session

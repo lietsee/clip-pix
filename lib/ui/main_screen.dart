@@ -1057,10 +1057,11 @@ class _Breadcrumb extends StatelessWidget {
   }
 
   void _openInExplorer(String path) {
-    if (!Platform.isWindows) {
-      return;
+    if (Platform.isWindows) {
+      Process.run('explorer.exe', ['/select,', path]);
+    } else if (Platform.isMacOS) {
+      Process.run('open', ['-R', path]);
     }
-    Process.run('explorer.exe', ['/select,', path]);
   }
 }
 
