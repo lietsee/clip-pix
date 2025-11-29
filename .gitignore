@@ -3,9 +3,15 @@
 build/
 .flutter-plugins-dependencies
 .flutter-plugins
+.metadata
 
 # IDE specific
 .idea/
 .vscode/
+*.iml
+
+# Flutter generated (not needed in version control)
+README.md
+analysis_options.yaml
 
 .tmp/
