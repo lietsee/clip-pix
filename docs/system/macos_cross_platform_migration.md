@@ -564,9 +564,13 @@ import 'clipboard_service_stub.dart'
 **編集**: `macos/Runner/Info.plist`
 
 ```xml
+<!-- クリップボードアクセスの説明（macOS 15.4+で許可ダイアログに表示） -->
 <key>NSPasteboardUsageDescription</key>
-<string>ClipPix needs clipboard access to capture images and text.</string>
+<string>ClipPixはコピーした画像やテキストを自動的に保存するためにクリップボードへのアクセスが必要です。この機能を使用しない場合は拒否できます。</string>
 ```
+
+> **注意**: macOS 15.4以降では、この説明文がユーザーへの許可ダイアログに表示されます。
+> ユーザーが理解しやすい説明を記載することが重要です。
 
 ---
 
@@ -623,21 +627,67 @@ import 'clipboard_service_stub.dart'
 
 | リスク | 影響 | 対策 |
 |-------|------|------|
+| **macOS 15.4+ クリップボードプライバシー** | ユーザー許可なしでクリップボード読み取り不可。許可拒否で自動保存機能が無効化 | 1. 初回起動時に許可を求めるUI追加 2. 許可拒否時のフォールバック（手動ペーストモード） 3. `accessBehavior` APIで許可状態を確認 |
 | macOSクリップボードの画像形式の違い | 画像が正しく読めない | TIFF→PNG変換をSwift側で実装 |
 | サンドボックス制限 | ファイル保存不可 | entitlementsでファイルアクセス許可 |
 | MethodChannelの非同期性 | changeCountのポーリング遅延 | キャッシュ戦略で対応 |
 | Windows Hookの代替なし（macOS） | イベント駆動監視不可 | ポーリングで統一（両プラットフォーム共通化も検討） |
 
+### 8.1 macOS 15.4+ プライバシー対応の詳細
+
+macOS 15.4（2025年5月）より、アプリがクリップボードにプログラムからアクセスする際にユーザー許可が必要になりました。macOS 16で全面適用予定です。
+
+#### テスト手順
+
+開発中に新しいプライバシー動作をテストするには：
+
+```bash
+defaults write com.clip_pix EnablePasteboardPrivacyDeveloperPreview -bool yes
+```
+
+#### アクセス状態の確認
+
+```swift
+let behavior = NSPasteboard.general.accessBehavior
+switch behavior {
+case .alwaysAllowed:
+    // 通常のポーリング監視が可能
+case .requiresUserConsent:
+    // ユーザー操作をトリガーに読み取り
+case .denied:
+    // 手動ペーストモードに切り替え
+@unknown default:
+    break
+}
+```
+
+#### フォールバック戦略
+
+| 許可状態 | 動作モード | UI |
+|---------|----------|-----|
+| `.alwaysAllowed` | 自動監視モード | 通常のクリップボード監視 |
+| `.requiresUserConsent` | 半自動モード | ペーストボタン押下時に読み取り |
+| `.denied` | 手動モード | ドラッグ&ドロップまたはファイル選択のみ |
+
 ---
 
 ## 9. 参考資料
 
+### Flutter パッケージ
 - [super_clipboard | pub.dev](https://pub.dev/packages/super_clipboard)
 - [pasteboard | pub.dev](https://pub.dev/packages/pasteboard)
 - [window_manager | pub.dev](https://pub.dev/packages/window_manager)
 - [screen_retriever | pub.dev](https://pub.dev/packages/screen_retriever)
+
+### Apple Developer Documentation
 - [NSPasteboard | Apple Developer](https://developer.apple.com/documentation/appkit/nspasteboard)
 - [NSPasteboard changeCount](https://developer.apple.com/documentation/appkit/nspasteboard/1533544-changecount)
+- [NSPasteboard accessBehavior](https://developer.apple.com/documentation/appkit/nspasteboard/accessbehavior)
+
+### macOS 15.4+ プライバシー変更
+- [Pasteboard Privacy Preview in macOS 15.4 - Michael Tsai](https://mjtsai.com/blog/2025/05/12/pasteboard-privacy-preview-in-macos-15-4/)
+- [macOS 16 clipboard privacy protection - 9to5Mac](https://9to5mac.com/2025/05/12/macos-16-clipboard-privacy-protection/)
+- [Apple to Block Mac Apps From Secretly Accessing Your Clipboard - MacRumors](https://www.macrumors.com/2025/05/12/apple-mac-apps-clipboard-change/)
 
 ---
 
@@ -646,3 +696,4 @@ import 'clipboard_service_stub.dart'
 | 日付 | 内容 |
 |------|------|
 | 2025-11-27 | 初版作成 |
+| 2025-11-29 | macOS 15.4+クリップボードプライバシー対応を追加（セクション8.1）、Info.plist説明文更新、参考資料追加 |
