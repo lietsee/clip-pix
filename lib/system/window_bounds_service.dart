@@ -30,8 +30,7 @@ class WindowBoundsService with WidgetsBindingObserver {
   static const _debounceDuration = Duration(milliseconds: 200);
 
   /// Returns true if window bounds persistence is supported on this platform.
-  bool get _isSupported =>
-      Platform.isWindows || Platform.isMacOS;
+  bool get _isSupported => Platform.isWindows;
 
   void init() {
     if (!_isSupported) {
