@@ -370,15 +370,34 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
     final double extendedScrollExtent = maxScrollExtent + extraExtent;
     final double extendedPaintExtentUpperBound = maxPaintedExtent + extraExtent;
 
+    // 最初の子のlayoutOffsetを取得（Flutter標準スリバーのパターンに準拠）
+    final double leadingScrollOffset = (firstChild != null &&
+            childScrollOffset(firstChild!) != null)
+        ? childScrollOffset(firstChild!)!
+        : 0.0;
+
+    final double paintExtent = calculatePaintOffset(
+      constraints,
+      from: math.min(constraints.scrollOffset, leadingScrollOffset),
+      to: maxPaintedExtent,
+    );
+
+    final double cacheExtent = calculateCacheOffset(
+      constraints,
+      from: leadingScrollOffset,
+      to: maxScrollExtent,
+    );
+
+    final double targetEndScrollOffsetForPaint =
+        constraints.scrollOffset + constraints.remainingPaintExtent;
+
     final computedGeometry = SliverGeometry(
       scrollExtent: extendedScrollExtent,
-      paintExtent: calculatePaintOffset(
-        constraints,
-        from: scrollOffset,
-        to: extendedPaintExtentUpperBound,
-      ),
+      paintExtent: paintExtent,
+      cacheExtent: cacheExtent,
       maxPaintExtent: extendedPaintExtentUpperBound,
-      hasVisualOverflow: maxPaintedExtent > constraints.remainingPaintExtent,
+      hasVisualOverflow: maxPaintedExtent > targetEndScrollOffsetForPaint ||
+          constraints.scrollOffset > 0.0,
     );
     geometry = computedGeometry;
 
