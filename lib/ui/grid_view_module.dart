@@ -2031,9 +2031,8 @@ class _GridViewModuleState extends State<GridViewModule> {
 
     for (var i = 0; i < _entries.length; i++) {
       final entry = _entries[i];
-      if (entry.item.id == _draggingId) {
-        continue;
-      }
+      // ドラッグ中のカードもターゲット候補に含める（元の位置に戻せるように）
+      // カードは opacity=0 で非表示だが、RenderBox は元の位置に残っている
       final key = _cardKeys[entry.item.id];
       final context = key?.currentContext;
       if (context == null) {
