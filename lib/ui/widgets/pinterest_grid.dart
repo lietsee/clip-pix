@@ -379,7 +379,7 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
     final double paintExtent = calculatePaintOffset(
       constraints,
       from: math.min(constraints.scrollOffset, leadingScrollOffset),
-      to: maxPaintedExtent,
+      to: extendedPaintExtentUpperBound,
     );
 
     final double cacheExtent = calculateCacheOffset(
