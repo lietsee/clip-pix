@@ -376,10 +376,14 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
         ? childScrollOffset(firstChild!)!
         : 0.0;
 
+    // toパラメータがビューポート終了以上であることを保証
+    // カードサイズがバラバラの場合でもビューポート全体がペイントされる
+    final double viewportEnd =
+        constraints.scrollOffset + constraints.remainingPaintExtent;
     final double paintExtent = calculatePaintOffset(
       constraints,
       from: math.min(constraints.scrollOffset, leadingScrollOffset),
-      to: extendedPaintExtentUpperBound,
+      to: math.max(extendedPaintExtentUpperBound, viewportEnd),
     );
 
     final double cacheExtent = calculateCacheOffset(
