@@ -422,13 +422,16 @@ class GridViewModuleState extends State<GridViewModule> {
     // スクロール位置を計算（カードの上端が表示されるように）
     final targetOffset = math.max(0.0, rect.top - _outerPadding);
     final maxExtent = scrollController.position.maxScrollExtent;
-    debugPrint('[GridViewModule] scrollToAndHighlight: targetOffset=$targetOffset, maxExtent=$maxExtent');
+    final totalHeight = snapshot.totalHeight;
+    debugPrint('[GridViewModule] scrollToAndHighlight: targetOffset=$targetOffset, maxExtent=$maxExtent, totalHeight=$totalHeight');
 
+    // cacheExtentが効いていればmaxExtent >= targetOffsetになるはず
+    // フォールバックとして段階的スクロールも残す
     if (targetOffset <= maxExtent) {
       // 目標位置が到達可能 → 通常スクロール
       _scrollToOffsetAndHighlight(scrollController, targetOffset, filePath);
     } else {
-      // 目標位置がmaxScrollExtentを超えている → 段階的スクロール
+      // 目標位置がmaxScrollExtentを超えている → 段階的スクロール（フォールバック）
       debugPrint('[GridViewModule] scrollToAndHighlight: target exceeds maxExtent, using incremental scroll');
       _scrollIncrementally(scrollController, targetOffset, filePath);
     }
@@ -631,10 +634,15 @@ class GridViewModuleState extends State<GridViewModule> {
           final currentImageIds =
               widget.state.images.map((img) => img.id).toSet();
 
+          // cacheExtentをスナップショットの全体高さに設定して
+          // 起動時に全カードをプリレイアウトする（scrollToAndHighlight用）
+          final cacheExtent = snapshot?.totalHeight;
+
           return Container(
             color: backgroundColor,
             child: CustomScrollView(
               controller: controller,
+              cacheExtent: cacheExtent,
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
                 SliverPadding(

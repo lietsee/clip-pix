@@ -195,6 +195,12 @@ class LayoutSnapshot {
   final String id;
   final GridLayoutGeometry geometry;
   final List<LayoutSnapshotEntry> entries;
+
+  /// 全エントリの最大bottom値（グリッド全体の高さ）
+  double get totalHeight {
+    if (entries.isEmpty) return 0;
+    return entries.map((e) => e.rect.bottom).reduce((a, b) => a > b ? a : b);
+  }
 }
 
 class LayoutSnapshotEntry {
