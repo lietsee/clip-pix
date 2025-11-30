@@ -1,6 +1,6 @@
 # ClipPix ドキュメント一覧
 
-**最終更新**: 2025-11-29
+**最終更新**: 2025-11-30
 
 ClipPixプロジェクトの全ドキュメントとその概要です。
 
@@ -74,6 +74,7 @@ ClipPixプロジェクトの全ドキュメントとその概要です。
 | [main_screen.md](./ui/main_screen.md) | メイン画面、フォルダ選択、タブ表示、AppBar、一括削除モード、プレビューウィンドウ管理 |
 | [grid_view.md](./ui/grid_view.md) | Pinterestスタイルグリッド表示、カードリサイズ、ズーム、ドラッグ&ドロップ、Entry Reconciliation |
 | [image_card.md](./ui/image_card.md) | 画像カードコンポーネント、リサイズ・ズーム・パン操作、コピー・プレビュー、リオーダー |
+| [text_card.md](./ui/text_card.md) | テキストカードコンポーネント、ホバーボタン編集、インライン編集、お気に入り |
 | [image_preview_window.md](./ui/image_preview_window.md) | 画像プレビューウィンドウ、最前面表示、プロセス管理、TextPreviewWindowとの関係 |
 | [grid_settings_dialog.md](./ui/grid_settings_dialog.md) | グリッド設定ダイアログ、列数設定、背景色、一括サイズ調整、Undo/Redo |
 
@@ -136,6 +137,7 @@ docs/
 │   ├── main_screen.md
 │   ├── grid_view.md
 │   ├── image_card.md
+│   ├── text_card.md
 │   ├── image_preview_window.md
 │   └── grid_settings_dialog.md
 │
@@ -187,6 +189,7 @@ docs/
 | `lib/ui/main_screen.dart` | main_screen.md |
 | `lib/ui/grid_view_module.dart` | grid_view.md |
 | `lib/ui/image_card.dart` | image_card.md |
+| `lib/ui/widgets/text_card.dart` | text_card.md |
 | `lib/ui/image_preview_window.dart` | image_preview_window.md |
 | `lib/ui/widgets/grid_layout_surface.dart` | grid_layout_surface.md |
 | `lib/ui/widgets/grid_settings_dialog.dart` | grid_settings_dialog.md |
