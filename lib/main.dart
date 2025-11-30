@@ -67,7 +67,7 @@ Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // DEBUG: ヒットテスト可視化（タブ切り替え後の操作不能バグ調査用）
-  debugPaintPointersEnabled = true;
+  debugPaintPointersEnabled = false;
 
   // 親PIDを取得（プレビューウィンドウが親プロセス終了時に自動終了するため）
   final parentPidIndex = args.indexOf('--parent-pid');
