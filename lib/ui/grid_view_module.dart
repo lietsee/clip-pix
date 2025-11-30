@@ -421,16 +421,72 @@ class GridViewModuleState extends State<GridViewModule> {
 
     // スクロール位置を計算（カードの上端が表示されるように）
     final targetOffset = math.max(0.0, rect.top - _outerPadding);
-    debugPrint('[GridViewModule] scrollToAndHighlight: scrolling to offset=$targetOffset');
-    scrollController.animateTo(
-      targetOffset,
+    final maxExtent = scrollController.position.maxScrollExtent;
+    debugPrint('[GridViewModule] scrollToAndHighlight: targetOffset=$targetOffset, maxExtent=$maxExtent');
+
+    if (targetOffset <= maxExtent) {
+      // 目標位置が到達可能 → 通常スクロール
+      _scrollToOffsetAndHighlight(scrollController, targetOffset, filePath);
+    } else {
+      // 目標位置がmaxScrollExtentを超えている → 段階的スクロール
+      debugPrint('[GridViewModule] scrollToAndHighlight: target exceeds maxExtent, using incremental scroll');
+      _scrollIncrementally(scrollController, targetOffset, filePath);
+    }
+  }
+
+  /// 指定オフセットにスクロールしてハイライトを設定
+  void _scrollToOffsetAndHighlight(ScrollController controller, double offset, String filePath) {
+    debugPrint('[GridViewModule] _scrollToOffsetAndHighlight: scrolling to $offset');
+    controller.animateTo(
+      offset,
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
     );
+    _setHighlight(filePath);
+  }
 
-    // ハイライト表示を設定
+  /// 段階的スクロール（maxScrollExtentが足りない場合に再試行）
+  void _scrollIncrementally(ScrollController controller, double targetOffset, String filePath, [int attempt = 0]) {
+    const maxAttempts = 5;
+    if (attempt >= maxAttempts) {
+      // 最大試行回数に達した → 現在位置でハイライト設定
+      debugPrint('[GridViewModule] _scrollIncrementally: max attempts reached, setting highlight at current position');
+      _setHighlight(filePath);
+      return;
+    }
+
+    final maxExtent = controller.position.maxScrollExtent;
+    debugPrint('[GridViewModule] _scrollIncrementally: attempt=$attempt, targetOffset=$targetOffset, maxExtent=$maxExtent');
+
+    if (targetOffset <= maxExtent) {
+      // 目標到達可能になった → 最終スクロール
+      debugPrint('[GridViewModule] _scrollIncrementally: target now reachable, final scroll');
+      _scrollToOffsetAndHighlight(controller, targetOffset, filePath);
+      return;
+    }
+
+    // まだ到達不可 → maxExtentまでスクロールしてレイアウト更新を待つ
+    debugPrint('[GridViewModule] _scrollIncrementally: scrolling to maxExtent=$maxExtent');
+    controller.animateTo(
+      maxExtent,
+      duration: const Duration(milliseconds: 150),
+      curve: Curves.easeOut,
+    );
+
+    // 次フレームでmaxScrollExtentが更新されるのを待って再試行
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _scrollIncrementally(controller, targetOffset, filePath, attempt + 1);
+      });
+    });
+  }
+
+  /// ハイライト表示を設定し、2秒後にクリア
+  void _setHighlight(String filePath) {
     _highlightTimer?.cancel();
-    debugPrint('[GridViewModule] scrollToAndHighlight: setting highlight for $filePath');
+    debugPrint('[GridViewModule] _setHighlight: setting highlight for $filePath');
     setState(() {
       _highlightedItemId = filePath;
     });
@@ -438,7 +494,7 @@ class GridViewModuleState extends State<GridViewModule> {
     // 2秒後にハイライトをクリア
     _highlightTimer = Timer(const Duration(seconds: 2), () {
       if (mounted) {
-        debugPrint('[GridViewModule] scrollToAndHighlight: clearing highlight');
+        debugPrint('[GridViewModule] _setHighlight: clearing highlight');
         setState(() {
           _highlightedItemId = null;
         });
