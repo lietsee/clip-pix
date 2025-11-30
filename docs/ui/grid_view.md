@@ -378,7 +378,62 @@ if (newlyAddedIds.isNotEmpty) {
 }
 ```
 
-### 15.6 関連コンポーネント
+### 15.6 遅延レイアウト対策 (2025-11-30追加)
+
+`PinterestSliverGrid`は遅延レイアウト（lazy layout）を行うため、ビューポート外のカードはレイアウトされず、`maxScrollExtent`が実際のグリッド高さより小さくなる問題がある。
+
+#### 15.6.1 cacheExtent設定
+
+`CustomScrollView.cacheExtent`にスナップショットの全体高さを設定し、起動時により多くのカードをプリレイアウトする。
+
+```dart
+// LayoutSnapshot.totalHeight getter
+double get totalHeight {
+  if (entries.isEmpty) return 0;
+  return entries.map((e) => e.rect.bottom).reduce((a, b) => a > b ? a : b);
+}
+
+// CustomScrollViewに設定
+final cacheExtent = snapshot?.totalHeight;
+CustomScrollView(
+  controller: controller,
+  cacheExtent: cacheExtent,
+  // ...
+)
+```
+
+#### 15.6.2 段階的スクロール（フォールバック）
+
+`cacheExtent`でもカバーしきれない場合のフォールバックとして、段階的スクロールを実装。
+
+```dart
+void _scrollIncrementally(ScrollController controller, double targetOffset, String filePath, [int attempt = 0]) {
+  const maxAttempts = 5;
+  if (attempt >= maxAttempts) {
+    _setHighlight(filePath);  // 現在位置でハイライト
+    return;
+  }
+
+  final maxExtent = controller.position.maxScrollExtent;
+  if (targetOffset <= maxExtent) {
+    _scrollToOffsetAndHighlight(controller, targetOffset, filePath);
+    return;
+  }
+
+  // maxExtentまでスクロールしてレイアウト更新を待つ
+  controller.animateTo(maxExtent, duration: Duration(milliseconds: 150), curve: Curves.easeOut);
+
+  // 2フレーム待って再試行
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollIncrementally(controller, targetOffset, filePath, attempt + 1);
+    });
+  });
+}
+```
+
+### 15.7 関連コンポーネント
 - **MainScreen._HistoryStrip**: Chipクリックで`scrollToAndHighlight`を呼び出し
 - **ImageCard.isHighlighted**: ハイライト状態を受け取りパルスアニメーション表示
 - **TextCard.isHighlighted**: 同上
+- **LayoutSnapshot.totalHeight**: グリッド全体の高さを計算
