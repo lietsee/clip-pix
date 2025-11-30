@@ -64,6 +64,12 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
 
   late final FocusNode _keyboardFocusNode;
 
+  // GridViewModule key for scrollToAndHighlight access
+  final GlobalKey<GridViewModuleState> _gridViewKey = GlobalKey<GridViewModuleState>();
+
+  // 履歴エントリの自動ジャンプ用トラッキング
+  String? _lastHistoryEntryPath;
+
   @override
   void initState() {
     super.initState();
@@ -185,6 +191,19 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     final historyState = context.watch<ImageHistoryState>();
     final deletionMode = context.watch<DeletionModeState>();
     final clipboardMonitor = context.watch<ClipboardMonitor>();
+
+    // 新しい履歴エントリが追加されたら自動ジャンプ
+    final newEntryPath = historyState.entries.isNotEmpty
+        ? historyState.entries.first.filePath
+        : null;
+    if (newEntryPath != null && newEntryPath != _lastHistoryEntryPath) {
+      _lastHistoryEntryPath = newEntryPath;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _gridViewKey.currentState?.scrollToAndHighlight(newEntryPath);
+        }
+      });
+    }
 
     // GridLayoutSettingsを取得してAppBarの色を決定
     final settingsRepo = context.watch<GridLayoutSettingsRepository>();
@@ -427,6 +446,9 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
             entries: historyState.entries.toList(),
             backgroundColor: contentBgColor,
             foregroundColor: contentFgColor,
+            onChipTap: (filePath) {
+              _gridViewKey.currentState?.scrollToAndHighlight(filePath);
+            },
           ),
         Expanded(
           child: NotificationListener<ScrollNotification>(
@@ -460,6 +482,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
               return false;
             },
             child: GridViewModule(
+              key: _gridViewKey,
               state: libraryState,
               controller: folderState.viewMode == FolderViewMode.root
                   ? _rootScrollController
@@ -1188,11 +1211,13 @@ class _HistoryStrip extends StatelessWidget {
     required this.entries,
     required this.backgroundColor,
     required this.foregroundColor,
+    this.onChipTap,
   });
 
   final List<ImageEntry> entries;
   final Color backgroundColor;
   final Color foregroundColor;
+  final void Function(String filePath)? onChipTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1206,19 +1231,22 @@ class _HistoryStrip extends StatelessWidget {
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final entry = entries[index];
-          return Chip(
-            backgroundColor: backgroundColor,
-            label: Text(
-              File(entry.filePath).uri.pathSegments.last,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: foregroundColor),
-            ),
-            avatar: Icon(Icons.image, size: 18, color: foregroundColor),
-            elevation: 0,
-            side: BorderSide(color: foregroundColor, width: 1),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
+          return GestureDetector(
+            onTap: () => onChipTap?.call(entry.filePath),
+            child: Chip(
+              backgroundColor: backgroundColor,
+              label: Text(
+                File(entry.filePath).uri.pathSegments.last,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: foregroundColor),
+              ),
+              avatar: Icon(Icons.image, size: 18, color: foregroundColor),
+              elevation: 0,
               side: BorderSide(color: foregroundColor, width: 1),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: BorderSide(color: foregroundColor, width: 1),
+              ),
             ),
           );
         },

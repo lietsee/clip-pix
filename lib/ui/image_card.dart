@@ -35,6 +35,7 @@ class ImageCard extends StatefulWidget {
     required this.backgroundColor,
     this.isDeletionMode = false,
     this.isSelected = false,
+    this.isHighlighted = false,
     this.onDelete,
     this.onSelectionToggle,
     this.onReorderPointerDown,
@@ -61,6 +62,7 @@ class ImageCard extends StatefulWidget {
   final Color backgroundColor;
   final bool isDeletionMode;
   final bool isSelected;
+  final bool isHighlighted;
   final void Function(ImageItem item)? onDelete;
   final void Function(String id)? onSelectionToggle;
   final void Function(String id, int pointer)? onReorderPointerDown;
@@ -94,7 +96,8 @@ Offset clampPanOffset({
 
 enum _CardVisualState { loading, ready, error }
 
-class _ImageCardState extends State<ImageCard> {
+class _ImageCardState extends State<ImageCard>
+    with SingleTickerProviderStateMixin {
   static const double _minWidth = 100;
   static const double _minHeight = 100;
   static const double _maxWidth = 1920;
@@ -134,6 +137,8 @@ class _ImageCardState extends State<ImageCard> {
   int _loadingStateVersion = 0;
   late ValueNotifier<Size> _sizeNotifier;
   late ValueNotifier<double> _scaleNotifier;
+  late AnimationController _highlightController;
+  late Animation<double> _highlightAnimation;
 
   @override
   void initState() {
@@ -147,6 +152,19 @@ class _ImageCardState extends State<ImageCard> {
     _currentSpan = widget.viewState.columnSpan;
     _currentScale = widget.viewState.scale;
     _imageOffset = widget.viewState.offset;
+
+    // パルスアニメーション用コントローラー（2秒間で3回パルス）
+    _highlightController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 667),
+    );
+    _highlightAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _highlightController, curve: Curves.easeInOut),
+    );
+    if (widget.isHighlighted) {
+      _highlightController.repeat(reverse: true);
+    }
+
     debugPrint('[ImageCard] initState_restore: id=${widget.item.id.split('/').last}, '
         'offset=$_imageOffset, scale=$_currentScale');
   }
@@ -190,6 +208,15 @@ class _ImageCardState extends State<ImageCard> {
     if (oldWidget.viewState.columnSpan != widget.viewState.columnSpan) {
       _currentSpan = widget.viewState.columnSpan;
     }
+    // ハイライト状態の変更を検知してアニメーション制御
+    if (oldWidget.isHighlighted != widget.isHighlighted) {
+      if (widget.isHighlighted) {
+        _highlightController.repeat(reverse: true);
+      } else {
+        _highlightController.stop();
+        _highlightController.reset();
+      }
+    }
   }
 
   @override
@@ -208,6 +235,7 @@ class _ImageCardState extends State<ImageCard> {
     _scaleNotifier.dispose();
     _detachImageStream();
     _cancelLoadingTimeout();
+    _highlightController.dispose();
     super.dispose();
   }
 
@@ -311,23 +339,43 @@ class _ImageCardState extends State<ImageCard> {
                     _sizeNotifier.value = clampedSize;
                   });
                 }
-                return SizedBox(
-                  width: clampedSize.width,
-                  height: clampedSize.height,
-                  child: Card(
-                    clipBehavior: Clip.antiAlias,
-                    elevation: 2,
-                    color: widget.backgroundColor,
-                    surfaceTintColor: Colors.transparent,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        _buildImageContent(
-                          context,
-                          Size(clampedSize.width, clampedSize.height),
+                return AnimatedBuilder(
+                  animation: _highlightAnimation,
+                  builder: (context, child) {
+                    final borderOpacity = widget.isHighlighted
+                        ? _highlightAnimation.value
+                        : 0.0;
+                    return Container(
+                      width: clampedSize.width,
+                      height: clampedSize.height,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.blue.withOpacity(borderOpacity),
+                          width: 3,
                         ),
-                        _buildHoverControls(),
-                      ],
+                      ),
+                      child: child,
+                    );
+                  },
+                  child: SizedBox(
+                    width: clampedSize.width,
+                    height: clampedSize.height,
+                    child: Card(
+                      clipBehavior: Clip.antiAlias,
+                      elevation: 2,
+                      color: widget.backgroundColor,
+                      surfaceTintColor: Colors.transparent,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          _buildImageContent(
+                            context,
+                            Size(clampedSize.width, clampedSize.height),
+                          ),
+                          _buildHoverControls(),
+                        ],
+                      ),
                     ),
                   ),
                 );

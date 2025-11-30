@@ -49,10 +49,10 @@ class GridViewModule extends StatefulWidget {
   final ScrollController? controller;
 
   @override
-  State<GridViewModule> createState() => _GridViewModuleState();
+  State<GridViewModule> createState() => GridViewModuleState();
 }
 
-class _GridViewModuleState extends State<GridViewModule> {
+class GridViewModuleState extends State<GridViewModule> {
   static const Duration _animationDuration = Duration(milliseconds: 200);
   static const double _outerPadding = 12;
   static const double _gridGap = 3;
@@ -83,6 +83,10 @@ class _GridViewModuleState extends State<GridViewModule> {
   OverlayEntry? _dropIndicatorOverlay;
   Rect? _dropIndicatorRect;
   int? _dropInsertIndex;
+
+  // ハイライト表示用
+  String? _highlightedItemId;
+  Timer? _highlightTimer;
 
   // 自動スクロール用
   Timer? _autoScrollTimer;
@@ -367,9 +371,70 @@ class _GridViewModuleState extends State<GridViewModule> {
       timer.cancel();
     }
     _autoScrollTimer?.cancel(); // 自動スクロールタイマー破棄
+    _highlightTimer?.cancel(); // ハイライトタイマー破棄
     _dragOverlay?.remove();
     _dragOverlay = null;
     super.dispose();
+  }
+
+  /// 指定されたファイルパスのカードにスクロールし、2秒間ハイライト表示する
+  void scrollToAndHighlight(String filePath) {
+    // 該当アイテムのインデックスを特定
+    final index = _entries.indexWhere((e) => e.item.id == filePath);
+    if (index < 0) {
+      debugPrint('[GridViewModule] scrollToAndHighlight: item not found $filePath');
+      return;
+    }
+
+    // 現在のディレクトリのScrollControllerを取得
+    final activeDir = widget.state.activeDirectory?.path;
+    if (activeDir == null) return;
+    final scrollController = _directoryControllers[activeDir];
+    if (scrollController == null || !scrollController.hasClients) {
+      debugPrint('[GridViewModule] scrollToAndHighlight: no scroll controller');
+      return;
+    }
+
+    // レイアウトスナップショットから位置を計算
+    final snapshot = _layoutStore.latestSnapshot;
+    if (snapshot == null) {
+      debugPrint('[GridViewModule] scrollToAndHighlight: no snapshot');
+      return;
+    }
+
+    // entries内から該当idのrectを検索
+    final entry = snapshot.entries.cast<dynamic>().firstWhere(
+      (e) => e.id == filePath,
+      orElse: () => null,
+    );
+    if (entry == null) {
+      debugPrint('[GridViewModule] scrollToAndHighlight: rect not found');
+      return;
+    }
+    final rect = entry.rect as Rect;
+
+    // スクロール位置を計算（カードの上端が表示されるように）
+    final targetOffset = math.max(0.0, rect.top - _outerPadding);
+    scrollController.animateTo(
+      targetOffset,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+
+    // ハイライト表示を設定
+    _highlightTimer?.cancel();
+    setState(() {
+      _highlightedItemId = filePath;
+    });
+
+    // 2秒後にハイライトをクリア
+    _highlightTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          _highlightedItemId = null;
+        });
+      }
+    });
   }
 
   @override
@@ -682,6 +747,7 @@ class _GridViewModuleState extends State<GridViewModule> {
                 backgroundColor: const Color(0xFF72CC82),
                 isDeletionMode: isDeletionMode,
                 isSelected: isSelected,
+                isHighlighted: _highlightedItemId == item.id,
                 onDelete: _handleDeleteText,
                 onSelectionToggle: _handleSelectionToggle,
                 onReorderPointerDown: _handleReorderPointerDown,
@@ -707,6 +773,7 @@ class _GridViewModuleState extends State<GridViewModule> {
                 columnGap: _gridGap,
                 isDeletionMode: isDeletionMode,
                 isSelected: isSelected,
+                isHighlighted: _highlightedItemId == item.id,
                 onDelete: _handleDeleteImage,
                 onSelectionToggle: _handleSelectionToggle,
                 onReorderPointerDown: _handleReorderPointerDown,

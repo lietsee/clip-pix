@@ -18,7 +18,6 @@ import 'watcher_status_state.dart';
 class AppStateProvider {
   static List<SingleChildWidget> providers({
     required Box<dynamic> appStateBox,
-    required Box<dynamic> imageHistoryBox,
     OpenPreviewsRepository? openPreviewsRepo,
   }) {
     return <SingleChildWidget>[
@@ -29,7 +28,7 @@ class AppStateProvider {
         create: (_) => WatcherStatusNotifier(),
       ),
       StateNotifierProvider<ImageHistoryNotifier, ImageHistoryState>(
-        create: (_) => ImageHistoryNotifier(imageHistoryBox),
+        create: (_) => ImageHistoryNotifier(),
       ),
       StateNotifierProvider<DeletionModeNotifier, DeletionModeState>(
         create: (_) => DeletionModeNotifier(),

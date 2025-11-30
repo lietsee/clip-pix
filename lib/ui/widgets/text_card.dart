@@ -24,6 +24,7 @@ class TextCard extends StatefulWidget {
     required this.backgroundColor,
     this.isDeletionMode = false,
     this.isSelected = false,
+    this.isHighlighted = false,
     this.onDelete,
     this.onSelectionToggle,
     this.onSpanChange,
@@ -48,6 +49,7 @@ class TextCard extends StatefulWidget {
   final Color backgroundColor;
   final bool isDeletionMode;
   final bool isSelected;
+  final bool isHighlighted;
   final void Function(TextContentItem item)? onDelete;
   final void Function(String id)? onSelectionToggle;
   final void Function(String id, int pointer)? onReorderPointerDown;
@@ -60,7 +62,8 @@ class TextCard extends StatefulWidget {
   State<TextCard> createState() => _TextCardState();
 }
 
-class _TextCardState extends State<TextCard> {
+class _TextCardState extends State<TextCard>
+    with SingleTickerProviderStateMixin {
   bool _showControls = false;
   bool _isResizing = false;
   bool _isEditing = false;
@@ -74,6 +77,8 @@ class _TextCardState extends State<TextCard> {
   String _textContent = '';
   bool _isLoading = true;
   late ValueNotifier<Size> _sizeNotifier;
+  late AnimationController _highlightController;
+  late Animation<double> _highlightAnimation;
 
   @override
   void initState() {
@@ -83,6 +88,18 @@ class _TextCardState extends State<TextCard> {
       Size(widget.viewState.width, widget.viewState.height),
     );
     _loadTextContent();
+
+    // パルスアニメーション用コントローラー（2秒間で3回パルス）
+    _highlightController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 667),
+    );
+    _highlightAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _highlightController, curve: Curves.easeInOut),
+    );
+    if (widget.isHighlighted) {
+      _highlightController.repeat(reverse: true);
+    }
   }
 
   @override
@@ -108,6 +125,15 @@ class _TextCardState extends State<TextCard> {
     if (oldWidget.viewState.columnSpan != widget.viewState.columnSpan) {
       _currentSpan = widget.viewState.columnSpan;
     }
+    // ハイライト状態の変更を検知してアニメーション制御
+    if (oldWidget.isHighlighted != widget.isHighlighted) {
+      if (widget.isHighlighted) {
+        _highlightController.repeat(reverse: true);
+      } else {
+        _highlightController.stop();
+        _highlightController.reset();
+      }
+    }
   }
 
   @override
@@ -115,6 +141,7 @@ class _TextCardState extends State<TextCard> {
     _overlayService?.dispose();
     _overlayService = null;
     _sizeNotifier.dispose();
+    _highlightController.dispose();
     super.dispose();
   }
 
@@ -159,15 +186,34 @@ class _TextCardState extends State<TextCard> {
         child: ValueListenableBuilder<Size>(
           valueListenable: _sizeNotifier,
           builder: (context, size, child) {
-            return Container(
-              width: size.width,
-              height: size.height,
-              decoration: BoxDecoration(
-                color: widget.backgroundColor,
-                border: Border.all(color: Colors.grey.shade300, width: 1),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Stack(
+            return AnimatedBuilder(
+              animation: _highlightAnimation,
+              builder: (context, cardChild) {
+                final borderOpacity = widget.isHighlighted
+                    ? _highlightAnimation.value
+                    : 0.0;
+                return Container(
+                  width: size.width,
+                  height: size.height,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Colors.blue.withOpacity(borderOpacity),
+                      width: 3,
+                    ),
+                  ),
+                  child: cardChild,
+                );
+              },
+              child: Container(
+                width: size.width,
+                height: size.height,
+                decoration: BoxDecoration(
+                  color: widget.backgroundColor,
+                  border: Border.all(color: Colors.grey.shade300, width: 1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Stack(
                 children: [
                   // テキストコンテンツ
                   if (!_isEditing)
@@ -261,7 +307,8 @@ class _TextCardState extends State<TextCard> {
                   if (_showControls || _isResizing) _buildResizeHandle(),
                 ],
               ),
-            );
+            ),
+          );
           },
         ),
       ),

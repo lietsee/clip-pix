@@ -1,18 +1,17 @@
 import 'dart:collection';
 
-import 'package:hive/hive.dart';
 import 'package:state_notifier/state_notifier.dart';
 
 import '../../data/models/image_entry.dart';
-import '../../data/models/image_source_type.dart';
 import 'image_history_state.dart';
 
+/// 保存履歴を管理するNotifier
+///
+/// 最新5件の保存履歴を保持（アプリ終了でクリア、永続化なし）
 class ImageHistoryNotifier extends StateNotifier<ImageHistoryState> {
-  ImageHistoryNotifier(this._box) : super(ImageHistoryState.initial());
+  ImageHistoryNotifier() : super(ImageHistoryState.initial());
 
-  final Box<dynamic> _box;
-  static const _storageKey = 'image_history';
-  static const _maxEntries = 20;
+  static const _maxEntries = 5;
 
   void addEntry(ImageEntry entry) {
     final updated = ListQueue<ImageEntry>.from(state.entries)..addFirst(entry);
@@ -20,7 +19,6 @@ class ImageHistoryNotifier extends StateNotifier<ImageHistoryState> {
       updated.removeLast();
     }
     state = state.copyWith(entries: updated);
-    _persist();
   }
 
   void removeEntry(String filePath) {
@@ -30,25 +28,9 @@ class ImageHistoryNotifier extends StateNotifier<ImageHistoryState> {
       return;
     }
     state = state.copyWith(entries: updated);
-    _persist();
   }
 
   void clear() {
     state = ImageHistoryState.initial();
-    _persist();
-  }
-
-  void _persist() {
-    final serialized = state.entries
-        .map(
-          (entry) => <String, dynamic>{
-            'filePath': entry.filePath,
-            'metadataPath': entry.metadataPath,
-            'sourceType': imageSourceTypeToString(entry.sourceType),
-            'savedAt': entry.savedAt.toUtc().toIso8601String(),
-          },
-        )
-        .toList(growable: false);
-    _box.put(_storageKey, serialized);
   }
 }

@@ -113,7 +113,6 @@ Future<void> main(List<String> args) async {
     () => runApp(
       ClipPixApp(
         appStateBox: boxes.appStateBox,
-        imageHistoryBox: boxes.imageHistoryBox,
         gridCardPrefBox: boxes.gridCardPrefBox,
         gridLayoutBox: boxes.gridLayoutBox,
         gridOrderBox: boxes.gridOrderBox,
@@ -204,7 +203,6 @@ void _registerHiveAdapters() {
 Future<
     ({
       Box<dynamic> appStateBox,
-      Box<dynamic> imageHistoryBox,
       Box<GridCardPreference> gridCardPrefBox,
       Box<dynamic> gridLayoutBox,
       Box<dynamic> gridOrderBox,
@@ -213,7 +211,6 @@ Future<
       Box<OpenPreviewItem> openPreviewsBox,
     })> _openCoreBoxes() async {
   final appStateBox = await Hive.openBox<dynamic>('app_state');
-  final imageHistoryBox = await Hive.openBox<dynamic>('image_history');
   final gridCardPrefBox = await Hive.openBox<GridCardPreference>(
     'grid_card_prefs',
   );
@@ -230,7 +227,6 @@ Future<
   );
   return (
     appStateBox: appStateBox,
-    imageHistoryBox: imageHistoryBox,
     gridCardPrefBox: gridCardPrefBox,
     gridLayoutBox: gridLayoutBox,
     gridOrderBox: gridOrderBox,
@@ -722,7 +718,6 @@ class ClipPixApp extends StatelessWidget {
   const ClipPixApp({
     super.key,
     required this.appStateBox,
-    required this.imageHistoryBox,
     required this.gridCardPrefBox,
     required this.gridLayoutBox,
     required this.gridOrderBox,
@@ -730,7 +725,6 @@ class ClipPixApp extends StatelessWidget {
   });
 
   final Box<dynamic> appStateBox;
-  final Box<dynamic> imageHistoryBox;
   final Box<GridCardPreference> gridCardPrefBox;
   final Box<dynamic> gridLayoutBox;
   final Box<dynamic> gridOrderBox;
@@ -743,7 +737,6 @@ class ClipPixApp extends StatelessWidget {
     final List<SingleChildWidget> providersList = <SingleChildWidget>[
       ...AppStateProvider.providers(
         appStateBox: appStateBox,
-        imageHistoryBox: imageHistoryBox,
         openPreviewsRepo: openPreviewsRepo,
       ),
       Provider<GridCardPreferencesRepository>(
