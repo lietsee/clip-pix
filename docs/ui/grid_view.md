@@ -231,3 +231,64 @@ Column 0     Column 1     Column 2
 ### 13.5 関連ファイル
 - `lib/ui/widgets/pinterest_grid.dart` - `RenderSliverPinterestGrid.performLayout()`
 - `docs/architecture/grid_rendering_pipeline.md` - レンダリングパイプライン詳細
+
+---
+
+## 14. ドラッグ中の自動スクロール機能 (2025-11-30追加)
+
+### 14.1 概要
+カードをドラッグ中に画面端へカーソルを移動すると、自動的にスクロールが開始される。これにより、画面外の位置へもカードを移動できる。
+
+### 14.2 トリガーゾーン
+- **上部ゾーン**: ビューポート上端から20%の領域 → 上方向へスクロール
+- **下部ゾーン**: ビューポート下端から20%の領域 → 下方向へスクロール
+- **中央領域**: 自動スクロールなし（通常のドラッグ操作）
+
+### 14.3 スクロール速度
+- 端に近いほど速くスクロール（線形補間）
+- 最大速度: 10px/frame（約60fps = 600px/秒）
+- 計算式: `speed = maxSpeed * (1.0 - distanceRatio)`
+  - `distanceRatio`: ゾーン内での相対位置（0.0=端、1.0=ゾーン境界）
+
+### 14.4 実装詳細（commit d75a74b）
+
+**状態変数** (`lib/ui/grid_view_module.dart`):
+```dart
+Timer? _autoScrollTimer;        // 16ms周期のスクロールタイマー
+double _autoScrollSpeed = 0;    // 現在のスクロール速度（px/frame）
+Offset? _lastDragGlobalPosition; // 最後のカーソル位置（スクロール後のドロップ位置更新用）
+```
+
+**主要メソッド**:
+| メソッド | 役割 |
+|---------|------|
+| `_checkAutoScroll(Offset)` | カーソル位置を判定し、スクロール開始/停止/速度更新を決定 |
+| `_startAutoScroll(double)` | 16ms周期のタイマーを開始 |
+| `_stopAutoScroll()` | タイマーをキャンセルし、速度をリセット |
+| `_performAutoScroll()` | 実際のスクロール実行とドロップ位置の再計算 |
+
+### 14.5 フロー図
+
+```
+_updateReorder(globalPosition)
+       │
+       ▼
+_checkAutoScroll(globalPosition)
+       │
+       ├─ 上部20%ゾーン内? ──▶ _startAutoScroll(負の速度)
+       │
+       ├─ 下部20%ゾーン内? ──▶ _startAutoScroll(正の速度)
+       │
+       └─ 中央領域? ─────────▶ _stopAutoScroll()
+
+_performAutoScroll() [16ms周期]
+       │
+       ├─ scrollController.jumpTo(newOffset)
+       │
+       └─ _updateDropTargetAfterScroll() ← ドロップ先を再計算
+```
+
+### 14.6 注意点
+- **タイマー管理**: `_endReorder()`と`dispose()`で必ずタイマーをキャンセル
+- **境界チェック**: スクロール位置は`minScrollExtent`〜`maxScrollExtent`にクランプ
+- **ドロップ位置更新**: スクロール後は`_lastDragGlobalPosition`を使って新しいドロップ先を計算

@@ -165,3 +165,15 @@ Each PR should include:
 **Fix**: Changed termination condition from `childEnd > targetEndScrollOffset` to `minColumnHeight > targetEndScrollOffset` to ensure all columns are filled.
 
 See: `docs/ui/grid_view.md` Section 13, `docs/architecture/grid_rendering_pipeline.md`
+
+### Auto-Scroll During Card Drag (commit d75a74b, 2025-11-30)
+**Feature**: Auto-scroll when dragging cards near viewport edges.
+
+**Behavior**:
+- Top 20% zone: Scroll up (speed increases near edge)
+- Bottom 20% zone: Scroll down (speed increases near edge)
+- Max speed: 10px/frame at 60fps (~600px/sec)
+
+**Implementation**: Timer-based scroll in `GridViewModule` with `_checkAutoScroll()`, `_startAutoScroll()`, `_stopAutoScroll()`, `_performAutoScroll()` methods.
+
+See: `docs/ui/grid_view.md` Section 14
