@@ -91,7 +91,7 @@ A --> D[GridView]
 
 ## 11. UI ステート
 - `NoFolder` : ガイダンスカード＋「フォルダを選択」ボタンのみ表示。
-- `RootGallery` : ルート直下のコンテンツを PinterestGrid で表示し、上部にサブフォルダ一覧と最近保存した画像の履歴ストリップを水平リストで表示。
+- `RootGallery` : ルート直下のコンテンツを PinterestGrid で表示し、上部にサブフォルダ一覧と最近保存した画像の履歴ストリップを水平リストで表示。履歴ストリップのChipクリックで該当カードにジャンプ＆ハイライト。
 - `SubFolder` : 選択したサブフォルダのコンテンツのみを表示。戻る操作で `RootGallery` に復帰。
 - 各ビュー切替時はロードインジケータを表示し、読み込み完了後にグリッドへ差し替え。
 
@@ -193,3 +193,44 @@ if (!scrollController.hasClients) {
 - ビューポート位置の黄色ボックス表示
 - クリック/ドラッグでスクロール位置変更
 - ホイールスクロール対応
+
+## 15. 履歴ストリップ (_HistoryStrip) (2025-11-30追加)
+
+### 15.1 概要
+最近保存したコンテンツを水平に表示するChip列。クリックで該当カードにジャンプ＆ハイライト。
+
+### 15.2 データソース
+`ImageHistoryNotifier`が管理する`ImageHistoryState.entries`（最大5件、FIFO、永続化なし）。
+
+### 15.3 UI要素
+- **Chip**: 各保存コンテンツのファイル名を表示
+- **アイコン**: 画像は`Icons.image`、テキストは`Icons.text_snippet`
+- **水平スクロール**: コンテンツが多い場合は水平スクロール可能
+
+### 15.4 クリック動作
+1. Chipクリック → `_gridViewKey.currentState?.scrollToAndHighlight(filePath)`
+2. `GridViewModule`が該当カードの位置を取得
+3. スクロール位置を調整してカードを画面中央付近に表示
+4. 該当カードの`isHighlighted`をtrueに設定
+5. パルスアニメーション（青枠が約667msで3回明滅、合計2秒）
+
+### 15.5 自動ジャンプ
+新規保存時、`_reconcileEntries`内で新規アイテムを検知し、自動的に`scrollToAndHighlight`を呼び出す。
+
+```dart
+// GridViewModule._reconcileEntries内
+if (newlyAddedIds.isNotEmpty) {
+  final latestNewId = newlyAddedIds.last;
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      scrollToAndHighlight(latestNewId);
+    });
+  });
+}
+```
+
+### 15.6 パルスアニメーション
+- **対象**: `ImageCard`/`TextCard`の`isHighlighted`プロパティ
+- **効果**: 青いボーダー（`Colors.blue.withOpacity(0.8)`）が明滅
+- **AnimationController**: `duration: 667ms`, `repeat(reverse: true)`
+- **自動停止**: 2秒後に`_highlightController.reset()`で解除

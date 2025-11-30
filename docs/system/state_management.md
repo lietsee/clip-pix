@@ -91,7 +91,7 @@ abstract class BookmarkService {
 ## 5. ImageHistoryState
 | フィールド | 型 | 説明 |
 |-----------|----|------|
-| `entries` | `Queue<ImageEntry>` | 直近保存(最大20件)のメタ情報 |
+| `entries` | `Queue<ImageEntry>` | 直近保存(最大5件)のメタ情報 |
 
 `ImageEntry`
 | フィールド | 型 | 説明 |
@@ -121,7 +121,7 @@ abstract class BookmarkService {
 - `clear()` : フォルダ解除時に状態を初期化。
 
 - `SelectedFolderNotifier` : `hive_box.put('selected_folder', {...})` でフォルダ・履歴・`viewMode`・`currentTab`・`rootScrollOffset` を保存。
-- `ImageHistoryNotifier` : オプションで `hive_box.put('image_history', ...)` 保存。既定はアプリ終了時のみ同期。
+- `ImageHistoryNotifier` : メモリのみ保持。Hive永続化なし（アプリ終了でクリア）。
 - `ImageLibraryNotifier` : 表示フォルダ変更や FileWatcher 通知ごとに `ImageRepository` を介して再構築し、必要に応じて Hive 永続化は行わない。
 - Hive 初期化はアプリ起動時に `AppStateProvider` が実施し、復元時の例外はログに記録してデフォルト状態にフォールバック。
 
@@ -140,7 +140,7 @@ abstract class BookmarkService {
 - StateNotifier のユニットテストで Hive モックを用い、履歴更新と復元を検証。
 - ImageLibraryNotifier については一時ディレクトリを用いて `loadForDirectory` / `addOrUpdate` / `remove` の動作を確認。
 - 監視フラグの切り替えは FileWatcher / ClipboardMonitor のスタブを使って `onFolderChanged` の呼び出し順序を確認。
-- ImageHistory のサイズ制限 (最大20件) と FIFO 振る舞いをテスト。
+- ImageHistory のサイズ制限 (最大5件) と FIFO 振る舞いをテスト。
 
 ---
 

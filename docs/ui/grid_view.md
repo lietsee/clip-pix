@@ -292,3 +292,93 @@ _performAutoScroll() [16ms周期]
 - **タイマー管理**: `_endReorder()`と`dispose()`で必ずタイマーをキャンセル
 - **境界チェック**: スクロール位置は`minScrollExtent`〜`maxScrollExtent`にクランプ
 - **ドロップ位置更新**: スクロール後は`_lastDragGlobalPosition`を使って新しいドロップ先を計算
+
+---
+
+## 15. スクロール＆ハイライト機能 (2025-11-30追加)
+
+### 15.1 概要
+`scrollToAndHighlight(String id)`メソッドにより、指定IDのカードにスクロールし、パルスアニメーションでハイライト表示する。
+
+### 15.2 公開API
+
+```dart
+/// 指定IDのカードにスクロールし、ハイライト表示する
+void scrollToAndHighlight(String id);
+```
+
+### 15.3 内部フロー
+
+1. **ID検索**: `_entries`から`id`または`id`で終わる`filePath`を持つエントリーを検索
+2. **Rect取得**: `GridLayoutStore.latestSnapshot`から該当カードの`Rect`を取得
+3. **スクロール**: `ScrollController.animateTo()`でカードが画面中央付近に来るよう調整
+4. **ハイライト設定**: `_highlightedId`をセットし、`setState()`で再ビルド
+5. **自動解除**: 2秒後に`_highlightedId`をクリア
+
+### 15.4 実装詳細
+
+```dart
+void scrollToAndHighlight(String id) {
+  // 1. エントリー検索
+  final entry = _entries.firstWhereOrNull(
+    (e) => e.id == id || e.item.filePath.endsWith(id),
+  );
+  if (entry == null) return;
+
+  // 2. スナップショットからRect取得
+  final snapshot = gridLayoutStore.latestSnapshot;
+  final rect = snapshot?.rects[entry.id];
+  if (rect == null) return;
+
+  // 3. スクロール位置計算
+  final viewportHeight = widget.controller.position.viewportDimension;
+  final targetOffset = rect.top - (viewportHeight / 2) + (rect.height / 2);
+
+  // 4. スクロール実行
+  widget.controller.animateTo(
+    targetOffset.clamp(0.0, widget.controller.position.maxScrollExtent),
+    duration: const Duration(milliseconds: 300),
+    curve: Curves.easeInOut,
+  );
+
+  // 5. ハイライト設定
+  setState(() => _highlightedId = entry.id);
+
+  // 6. 2秒後に解除
+  Future.delayed(const Duration(seconds: 2), () {
+    if (mounted && _highlightedId == entry.id) {
+      setState(() => _highlightedId = null);
+    }
+  });
+}
+```
+
+### 15.5 新規アイテム自動スクロール
+
+`_reconcileEntries()`内で新規追加されたアイテムを検知し、自動的に`scrollToAndHighlight`を呼び出す。
+
+**タイミングの工夫**:
+- `_entries`に追加された後、2回の`addPostFrameCallback`で遅延実行
+- 1回目: 現在フレームのレイアウト完了を待機
+- 2回目: スナップショット更新を待機
+
+```dart
+// _reconcileEntries内
+final List<String> newlyAddedIds = <String>[];
+// ... アイテム追加時にnewlyAddedIds.add(item.id)
+
+if (newlyAddedIds.isNotEmpty) {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      scrollToAndHighlight(newlyAddedIds.last);
+    });
+  });
+}
+```
+
+### 15.6 関連コンポーネント
+- **MainScreen._HistoryStrip**: Chipクリックで`scrollToAndHighlight`を呼び出し
+- **ImageCard.isHighlighted**: ハイライト状態を受け取りパルスアニメーション表示
+- **TextCard.isHighlighted**: 同上
