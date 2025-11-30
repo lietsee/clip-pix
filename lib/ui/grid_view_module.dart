@@ -672,7 +672,6 @@ class _GridViewModuleState extends State<GridViewModule> {
                 viewState: viewState,
                 onResize: _handleResize,
                 onSpanChange: _handleSpanChange,
-                onEditMemo: _handleEditMemo,
                 onFavoriteToggle: _handleFavorite,
                 onCopyText: _handleCopyText,
                 onOpenPreview: _showTextPreviewDialog,

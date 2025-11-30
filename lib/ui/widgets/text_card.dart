@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 
 import '../../data/models/text_content_item.dart';
 import '../../system/state/grid_layout_store.dart';
-import 'memo_edit_dialog.dart';
 import 'resize_preview_overlay.dart';
 import 'text_inline_editor.dart';
 
@@ -15,7 +14,6 @@ class TextCard extends StatefulWidget {
     required this.item,
     required this.viewState,
     required this.onResize,
-    required this.onEditMemo,
     required this.onFavoriteToggle,
     required this.onCopyText,
     required this.onOpenPreview,
@@ -40,7 +38,6 @@ class TextCard extends StatefulWidget {
   final GridCardViewState viewState;
   final void Function(String id, Size newSize) onResize;
   final void Function(String id, int span)? onSpanChange;
-  final void Function(String id, String memo) onEditMemo;
   final void Function(String id, int favorite) onFavoriteToggle;
   final void Function(TextContentItem item) onCopyText;
   final Future<void> Function(TextContentItem item) onOpenPreview;
@@ -157,7 +154,7 @@ class _TextCardState extends State<TextCard> {
       onEnter: (_) => setState(() => _showControls = true),
       onExit: (_) => setState(() => _showControls = false),
       child: GestureDetector(
-        onTap: (_isEditing || widget.isDeletionMode) ? null : _handleSingleTap,
+        onTap: null, // 編集はホバーボタンからのみ
         onDoubleTap: (_isEditing || widget.isDeletionMode) ? null : _handleDoubleTap,
         child: ValueListenableBuilder<Size>(
           valueListenable: _sizeNotifier,
@@ -274,20 +271,20 @@ class _TextCardState extends State<TextCard> {
   Widget _buildHoverControls() {
     return Stack(
       children: [
-        // メモボタン（左上）- 一括削除モード時は非表示
+        // テキスト編集ボタン（左上）- 一括削除モード時は非表示
         if (!widget.isDeletionMode)
           Positioned(
             top: 8,
             left: 8,
             child: ElevatedButton(
-              onPressed: _handleEditMemo,
+              onPressed: _handleSingleTap,
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(36, 36),
                 padding: EdgeInsets.zero,
                 backgroundColor: Colors.white.withOpacity(0.9),
               ),
               child: Icon(
-                widget.item.memo.isEmpty ? Icons.note_add : Icons.edit_note,
+                Icons.edit,
                 size: 20,
                 color: Colors.blue.shade700,
               ),
@@ -406,19 +403,6 @@ class _TextCardState extends State<TextCard> {
     setState(() {
       _isEditing = false;
     });
-  }
-
-  Future<void> _handleEditMemo() async {
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => MemoEditDialog(
-        initialMemo: widget.item.memo,
-        fileName: widget.item.filePath.split('/').last,
-      ),
-    );
-    if (result != null) {
-      widget.onEditMemo(widget.item.id, result);
-    }
   }
 
   void _handleFavoriteToggle() {
