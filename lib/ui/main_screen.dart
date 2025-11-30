@@ -67,9 +67,6 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   // GridViewModule key for scrollToAndHighlight access
   final GlobalKey<GridViewModuleState> _gridViewKey = GlobalKey<GridViewModuleState>();
 
-  // 履歴エントリの自動ジャンプ用トラッキング
-  String? _lastHistoryEntryPath;
-
   @override
   void initState() {
     super.initState();
@@ -191,19 +188,6 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     final historyState = context.watch<ImageHistoryState>();
     final deletionMode = context.watch<DeletionModeState>();
     final clipboardMonitor = context.watch<ClipboardMonitor>();
-
-    // 新しい履歴エントリが追加されたら自動ジャンプ
-    final newEntryPath = historyState.entries.isNotEmpty
-        ? historyState.entries.first.filePath
-        : null;
-    if (newEntryPath != null && newEntryPath != _lastHistoryEntryPath) {
-      _lastHistoryEntryPath = newEntryPath;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _gridViewKey.currentState?.scrollToAndHighlight(newEntryPath);
-        }
-      });
-    }
 
     // GridLayoutSettingsを取得してAppBarの色を決定
     final settingsRepo = context.watch<GridLayoutSettingsRepository>();

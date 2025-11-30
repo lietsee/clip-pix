@@ -379,19 +379,22 @@ class GridViewModuleState extends State<GridViewModule> {
 
   /// 指定されたファイルパスのカードにスクロールし、2秒間ハイライト表示する
   void scrollToAndHighlight(String filePath) {
+    debugPrint('[GridViewModule] scrollToAndHighlight: called with $filePath');
+    debugPrint('[GridViewModule] scrollToAndHighlight: _entries.length=${_entries.length}');
+
     // 該当アイテムのインデックスを特定
     final index = _entries.indexWhere((e) => e.item.id == filePath);
     if (index < 0) {
       debugPrint('[GridViewModule] scrollToAndHighlight: item not found $filePath');
+      debugPrint('[GridViewModule] scrollToAndHighlight: available ids=${_entries.map((e) => e.item.id.split('/').last).take(5).toList()}...');
       return;
     }
+    debugPrint('[GridViewModule] scrollToAndHighlight: found at index=$index');
 
-    // 現在のディレクトリのScrollControllerを取得
-    final activeDir = widget.state.activeDirectory?.path;
-    if (activeDir == null) return;
-    final scrollController = _directoryControllers[activeDir];
+    // ScrollControllerを取得（widget.controllerを優先）
+    final scrollController = widget.controller;
     if (scrollController == null || !scrollController.hasClients) {
-      debugPrint('[GridViewModule] scrollToAndHighlight: no scroll controller');
+      debugPrint('[GridViewModule] scrollToAndHighlight: no scroll controller or no clients');
       return;
     }
 
@@ -401,20 +404,24 @@ class GridViewModuleState extends State<GridViewModule> {
       debugPrint('[GridViewModule] scrollToAndHighlight: no snapshot');
       return;
     }
+    debugPrint('[GridViewModule] scrollToAndHighlight: snapshot.entries.length=${snapshot.entries.length}');
 
     // entries内から該当idのrectを検索
-    final entry = snapshot.entries.cast<dynamic>().firstWhere(
+    final snapshotEntry = snapshot.entries.cast<dynamic>().firstWhere(
       (e) => e.id == filePath,
       orElse: () => null,
     );
-    if (entry == null) {
-      debugPrint('[GridViewModule] scrollToAndHighlight: rect not found');
+    if (snapshotEntry == null) {
+      debugPrint('[GridViewModule] scrollToAndHighlight: rect not found in snapshot');
+      debugPrint('[GridViewModule] scrollToAndHighlight: snapshot ids=${snapshot.entries.take(5).map((e) => e.id.split('/').last).toList()}...');
       return;
     }
-    final rect = entry.rect as Rect;
+    final rect = snapshotEntry.rect as Rect;
+    debugPrint('[GridViewModule] scrollToAndHighlight: rect=$rect');
 
     // スクロール位置を計算（カードの上端が表示されるように）
     final targetOffset = math.max(0.0, rect.top - _outerPadding);
+    debugPrint('[GridViewModule] scrollToAndHighlight: scrolling to offset=$targetOffset');
     scrollController.animateTo(
       targetOffset,
       duration: const Duration(milliseconds: 300),
@@ -423,6 +430,7 @@ class GridViewModuleState extends State<GridViewModule> {
 
     // ハイライト表示を設定
     _highlightTimer?.cancel();
+    debugPrint('[GridViewModule] scrollToAndHighlight: setting highlight for $filePath');
     setState(() {
       _highlightedItemId = filePath;
     });
@@ -430,6 +438,7 @@ class GridViewModuleState extends State<GridViewModule> {
     // 2秒後にハイライトをクリア
     _highlightTimer = Timer(const Duration(seconds: 2), () {
       if (mounted) {
+        debugPrint('[GridViewModule] scrollToAndHighlight: clearing highlight');
         setState(() {
           _highlightedItemId = null;
         });
@@ -1229,6 +1238,7 @@ class GridViewModuleState extends State<GridViewModule> {
     int newCount = 0;
     int versionIncrementCount = 0;
     final List<_GridEntry> reordered = <_GridEntry>[];
+    final List<String> newlyAddedIds = <String>[]; // 新規追加されたアイテムID
     for (final item in newItems) {
       final existing = existingMap[item.id];
       if (existing != null) {
@@ -1254,6 +1264,7 @@ class GridViewModuleState extends State<GridViewModule> {
       } else {
         final entry = _createEntry(item);
         newCount++;
+        newlyAddedIds.add(item.id); // 新規アイテムIDを記録
         reordered.add(entry);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
@@ -1289,6 +1300,20 @@ class GridViewModuleState extends State<GridViewModule> {
       if (!mounted) return;
       _logEntries('reconcile_after_post', _entries);
     });
+
+    // 新規アイテムが追加された場合、最後の1件に自動スクロール＆ハイライト
+    if (newlyAddedIds.isNotEmpty) {
+      final latestNewId = newlyAddedIds.last;
+      debugPrint('[GridViewModule] _reconcileEntries: new item detected, scheduling scroll to $latestNewId');
+      // レイアウト完了後にスクロール実行（2フレーム待つ）
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          scrollToAndHighlight(latestNewId);
+        });
+      });
+    }
   }
 
   void _animateEntryVisible(_GridEntry entry) {

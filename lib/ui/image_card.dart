@@ -210,6 +210,8 @@ class _ImageCardState extends State<ImageCard>
     }
     // ハイライト状態の変更を検知してアニメーション制御
     if (oldWidget.isHighlighted != widget.isHighlighted) {
+      debugPrint('[ImageCard] highlight_changed: ${widget.item.id.split('/').last}, '
+          'old=${oldWidget.isHighlighted}, new=${widget.isHighlighted}');
       if (widget.isHighlighted) {
         _highlightController.repeat(reverse: true);
       } else {
