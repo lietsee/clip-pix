@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ffi' hide Size;
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -239,7 +241,7 @@ Future<
 }
 
 /// 親プロセスが生存しているかチェック
-/// Windows: Win32 OpenProcess APIで確認（高速）
+/// Windows: Win32 OpenProcess + GetExitCodeProcess APIで確認（高速）
 /// macOS: psコマンドで確認
 bool _isParentProcessAlive(int pid) {
   try {
@@ -254,8 +256,20 @@ bool _isParentProcessAlive(int pid) {
         // プロセスが存在しない、またはアクセス権がない
         return false;
       }
+
+      // 終了コードを取得してプロセスが実際に生存しているか確認
+      final exitCodePtr = calloc<Uint32>();
+      final success = win32.GetExitCodeProcess(handle, exitCodePtr);
+      final exitCode = exitCodePtr.value;
+      calloc.free(exitCodePtr);
       win32.CloseHandle(handle);
-      return true;
+
+      if (success == 0) {
+        return true; // API失敗時は安全側（生存扱い）
+      }
+
+      // STILL_ACTIVE (259) = プロセス生存中
+      return exitCode == win32.STILL_ACTIVE;
     } else if (Platform.isMacOS) {
       final result = Process.runSync('ps', ['-p', '$pid']);
       // 終了コード0ならプロセス存在
