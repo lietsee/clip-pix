@@ -270,7 +270,10 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
       }
       trailingChildWithLayout = child;
 
-      if (childEnd > targetEndScrollOffset) {
+      // Masonryグリッドでは次のカードは必ず最も低いカラムに配置される
+      // 全カラムの最小高さがtargetを超えたら、全カラムがビューポートをカバー済み
+      final double minColumnHeight = columnHeights.reduce(math.min);
+      if (minColumnHeight > targetEndScrollOffset) {
         reachedEnd = true;
         break;
       }
