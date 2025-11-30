@@ -55,6 +55,7 @@ import 'system/state/selected_folder_state.dart';
 import 'system/state/watcher_status_notifier.dart';
 import 'system/url_download_service.dart';
 import 'package:path/path.dart' as p;
+import 'package:win32/win32.dart' as win32;
 import 'ui/main_screen.dart';
 import 'ui/image_preview_window.dart';
 import 'ui/widgets/text_preview_window.dart';
@@ -238,17 +239,23 @@ Future<
 }
 
 /// 親プロセスが生存しているかチェック
-/// Windows: tasklistコマンドで確認
+/// Windows: Win32 OpenProcess APIで確認（高速）
 /// macOS: psコマンドで確認
 bool _isParentProcessAlive(int pid) {
   try {
     if (Platform.isWindows) {
-      final result = Process.runSync(
-        'tasklist',
-        ['/FI', 'PID eq $pid', '/NH', '/FO', 'CSV'],
+      // PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+      final handle = win32.OpenProcess(
+        win32.PROCESS_QUERY_LIMITED_INFORMATION,
+        win32.FALSE,
+        pid,
       );
-      // tasklistの出力にPIDが含まれていれば生存
-      return result.stdout.toString().contains('"$pid"');
+      if (handle == 0) {
+        // プロセスが存在しない、またはアクセス権がない
+        return false;
+      }
+      win32.CloseHandle(handle);
+      return true;
     } else if (Platform.isMacOS) {
       final result = Process.runSync('ps', ['-p', '$pid']);
       // 終了コード0ならプロセス存在
