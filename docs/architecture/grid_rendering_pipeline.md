@@ -682,10 +682,60 @@ testWidgets('full rendering pipeline', (tester) async {
 - [Data Flow](./data_flow.md) - 全体データフロー
 - [State Management Flow](./state_management_flow.md) - 状態管理フロー
 
+## Masonryレイアウトループの終了条件 (2025-11-30追加)
+
+### 問題と解決
+
+Pinterest/Masonryグリッドでは、カードは**最も低いカラム**に配置される。以前の実装では、1つのカードが`targetEndScrollOffset`を超えた時点でレイアウトループを終了していたが、これでは他のカラムがまだ短い場合にカードが配置されずに表示されないバグが発生していた。
+
+**修正前（バグあり）**:
+```dart
+// 1つのカードがtargetを超えたら終了 - これは間違い
+if (childEnd > targetEndScrollOffset) {
+  reachedEnd = true;
+  break;
+}
+```
+
+**修正後（commit f787070）**:
+```dart
+// 全カラムの最小高さがtargetを超えたら終了
+// Masonryでは次のカードは必ず最も低いカラムに配置される
+// よって最小カラム高さ > target = 全カラムがビューポートをカバー済み
+final double minColumnHeight = columnHeights.reduce(math.min);
+if (minColumnHeight > targetEndScrollOffset) {
+  reachedEnd = true;
+  break;
+}
+```
+
+### 図解
+
+```
+Column 0     Column 1     Column 2
++-------+    +-------+    +-------+
+|Card 0 |    |Card 1 |    |Card 2 |
+|高400  |    |高300  |    |高500  |
++-------+    +-------+    +-------+
+|Card 3 |    |Card 4 |    |       |
+|高300  |    |高600  |    |       |  ← 旧実装: Card 4で終了
++-------+    +-------+    |       |     Column 2は高さ500でtarget未満なのに
+             ...STOP...   |       |     Card 5が配置されない！
+                         +-------+
+                         |Card 5 |  ← 新実装: 全カラムがtargetを超えるまで継続
+                         |高300  |
+                         +-------+
+```
+
+### 影響箇所
+
+- `lib/ui/widgets/pinterest_grid.dart:273-279` - `RenderSliverPinterestGrid.performLayout()`
+
 ## 変更履歴
 
 | 日付 | 内容 |
 |------|------|
+| 2025-11-30 | Masonryレイアウトループ終了条件の修正（f787070）追加 |
 | 2025-11-28 | セマンティクス機能削除（アクセシビリティ不要のため） |
 | 2025-11-28 | 全体アーキテクチャ図、詳細シーケンス図、カードライフサイクル追加 |
 | 2025-11-02 | 個別カード更新フロー、スナップショット再生成パターン追加 |

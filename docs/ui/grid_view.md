@@ -1,5 +1,5 @@
 # GridView 詳細設計
-最終更新: 2025-11-29
+最終更新: 2025-11-30
 
 ## 1. 概要
 指定フォルダ内の画像を Pinterest 風に配置し、カードの列スパン・高さを尊重したタイルレイアウトを提供する。
@@ -175,3 +175,59 @@ if (directoryChanged && widget.state.images.isNotEmpty) {
 #### 関連修正
 - **ミニマップの再作成** (commit 2817932): viewMode変更時に正しいScrollControllerでミニマップを再作成
 - **hasClientsリトライ** (commit a75a96d): ScrollControllerにクライアントがアタッチされるまでリトライ
+
+---
+
+## 13. PinterestSliverGridレイアウトループ修正 (2025-11-30追加)
+
+### 13.1 問題
+ビューポート下部のカードが表示されないバグがあった。スクロールしてカード全体が画面中央付近に来るまで表示されないケースが発生。
+
+### 13.2 根本原因
+`PinterestSliverGrid`のレイアウトループ終了条件に問題があった。
+
+**問題のあるコード（lib/ui/widgets/pinterest_grid.dart:273-276）**:
+```dart
+if (childEnd > targetEndScrollOffset) {
+  reachedEnd = true;
+  break;
+}
+```
+
+Masonryグリッドではカードは**最も低いカラム**に配置されるが、このコードは**1つのカード**が`targetEndScrollOffset`を超えた時点でループを終了していた。そのため、高いカードが1つでもtargetを超えると、他のまだ低いカラムにカードが配置されずにスキップされていた。
+
+### 13.3 解決策（commit f787070）
+
+終了条件を「全カラムの最小高さがtargetを超えたら終了」に変更:
+
+```dart
+// Masonryグリッドでは次のカードは必ず最も低いカラムに配置される
+// 全カラムの最小高さがtargetを超えたら、全カラムがビューポートをカバー済み
+final double minColumnHeight = columnHeights.reduce(math.min);
+if (minColumnHeight > targetEndScrollOffset) {
+  reachedEnd = true;
+  break;
+}
+```
+
+### 13.4 図解
+
+```
+Column 0     Column 1     Column 2
++-------+    +-------+    +-------+
+|Card 0 |    |Card 1 |    |Card 2 |
+|高400  |    |高300  |    |高500  |
++-------+    +-------+    +-------+
+|Card 3 |    |Card 4 |    |       |
+|高300  |    |高600  |    |       |  ← 旧実装: Card 4のchildEnd > targetで終了
++-------+    +-------+    |       |     Column 2は高さ500でtarget(800)未満なのに
+                         |       |     Card 5が配置されない！
+                         +-------+
+                         |Card 5 |  ← 新実装: minColumnHeight(500) < target(800)
+                         |高300  |     なので継続、Card 5が配置される
+                         +-------+
+```
+
+### 13.5 関連ファイル
+- `lib/ui/widgets/pinterest_grid.dart` - `RenderSliverPinterestGrid.performLayout()`
+- `docs/architecture/grid_rendering_pipeline.md` - レンダリングパイプライン詳細

@@ -69,17 +69,21 @@ Provider tree (see `lib/main.dart` and `lib/system/state/app_state_provider.dart
 - `GridResizeController` - Resize command handling, undo/redo stack (3 levels)
 - `GridLayoutMutationController` - Batches geometry mutations for performance
 
-### Grid Semantics & Layout Stability
+### Grid Layout & Rendering
 
-**Current Implementation (as of 801d3c6)**:
+**Current Implementation (as of f787070)**:
 - `GridLayoutLayoutEngine` produces `LayoutSnapshot` with card rects and IDs
-- `GridLayoutSurface` uses Front/Back buffer pattern to defer semantics updates until post-layout
-- `GridSemanticsTree` rebuilds semantics via `SchedulerBinding.addPostFrameCallback` to avoid `!semantics.parentDataDirty` assertions
-- `GeometryMutationQueue` batches column/resize updates to minimize `notifyListeners()` calls
+- `GridLayoutSurface` uses Front/Back buffer pattern for smooth layout updates
+- `GeometryMutationQueue` batches column/resize updates with 60ms throttling to minimize `notifyListeners()` calls
+- `PinterestSliverGrid` renders cards using masonry layout algorithm with proper termination condition
 
-**Known Issue** (see `docs/known_issue_grid_semantics.md`):
-- Rapid window resizing or repeated column changes can still trigger RenderObject semantics assertions
-- Workaround: 60ms throttling on geometry updates; further stabilization planned in `docs/system/grid_semantics_rebuild_plan.md`
+**Masonry Layout Loop** (see `docs/ui/grid_view.md` Section 13):
+- Layout loop terminates when **all columns** exceed `targetEndScrollOffset` (not when any single card exceeds it)
+- This ensures cards are placed in shorter columns even when taller columns already exceed the viewport
+- Implementation: `columnHeights.reduce(math.min) > targetEndScrollOffset`
+
+**Semantics** (resolved - see `docs/archive/known_issue_grid_semantics.md`):
+- Semantics disabled via `ExcludeSemantics` wrapper as accessibility is not required for this desktop app
 
 ## Testing Strategy
 
@@ -148,13 +152,16 @@ Each PR should include:
 
 - **System Specs**: `docs/overview.md`, `docs/system/state_management.md`, `docs/system/clipboard_monitor.md`, `docs/system/image_saver.md`, `docs/system/file_watcher.md`
 - **UI Specs**: `docs/ui/main_screen.md`, `docs/ui/grid_view.md`, `docs/ui/image_card.md`, `docs/ui/image_preview_window.md`
-- **Migration Plans**: `docs/system/pinterest_grid_migration.md`, `docs/system/grid_layout_store_migration.md`, `docs/system/grid_semantics_rebuild_plan.md`
-- **Known Issues**: `docs/known_issue_grid_semantics.md`
+- **Architecture**: `docs/architecture/grid_rendering_pipeline.md`, `docs/architecture/data_flow.md`, `docs/architecture/state_management_flow.md`
+- **Archive**: `docs/archive/pinterest_grid_migration.md`, `docs/archive/known_issue_grid_semantics.md`, `docs/archive/grid_semantics_rebuild_plan.md`
 
-## Active Development Focus
+## Recent Bug Fixes
 
-As of commit 801d3c6 (2025-10-28):
-1. **Pinterest Grid Stabilization** - Improve `PinterestSliverGrid` key generation and differential updates
-2. **Semantics Stability** - Finalize Front/Back buffer semantics deferral to eliminate layout assertions during window resize
-3. **Geometry Queue Integration** - Enable `geometryQueueEnabled` flag in production after validation
-4. **CI Log Collection** - Add snapshot log verification (`front_snapshot_updated`, `staging_snapshot_ready`, `front_snapshot_swapped`) to detect sequence anomalies
+### Masonry Layout Loop Fix (commit f787070, 2025-11-30)
+**Problem**: Cards at viewport bottom were not displayed until scrolled to center.
+
+**Root Cause**: Layout loop terminated when ANY card exceeded `targetEndScrollOffset`, but in masonry layout cards are placed in the shortest column. This caused cards in shorter columns to be skipped.
+
+**Fix**: Changed termination condition from `childEnd > targetEndScrollOffset` to `minColumnHeight > targetEndScrollOffset` to ensure all columns are filled.
+
+See: `docs/ui/grid_view.md` Section 13, `docs/architecture/grid_rendering_pipeline.md`
