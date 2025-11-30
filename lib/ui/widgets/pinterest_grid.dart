@@ -406,7 +406,7 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
     geometry = computedGeometry;
 
     final viewportStart = constraints.scrollOffset;
-    final viewportEnd = viewportStart + constraints.remainingPaintExtent;
+    // viewportEnd は381行目で定義済み
 
     if (leadingTrackedChild != null && trailingTrackedChild != null) {
       final leadingData =
