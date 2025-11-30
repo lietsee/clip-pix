@@ -1,6 +1,6 @@
 # ImagePreviewWindow 詳細設計
 
-**最終更新**: 2025-11-27
+**最終更新**: 2025-11-30
 
 ## 1. 概要
 ImageCard から起動される単独ウィンドウ。対象画像を等倍またはウィンドウ幅で表示し、最前面表示の切替と閉じる操作のみを提供する。
@@ -72,6 +72,22 @@ ImageCard から起動される単独ウィンドウ。対象画像を等倍ま�
 ```
 ImageCard.onOpenPreview
   → ImagePreviewProcessManager.launchPreview(imageItem)
-  → Process.start(executable, ['--preview', jsonPayload])
+  → Process.start(executable, ['--preview', jsonPayload, '--parent-pid', parentPid])
   → ImagePreviewWindow (別プロセス)
 ```
+
+### 8.4 親プロセス監視による自動終了
+プレビューウィンドウは別プロセスで起動されるため、メインアプリ終了時に孤児プロセスとなる問題がある。これを解決するため、親プロセスの生存監視を行う。
+
+**仕組み:**
+1. メインアプリがプレビュー起動時に `--parent-pid` 引数で自身のPIDを渡す
+2. プレビューウィンドウは1秒ごとに親プロセスの存在を確認
+3. 親プロセスが終了したことを検知したら `exit(0)` で自動終了
+
+**プラットフォーム実装:**
+| OS | 検出方法 | 応答速度 |
+|----|----------|----------|
+| Windows | Win32 `OpenProcess` + `GetExitCodeProcess` API | 数ミリ秒 |
+| macOS | `ps -p $pid` コマンド | 数十ミリ秒 |
+
+**コード位置:** `lib/main.dart` の `_isParentProcessAlive()` 関数

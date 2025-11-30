@@ -125,7 +125,7 @@ Previous architecture had per-card `ValueNotifier` instances causing excessive `
 `ClipboardMonitor` polls system clipboard continuously. When app copies an image, it must ignore its own event. `ClipboardCopyService` injects guard token and `ClipboardMonitor` checks it before triggering save.
 
 ### Why Separate Preview Window Process?
-`ImagePreviewWindow` can be launched as standalone process (`--preview` flag with JSON payload) to enable always-on-top behavior independent of main window state.
+`ImagePreviewWindow` can be launched as standalone process (`--preview` flag with JSON payload) to enable always-on-top behavior independent of main window state. The preview process receives `--parent-pid` argument and monitors parent process existence every 1 second, auto-terminating when the main app exits (Windows: Win32 `OpenProcess` + `GetExitCodeProcess`, macOS: `ps -p`).
 
 ## Code Style & Conventions
 
