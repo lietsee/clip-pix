@@ -115,21 +115,30 @@ class TextPreviewProcessManager extends ChangeNotifier {
     debugPrint(
         '[TextPreviewProcessManager] Killing all ${_processes.length} preview processes');
 
-    // Send SIGTERM to all processes
+    // Send kill signal and wait for exit
+    final futures = <Future<void>>[];
     for (final entry in _processes.entries) {
       debugPrint(
           '[TextPreviewProcessManager] Killing process ${entry.key} (PID: ${entry.value.pid})');
       entry.value.kill();
-      // DON'T remove from repository - preserve for next session restoration
+
+      // Wait for process exit with timeout
+      futures.add(
+        entry.value.exitCode
+            .timeout(gracePeriod)
+            .then((code) => debugPrint(
+                '[TextPreviewProcessManager] Process ${entry.key} exited with code $code'))
+            .catchError((_) => debugPrint(
+                '[TextPreviewProcessManager] Process ${entry.key} exit timed out')),
+      );
     }
 
-    // Wait for graceful shutdown to allow async Hive writes to complete
-    debugPrint(
-        '[TextPreviewProcessManager] Waiting ${gracePeriod.inMilliseconds}ms for graceful shutdown');
-    await Future.delayed(gracePeriod);
+    // Wait for all processes to exit
+    await Future.wait(futures);
 
     _processes.clear();
     _launching.clear();
+    // DON'T clear repository - preserve for next session restoration
     debugPrint(
         '[TextPreviewProcessManager] All processes killed (repository preserved for restoration)');
     notifyListeners();
