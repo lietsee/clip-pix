@@ -84,6 +84,11 @@ class _GridViewModuleState extends State<GridViewModule> {
   Rect? _dropIndicatorRect;
   int? _dropInsertIndex;
 
+  // 自動スクロール用
+  Timer? _autoScrollTimer;
+  double _autoScrollSpeed = 0; // 正:下スクロール、負:上スクロール
+  Offset? _lastDragGlobalPosition; // スクロール中にドロップターゲット更新用
+
   List<_GridEntry> _entries = <_GridEntry>[];
   bool _loggedInitialBuild = false;
   bool _firstFrameComplete = false;
@@ -361,6 +366,7 @@ class _GridViewModuleState extends State<GridViewModule> {
     for (final timer in _scaleDebounceTimers.values) {
       timer.cancel();
     }
+    _autoScrollTimer?.cancel(); // 自動スクロールタイマー破棄
     _dragOverlay?.remove();
     _dragOverlay = null;
     super.dispose();
@@ -1865,6 +1871,7 @@ class _GridViewModuleState extends State<GridViewModule> {
     _dragOverlayOffset = globalPosition - _dragPointerOffset;
     _dragOverlay!.markNeedsBuild();
     _updateDropTarget(globalPosition);
+    _checkAutoScroll(globalPosition); // 画面端で自動スクロール
   }
 
   void _updateDropTarget(Offset globalPosition) {
@@ -1891,6 +1898,9 @@ class _GridViewModuleState extends State<GridViewModule> {
   }
 
   void _endReorder(String id, {bool canceled = false}) {
+    _stopAutoScroll(); // 自動スクロール停止
+    _lastDragGlobalPosition = null;
+
     if (_draggingId != id) {
       debugPrint(
           '[GridViewModule] reorder_end ignored id=$id active=$_draggingId');
@@ -2099,6 +2109,80 @@ class _GridViewModuleState extends State<GridViewModule> {
         (a.top - b.top).abs() <= tolerance &&
         (a.width - b.width).abs() <= tolerance &&
         (a.height - b.height).abs() <= tolerance;
+  }
+
+  // ==================== 自動スクロール ====================
+
+  void _checkAutoScroll(Offset globalPosition) {
+    _lastDragGlobalPosition = globalPosition;
+
+    final controller = widget.controller;
+    if (controller == null || !controller.hasClients) {
+      _stopAutoScroll();
+      return;
+    }
+
+    // ビューポートの境界を取得（グリッド領域のRenderBoxから）
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) {
+      _stopAutoScroll();
+      return;
+    }
+
+    final localPosition = box.globalToLocal(globalPosition);
+    final viewportHeight = box.size.height;
+
+    // 上部20%と下部20%のゾーン
+    final topThreshold = viewportHeight * 0.20;
+    final bottomThreshold = viewportHeight * 0.80;
+
+    if (localPosition.dy < topThreshold && localPosition.dy >= 0) {
+      // 上部ゾーン: 上にスクロール
+      final intensity = 1.0 - (localPosition.dy / topThreshold);
+      _startAutoScroll(-intensity * 10); // pixels per tick
+    } else if (localPosition.dy > bottomThreshold &&
+        localPosition.dy <= viewportHeight) {
+      // 下部ゾーン: 下にスクロール
+      final intensity =
+          (localPosition.dy - bottomThreshold) / (viewportHeight - bottomThreshold);
+      _startAutoScroll(intensity * 10);
+    } else {
+      _stopAutoScroll();
+    }
+  }
+
+  void _startAutoScroll(double speed) {
+    _autoScrollSpeed = speed;
+    _autoScrollTimer ??= Timer.periodic(
+      const Duration(milliseconds: 16), // ~60fps
+      (_) => _performAutoScroll(),
+    );
+  }
+
+  void _stopAutoScroll() {
+    _autoScrollTimer?.cancel();
+    _autoScrollTimer = null;
+    _autoScrollSpeed = 0;
+  }
+
+  void _performAutoScroll() {
+    final controller = widget.controller;
+    if (controller == null || !controller.hasClients || _autoScrollSpeed == 0) {
+      return;
+    }
+
+    final position = controller.position;
+    final newOffset = (position.pixels + _autoScrollSpeed)
+        .clamp(position.minScrollExtent, position.maxScrollExtent);
+
+    if (newOffset != position.pixels) {
+      controller.jumpTo(newOffset);
+
+      // スクロールで相対位置が変わるため、ドロップターゲットを更新
+      if (_lastDragGlobalPosition != null) {
+        _updateDropTarget(_lastDragGlobalPosition!);
+      }
+    }
   }
 
   /// Restore text preview windows from previous session
