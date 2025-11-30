@@ -66,15 +66,22 @@ Future<void> main(List<String> args) async {
   // DEBUG: ヒットテスト可視化（タブ切り替え後の操作不能バグ調査用）
   debugPaintPointersEnabled = true;
 
+  // 親PIDを取得（プレビューウィンドウが親プロセス終了時に自動終了するため）
+  final parentPidIndex = args.indexOf('--parent-pid');
+  int? parentPid;
+  if (parentPidIndex != -1 && parentPidIndex + 1 < args.length) {
+    parentPid = int.tryParse(args[parentPidIndex + 1]);
+  }
+
   final previewIndex = args.indexOf('--preview');
   if (previewIndex != -1 && previewIndex + 1 < args.length) {
-    await _launchPreviewMode(args[previewIndex + 1]);
+    await _launchPreviewMode(args[previewIndex + 1], parentPid);
     return;
   }
 
   final previewTextIndex = args.indexOf('--preview-text');
   if (previewTextIndex != -1 && previewTextIndex + 1 < args.length) {
-    await _launchTextPreviewMode(args[previewTextIndex + 1]);
+    await _launchTextPreviewMode(args[previewTextIndex + 1], parentPid);
     return;
   }
 
@@ -230,7 +237,44 @@ Future<
   );
 }
 
-Future<void> _launchPreviewMode(String payload) async {
+/// 親プロセスが生存しているかチェック
+/// Windows: tasklistコマンドで確認
+/// macOS: psコマンドで確認
+bool _isParentProcessAlive(int pid) {
+  try {
+    if (Platform.isWindows) {
+      final result = Process.runSync(
+        'tasklist',
+        ['/FI', 'PID eq $pid', '/NH', '/FO', 'CSV'],
+      );
+      // tasklistの出力にPIDが含まれていれば生存
+      return result.stdout.toString().contains('"$pid"');
+    } else if (Platform.isMacOS) {
+      final result = Process.runSync('ps', ['-p', '$pid']);
+      // 終了コード0ならプロセス存在
+      return result.exitCode == 0;
+    }
+    return true; // 未対応プラットフォームでは終了しない
+  } catch (error) {
+    debugPrint('[ParentMonitor] Error checking parent process: $error');
+    return true; // エラー時は終了しない（安全側に倒す）
+  }
+}
+
+Future<void> _launchPreviewMode(String payload, int? parentPid) async {
+  // 親プロセス監視タイマー（親プロセス終了時に自動終了）
+  Timer? parentMonitorTimer;
+  if (parentPid != null) {
+    parentMonitorTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!_isParentProcessAlive(parentPid)) {
+        debugPrint('[ImagePreviewMode] Parent process $parentPid not found, exiting');
+        timer.cancel();
+        exit(0);
+      }
+    });
+    debugPrint('[ImagePreviewMode] Started parent process monitor for PID: $parentPid');
+  }
+
   await runZonedGuarded(
     () async {
       _configureLogging();
@@ -437,7 +481,20 @@ class _ImagePreviewApp extends StatelessWidget {
   }
 }
 
-Future<void> _launchTextPreviewMode(String payload) async {
+Future<void> _launchTextPreviewMode(String payload, int? parentPid) async {
+  // 親プロセス監視タイマー（親プロセス終了時に自動終了）
+  Timer? parentMonitorTimer;
+  if (parentPid != null) {
+    parentMonitorTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!_isParentProcessAlive(parentPid)) {
+        debugPrint('[TextPreviewMode] Parent process $parentPid not found, exiting');
+        timer.cancel();
+        exit(0);
+      }
+    });
+    debugPrint('[TextPreviewMode] Started parent process monitor for PID: $parentPid');
+  }
+
   await runZonedGuarded(
     () async {
       _configureLogging();

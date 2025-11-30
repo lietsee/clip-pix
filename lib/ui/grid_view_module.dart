@@ -1380,7 +1380,7 @@ class _GridViewModuleState extends State<GridViewModule> {
           '[GridViewModule] Starting image preview process for ${item.id} (hashCode=${item.id.hashCode})');
       final process = await Process.start(
         exePath,
-        ['--preview', payload],
+        ['--preview', payload, '--parent-pid', '${pid}'],
         mode: ProcessStartMode.normal,
       );
 
@@ -1487,7 +1487,7 @@ class _GridViewModuleState extends State<GridViewModule> {
           '[GridViewModule] Starting process for ${item.id} (hashCode=${item.id.hashCode})');
       final process = await Process.start(
         exePath,
-        ['--preview-text', payload],
+        ['--preview-text', payload, '--parent-pid', '${pid}'],
         mode: ProcessStartMode.normal,
       );
 
