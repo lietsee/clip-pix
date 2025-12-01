@@ -1372,10 +1372,37 @@ class GridViewModuleState extends State<GridViewModule> {
     }
 
     _logEntries('reconcile_after_pending', reordered);
+
+    // _layoutStore.orderedIds の順序に合わせて並べ替え（ミニマップとの同期）
+    final storeOrderedIds = _layoutStore.orderedIds;
+    List<_GridEntry> finalEntries = reordered;
+    if (storeOrderedIds.isNotEmpty) {
+      final entryMap = {for (final e in reordered) e.item.id: e};
+      final syncedReordered = <_GridEntry>[];
+
+      // storeOrderedIds の順序で並べ替え
+      for (final id in storeOrderedIds) {
+        final entry = entryMap[id];
+        if (entry != null) {
+          syncedReordered.add(entry);
+          entryMap.remove(id);
+        }
+      }
+
+      // storeOrderedIds に存在しないエントリ（新規追加直後など）を末尾に追加
+      for (final entry in entryMap.values) {
+        syncedReordered.add(entry);
+      }
+
+      finalEntries = syncedReordered;
+      debugPrint('[GridViewModule] _reconcileEntries: synced order with store, '
+          'syncedCount=${syncedReordered.length}');
+    }
+
     debugPrint('[GridViewModule] _reconcileEntries completed: '
-        'updated=$updatedCount, new=$newCount, versionIncremented=$versionIncrementCount, total=${reordered.length}');
+        'updated=$updatedCount, new=$newCount, versionIncremented=$versionIncrementCount, total=${finalEntries.length}');
     setState(() {
-      _entries = reordered;
+      _entries = finalEntries;
     });
 
     // Schedule scroll position restoration after rebuild

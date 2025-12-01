@@ -159,6 +159,9 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
   layout.LayoutSnapshot? get latestSnapshot =>
       _latestSnapshot ?? _previousSnapshot;
 
+  /// 現在の順序付きIDリストを取得（ミニマップとの同期用）
+  List<String> get orderedIds => List.unmodifiable(_orderedIds);
+
   void syncLibrary(
     List<ContentItem> items, {
     String? directoryPath,
