@@ -471,6 +471,9 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
               controller: folderState.viewMode == FolderViewMode.root
                   ? _rootScrollController
                   : _gridSubfolderScrollController,
+              onHoverChanged: (cardId) {
+                _minimapService?.updateHoveredCard(cardId);
+              },
             ),
           ),
         ),

@@ -43,6 +43,7 @@ class ImageCard extends StatefulWidget {
     this.onReorderUpdate,
     this.onReorderEnd,
     this.onReorderCancel,
+    this.onHoverChanged,
   });
 
   final ImageItem item;
@@ -70,6 +71,7 @@ class ImageCard extends StatefulWidget {
   final void Function(String id, Offset globalPosition)? onReorderUpdate;
   final void Function(String id)? onReorderEnd;
   final void Function(String id)? onReorderCancel;
+  final void Function(bool isHovered)? onHoverChanged;
 
   @override
   State<ImageCard> createState() => _ImageCardState();
@@ -321,11 +323,13 @@ class _ImageCardState extends State<ImageCard>
               print('[ImageCard] onEnter: ${widget.item.id.split('/').last}');
               _setControlsVisible(true);
               _scheduleMemoTooltip();
+              widget.onHoverChanged?.call(true);
             },
             onExit: (_) {
               print('[ImageCard] onExit: ${widget.item.id.split('/').last}');
               _setControlsVisible(false);
               _cancelMemoTooltip();
+              widget.onHoverChanged?.call(false);
             },
             cursor: _isResizing
                 ? SystemMouseCursors.resizeUpLeftDownRight

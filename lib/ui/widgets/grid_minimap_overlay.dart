@@ -53,6 +53,15 @@ class MinimapOverlayService {
     _stateNotifier.value = MinimapState.empty();
   }
 
+  /// Update the hovered card ID for minimap highlighting
+  void updateHoveredCard(String? cardId) {
+    if (!isVisible) return;
+    final current = _stateNotifier.value;
+    if (current.hoveredCardId != cardId) {
+      _stateNotifier.value = current.copyWith(hoveredCardId: cardId);
+    }
+  }
+
   void dispose() {
     hide();
     _stateNotifier.dispose();
@@ -63,11 +72,13 @@ class MinimapState {
   final ScrollController? scrollController;
   final GridLayoutStore? layoutStore;
   final bool visible;
+  final String? hoveredCardId;
 
   MinimapState({
     required this.scrollController,
     required this.layoutStore,
     required this.visible,
+    this.hoveredCardId,
   });
 
   factory MinimapState.empty() {
@@ -75,6 +86,16 @@ class MinimapState {
       scrollController: null,
       layoutStore: null,
       visible: false,
+      hoveredCardId: null,
+    );
+  }
+
+  MinimapState copyWith({String? hoveredCardId}) {
+    return MinimapState(
+      scrollController: scrollController,
+      layoutStore: layoutStore,
+      visible: visible,
+      hoveredCardId: hoveredCardId,
     );
   }
 }
@@ -219,6 +240,7 @@ class _MinimapWidgetState extends State<_MinimapWidget> {
                     viewportWidth: screenSize.width,
                     minimapWidth: minimapWidth,
                     minimapHeight: minimapHeight,
+                    hoveredCardId: state.hoveredCardId,
                   ),
                 ),
               ),
@@ -319,6 +341,7 @@ class _MinimapPainter extends CustomPainter {
   final double viewportWidth;
   final double minimapWidth;
   final double minimapHeight;
+  final String? hoveredCardId;
 
   _MinimapPainter({
     required this.snapshot,
@@ -328,6 +351,7 @@ class _MinimapPainter extends CustomPainter {
     required this.viewportWidth,
     required this.minimapWidth,
     required this.minimapHeight,
+    this.hoveredCardId,
   });
 
   @override
@@ -404,6 +428,30 @@ class _MinimapPainter extends CustomPainter {
             ..color = Colors.grey[600]!
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1,
+        );
+      }
+
+      // Draw hover highlight if this card is hovered
+      final isHovered = entry.id == hoveredCardId;
+      if (isHovered) {
+        final rrect =
+            RRect.fromRectAndRadius(scaledRect, const Radius.circular(2));
+
+        // Semi-transparent light blue fill
+        canvas.drawRRect(
+          rrect,
+          Paint()
+            ..color = Colors.lightBlue.withValues(alpha: 0.4)
+            ..style = PaintingStyle.fill,
+        );
+
+        // Light blue border
+        canvas.drawRRect(
+          rrect,
+          Paint()
+            ..color = Colors.lightBlue
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.0,
         );
       }
     }
@@ -496,6 +544,7 @@ class _MinimapPainter extends CustomPainter {
     final snapshotChanged = oldDelegate.snapshot != snapshot;
     final viewportHeightChanged = oldDelegate.viewportHeight != viewportHeight;
     final viewportWidthChanged = oldDelegate.viewportWidth != viewportWidth;
+    final hoveredCardChanged = oldDelegate.hoveredCardId != hoveredCardId;
 
     // Deep comparison: only repaint if IDs or favorite states actually changed
     final imagesChanged = _imagesActuallyChanged(
@@ -507,6 +556,7 @@ class _MinimapPainter extends CustomPainter {
         snapshotChanged ||
         viewportHeightChanged ||
         viewportWidthChanged ||
+        hoveredCardChanged ||
         imagesChanged;
   }
 

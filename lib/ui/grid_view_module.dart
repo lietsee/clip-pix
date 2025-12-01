@@ -43,10 +43,12 @@ class GridViewModule extends StatefulWidget {
     super.key,
     required this.state,
     this.controller,
+    this.onHoverChanged,
   });
 
   final ImageLibraryState state;
   final ScrollController? controller;
+  final void Function(String? cardId)? onHoverChanged;
 
   @override
   State<GridViewModule> createState() => GridViewModuleState();
@@ -87,6 +89,9 @@ class GridViewModuleState extends State<GridViewModule> {
   // ハイライト表示用
   String? _highlightedItemId;
   Timer? _highlightTimer;
+
+  // ホバー状態（ミニマップ連携用）
+  String? _hoveredCardId;
 
   // 自動スクロール用
   Timer? _autoScrollTimer;
@@ -378,6 +383,19 @@ class GridViewModuleState extends State<GridViewModule> {
     _dragOverlay?.remove();
     _dragOverlay = null;
     super.dispose();
+  }
+
+  /// ホバー中のカードID（ミニマップ連携用）
+  String? get hoveredCardId => _hoveredCardId;
+
+  /// カードホバー状態の変更を処理
+  void _onCardHoverChanged(String? cardId) {
+    if (_hoveredCardId != cardId) {
+      setState(() {
+        _hoveredCardId = cardId;
+      });
+      widget.onHoverChanged?.call(cardId);
+    }
   }
 
   /// 指定されたファイルパスのカードにスクロールし、2秒間ハイライト表示する
@@ -831,6 +849,9 @@ class GridViewModuleState extends State<GridViewModule> {
                 onReorderUpdate: _updateReorder,
                 onReorderEnd: _endReorder,
                 onReorderCancel: _handleReorderCancel,
+                onHoverChanged: (isHovered) {
+                  _onCardHoverChanged(isHovered ? item.id : null);
+                },
               )
             : ImageCard(
                 item: item as ImageItem,
@@ -858,6 +879,9 @@ class GridViewModuleState extends State<GridViewModule> {
                 onReorderEnd: _endReorder,
                 onReorderCancel: _handleReorderCancel,
                 backgroundColor: backgroundColor,
+                onHoverChanged: (isHovered) {
+                  _onCardHoverChanged(isHovered ? item.id : null);
+                },
               ),
       ),
     );

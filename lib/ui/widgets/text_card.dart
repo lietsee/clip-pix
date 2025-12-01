@@ -33,6 +33,7 @@ class TextCard extends StatefulWidget {
     this.onReorderUpdate,
     this.onReorderEnd,
     this.onReorderCancel,
+    this.onHoverChanged,
   });
 
   final TextContentItem item;
@@ -57,6 +58,7 @@ class TextCard extends StatefulWidget {
   final void Function(String id, Offset globalPosition)? onReorderUpdate;
   final void Function(String id)? onReorderEnd;
   final void Function(String id)? onReorderCancel;
+  final void Function(bool isHovered)? onHoverChanged;
 
   @override
   State<TextCard> createState() => _TextCardState();
@@ -180,8 +182,14 @@ class _TextCardState extends State<TextCard>
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
-      onEnter: (_) => setState(() => _showControls = true),
-      onExit: (_) => setState(() => _showControls = false),
+      onEnter: (_) {
+        setState(() => _showControls = true);
+        widget.onHoverChanged?.call(true);
+      },
+      onExit: (_) {
+        setState(() => _showControls = false);
+        widget.onHoverChanged?.call(false);
+      },
       child: GestureDetector(
         onTap: null, // 編集はホバーボタンからのみ
         onDoubleTap: (_isEditing || widget.isDeletionMode) ? null : _handleDoubleTap,
