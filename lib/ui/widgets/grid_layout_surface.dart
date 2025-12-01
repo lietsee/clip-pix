@@ -228,22 +228,29 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
 
     final prevSnapshotId = _frontSnapshot?.id;
     final nextSnapshotId = latestSnapshot?.id;
+
+    // Check if snapshot ID actually changed (indicates order/content change)
+    final snapshotChanged =
+        prevSnapshotId != nextSnapshotId && nextSnapshotId != null;
+
     print('[GridLayoutSurface] store_changed: '
         'prevSnapshot=$prevSnapshotId, nextSnapshot=$nextSnapshotId, '
-        'mutating=$_mutationInProgress, viewStateCount=${_store.viewStates.length}');
+        'mutating=$_mutationInProgress, snapshotChanged=$snapshotChanged, '
+        'viewStateCount=${_store.viewStates.length}');
 
     setState(() {
-      if (!_mutationInProgress) {
+      // Update front buffer if:
+      // 1. Not in mutation, OR
+      // 2. Snapshot ID changed (indicates order/content change that needs immediate propagation)
+      if (!_mutationInProgress || snapshotChanged) {
         _frontStates = _cloneStates(_store.viewStates);
         _frontSnapshot = latestSnapshot;
         if (latestSnapshot != null) {
           _frontGeometry = latestSnapshot.geometry;
           print('[GridLayoutSurface] front_snapshot_updated: '
-              'id=${latestSnapshot.id}, statesCount=${_frontStates?.length ?? 0}');
+              'id=${latestSnapshot.id}, statesCount=${_frontStates?.length ?? 0}, '
+              'reason=${snapshotChanged ? "snapshotChanged" : "notMutating"}');
         }
-
-        print('[GridLayoutSurface] front_buffer_updated: '
-            'snapshotId=${latestSnapshot?.id}, statesCount=${_frontStates?.length ?? 0}');
       } else {
         print('[GridLayoutSurface] store_changed but mutation in progress, skipping front buffer update');
       }

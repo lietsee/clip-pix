@@ -381,14 +381,19 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     }
     _latestSnapshot = result.snapshot;
 
+    // Force notification if we had pending regeneration
+    // This ensures the front buffer gets the new snapshot even when notify=false
+    final shouldNotify = (changed && notify) || hadPendingRegeneration;
+
     // [DIAGNOSTIC] Track snapshot regeneration in updateGeometry
     debugPrint('[GridLayoutStore] updateGeometry: '
         'prevSnapshotId=$prevSnapshotId, newSnapshotId=${_latestSnapshot?.id}, '
         'hadPendingRegeneration=$hadPendingRegeneration, '
-        'changed=$changed, geometryChanged=$geometryChanged, '
+        'changed=$changed, notify=$notify, shouldNotify=$shouldNotify, '
+        'geometryChanged=$geometryChanged, '
         'orderedIdsFirst3=${_orderedIds.take(3).map((e) => e.split('/').last).join(', ')}');
 
-    if (changed && notify) {
+    if (shouldNotify) {
       notifyListeners();
     }
   }
