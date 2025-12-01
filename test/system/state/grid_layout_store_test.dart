@@ -97,6 +97,9 @@ void main() {
     });
 
     test('applyBulkSpan は単一通知で完了し、永続化バッチも 1 回で済む', () async {
+      // Wait for any pending async operations (e.g., _resolveNewCardAspectRatios) to complete
+      await Future<void>.delayed(Duration.zero);
+
       store.updateGeometry(
         const GridLayoutGeometry(
           columnCount: 6,
@@ -152,6 +155,10 @@ void main() {
     });
 
     test('カード単位更新でもバッチ永続化される', () async {
+      // Wait for any pending async operations (e.g., _resolveNewCardAspectRatios) to complete
+      await Future<void>.delayed(Duration.zero);
+      persistence.recordedBatches.clear();
+
       await store.updateCard(
         id: 'b',
         customSize: const Size(400, 260),

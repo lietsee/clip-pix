@@ -176,8 +176,12 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     final Map<String, GridCardViewState> nextStates = {};
     final List<String> nextOrder = [];
 
+    // Collect new cards that need aspect ratio resolution
+    final List<String> newCardIds = [];
+
     for (final item in items) {
       final record = _persistence.read(item.id);
+      final isNewCard = !_viewStates.containsKey(item.id);
       final state = GridCardViewState(
         id: item.id,
         width: record.width,
@@ -190,6 +194,11 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
       );
       nextStates[item.id] = state;
       nextOrder.add(item.id);
+
+      // Mark new cards without custom height for aspect ratio resolution
+      if (isNewCard && record.customHeight == null) {
+        newCardIds.add(item.id);
+      }
     }
 
     final bool orderChanged = !listEquals(_orderedIds, nextOrder);
@@ -275,7 +284,13 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
         'orderChanged=$orderChanged, contentChanged=$contentChanged, '
         'willNotify=${notify && (orderChanged || contentChanged)}, '
         'newViewStateCount=${_viewStates.length}, '
+        'newCardIds=${newCardIds.length}, '
         'first3Ids=${_orderedIds.take(3).map((id) => id.split('/').last).join(", ")}');
+
+    // Resolve aspect ratios for new cards asynchronously (fire-and-forget)
+    if (newCardIds.isNotEmpty) {
+      _resolveNewCardAspectRatios(newCardIds);
+    }
   }
 
   bool hasViewState(String id) {
@@ -645,5 +660,89 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
       _previousSnapshot = _latestSnapshot;
     }
     _latestSnapshot = null;
+  }
+
+  /// Resolve aspect ratios for newly added cards and update their heights.
+  /// This is called asynchronously after syncLibrary() to avoid blocking.
+  Future<void> _resolveNewCardAspectRatios(List<String> newCardIds) async {
+    debugPrint('[GridLayoutStore] _resolveNewCardAspectRatios: '
+        'resolving ${newCardIds.length} new cards');
+
+    bool anyChanged = false;
+
+    for (final id in newCardIds) {
+      final current = _viewStates[id];
+      if (current == null) continue;
+
+      // Resolve aspect ratio from image file
+      final ratio = await _resolveAspectRatio(id, current);
+      if (!ratio.isFinite || ratio <= 0) continue;
+
+      // Calculate new height based on aspect ratio (ratio = height/width)
+      final newHeight = current.width * ratio;
+
+      // Skip if height is already correct (within tolerance)
+      if ((current.height - newHeight).abs() < 1.0) continue;
+
+      debugPrint('[GridLayoutStore] new_card_height_adjusted: '
+          'id=${id.split('/').last}, '
+          'oldHeight=${current.height.toStringAsFixed(1)}, '
+          'newHeight=${newHeight.toStringAsFixed(1)}, '
+          'ratio=${ratio.toStringAsFixed(3)}');
+
+      // Update viewState with new height
+      final newState = GridCardViewState(
+        id: current.id,
+        width: current.width,
+        height: newHeight,
+        scale: current.scale,
+        columnSpan: current.columnSpan,
+        customHeight: newHeight,
+        offsetDx: current.offsetDx,
+        offsetDy: current.offsetDy,
+      );
+      _viewStates[id] = newState;
+
+      // Persist the calculated height
+      await _persistence.saveBatch([
+        GridLayoutPreferenceRecord(
+          id: id,
+          width: current.width,
+          height: newHeight,
+          scale: current.scale,
+          columnSpan: current.columnSpan,
+          customHeight: newHeight,
+          offsetDx: current.offsetDx,
+          offsetDy: current.offsetDy,
+        ),
+      ]);
+
+      anyChanged = true;
+    }
+
+    if (anyChanged) {
+      // Regenerate snapshot with updated heights
+      final geometry = _geometry;
+      if (geometry != null) {
+        final orderedStates = _orderedIds
+            .map((id) => _viewStates[id])
+            .whereType<GridCardViewState>()
+            .toList(growable: false);
+        final result = _layoutEngine.compute(
+          geometry: geometry,
+          states: orderedStates,
+        );
+        _latestSnapshot = result.snapshot;
+
+        debugPrint('[GridLayoutStore] snapshot_regenerated_after_aspect_ratio: '
+            'newId=${_latestSnapshot?.id}');
+      }
+
+      // Notify listeners to update UI
+      notifyListeners();
+    }
+
+    debugPrint('[GridLayoutStore] _resolveNewCardAspectRatios_complete: '
+        'anyChanged=$anyChanged');
   }
 }
