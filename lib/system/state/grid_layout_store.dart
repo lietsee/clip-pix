@@ -147,6 +147,10 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
   layout.LayoutSnapshot? _latestSnapshot;
   layout.LayoutSnapshot? _previousSnapshot;
 
+  /// syncLibraryで順序が変更されたがgeometryがnullのためスナップショットを
+  /// 再生成できなかった場合にtrueになる。updateGeometryで処理される。
+  bool _pendingSnapshotRegeneration = false;
+
   @override
   List<GridCardViewState> get viewStates => UnmodifiableListView(
         _orderedIds
@@ -271,7 +275,10 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
         debugPrint('[GridLayoutStore] snapshot_regenerated: '
             'prevId=$prevSnapshotId, newId=${_latestSnapshot?.id}');
       } else {
-        // No geometry available yet, just invalidate
+        // No geometry available yet, mark for later regeneration
+        _pendingSnapshotRegeneration = true;
+        debugPrint('[GridLayoutStore] syncLibrary: geometry null, '
+            'setting pendingSnapshotRegeneration=true');
         _invalidateSnapshot();
       }
     } else {
@@ -314,6 +321,10 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     GridLayoutGeometry geometry, {
     bool notify = true,
   }) {
+    // Check if we have a pending regeneration from syncLibrary
+    final hadPendingRegeneration = _pendingSnapshotRegeneration;
+    _pendingSnapshotRegeneration = false;
+
     final previousGeometry = _geometry;
     _geometry = geometry;
     final orderedStates = _orderedIds
@@ -330,7 +341,7 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
         (previousGeometry.columnWidth - geometry.columnWidth).abs() >
             _epsilon ||
         (previousGeometry.gap - geometry.gap).abs() > _epsilon;
-    changed = changed || geometryChanged;
+    changed = changed || geometryChanged || hadPendingRegeneration;
 
     // Collect mutations for persistence
     final List<GridLayoutPreferenceRecord> mutations = [];
@@ -364,10 +375,19 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     }
 
     // Preserve previous snapshot before updating to new one
+    final prevSnapshotId = _latestSnapshot?.id;
     if (_latestSnapshot != null) {
       _previousSnapshot = _latestSnapshot;
     }
     _latestSnapshot = result.snapshot;
+
+    // [DIAGNOSTIC] Track snapshot regeneration in updateGeometry
+    debugPrint('[GridLayoutStore] updateGeometry: '
+        'prevSnapshotId=$prevSnapshotId, newSnapshotId=${_latestSnapshot?.id}, '
+        'hadPendingRegeneration=$hadPendingRegeneration, '
+        'changed=$changed, geometryChanged=$geometryChanged, '
+        'orderedIdsFirst3=${_orderedIds.take(3).map((e) => e.split('/').last).join(', ')}');
+
     if (changed && notify) {
       notifyListeners();
     }
