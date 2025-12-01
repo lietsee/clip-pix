@@ -229,19 +229,26 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     final prevSnapshotId = _frontSnapshot?.id;
     final nextSnapshotId = latestSnapshot?.id;
 
-    // Check if snapshot ID actually changed (indicates order/content change)
-    final snapshotChanged =
+    // Check if snapshot changed using OBJECT REFERENCE comparison, not just ID
+    // This handles the case where hot restart resets the static ID counter,
+    // causing different snapshots to have the same ID (e.g., both "layout_snapshot_000001")
+    // Also check if IDs differ (handles normal case where IDs are unique)
+    final snapshotObjectChanged =
+        latestSnapshot != null && !identical(_frontSnapshot, latestSnapshot);
+    final snapshotIdChanged =
         prevSnapshotId != nextSnapshotId && nextSnapshotId != null;
+    final snapshotChanged = snapshotObjectChanged || snapshotIdChanged;
 
     print('[GridLayoutSurface] store_changed: '
         'prevSnapshot=$prevSnapshotId, nextSnapshot=$nextSnapshotId, '
         'mutating=$_mutationInProgress, snapshotChanged=$snapshotChanged, '
+        'snapshotObjectChanged=$snapshotObjectChanged, snapshotIdChanged=$snapshotIdChanged, '
         'viewStateCount=${_store.viewStates.length}');
 
     setState(() {
       // Update front buffer if:
       // 1. Not in mutation, OR
-      // 2. Snapshot ID changed (indicates order/content change that needs immediate propagation)
+      // 2. Snapshot changed (by object reference or ID - indicates order/content change)
       if (!_mutationInProgress || snapshotChanged) {
         _frontStates = _cloneStates(_store.viewStates);
         _frontSnapshot = latestSnapshot;
