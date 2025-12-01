@@ -1,4 +1,5 @@
 import 'dart:collection';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
@@ -665,6 +666,13 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
   /// Resolve aspect ratios for newly added cards and update their heights.
   /// This is called asynchronously after syncLibrary() to avoid blocking.
   Future<void> _resolveNewCardAspectRatios(List<String> newCardIds) async {
+    final geometry = _geometry;
+    if (geometry == null) {
+      debugPrint('[GridLayoutStore] _resolveNewCardAspectRatios: '
+          'skipped - no geometry available');
+      return;
+    }
+
     debugPrint('[GridLayoutStore] _resolveNewCardAspectRatios: '
         'resolving ${newCardIds.length} new cards');
 
@@ -678,22 +686,31 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
       final ratio = await _resolveAspectRatio(id, current);
       if (!ratio.isFinite || ratio <= 0) continue;
 
-      // Calculate new height based on aspect ratio (ratio = height/width)
-      final newHeight = current.width * ratio;
+      // Calculate actual width based on geometry (same logic as GridLayoutLayoutEngine._computeWidth)
+      final span = current.columnSpan;
+      final gapCount = math.max(0, span - 1);
+      final gapWidth = geometry.gap * gapCount;
+      final actualWidth = geometry.columnWidth * span + gapWidth;
 
-      // Skip if height is already correct (within tolerance)
-      if ((current.height - newHeight).abs() < 1.0) continue;
+      // Calculate new height based on actual width and aspect ratio (ratio = height/width)
+      final newHeight = actualWidth * ratio;
+
+      // Skip if size is already correct (within tolerance)
+      if ((current.width - actualWidth).abs() < 1.0 &&
+          (current.height - newHeight).abs() < 1.0) {
+        continue;
+      }
 
       debugPrint('[GridLayoutStore] new_card_height_adjusted: '
           'id=${id.split('/').last}, '
-          'oldHeight=${current.height.toStringAsFixed(1)}, '
-          'newHeight=${newHeight.toStringAsFixed(1)}, '
+          'oldSize=${current.width.toStringAsFixed(1)}x${current.height.toStringAsFixed(1)}, '
+          'newSize=${actualWidth.toStringAsFixed(1)}x${newHeight.toStringAsFixed(1)}, '
           'ratio=${ratio.toStringAsFixed(3)}');
 
-      // Update viewState with new height
+      // Update viewState with actual width and calculated height
       final newState = GridCardViewState(
         id: current.id,
-        width: current.width,
+        width: actualWidth,
         height: newHeight,
         scale: current.scale,
         columnSpan: current.columnSpan,
@@ -703,11 +720,11 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
       );
       _viewStates[id] = newState;
 
-      // Persist the calculated height
+      // Persist the calculated size
       await _persistence.saveBatch([
         GridLayoutPreferenceRecord(
           id: id,
-          width: current.width,
+          width: actualWidth,
           height: newHeight,
           scale: current.scale,
           columnSpan: current.columnSpan,
