@@ -191,6 +191,20 @@ class ImageLibraryNotifier extends StateNotifier<ImageLibraryState> {
     state = ImageLibraryState.initial();
   }
 
+  /// Reorder images by the given list of IDs.
+  /// Called from GridViewModule after drag&drop to sync order.
+  void reorderImages(List<String> orderedIds) {
+    final map = {for (final item in state.images) item.id: item};
+    final reordered = <ContentItem>[];
+    for (final id in orderedIds) {
+      final item = map[id];
+      if (item != null) {
+        reordered.add(item);
+      }
+    }
+    state = state.copyWith(images: reordered);
+  }
+
   /// Apply directory order from GridOrderRepository (Hive DB)
   List<ContentItem> _applyDirectoryOrder(
     List<ContentItem> items,

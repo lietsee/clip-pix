@@ -226,15 +226,18 @@ class GridViewModuleState extends State<GridViewModule> {
           'first10=[${stateImages.take(10).map((e) => e.id.split('/').last).join(', ')}]');
 
       final orderedImages = _applyDirectoryOrder(widget.state.images);
-      final orderChanged = !listEquals(
-        widget.state.images.map((e) => e.id).toList(),
-        orderedImages.map((e) => e.id).toList(),
-      );
+
+      // Compare orderedImages with _entries to detect order mismatch
+      // This catches cases where Hive order differs from _entries order
+      final entriesIds = _entries.where((e) => !e.isRemoving).map((e) => e.item.id).toList();
+      final orderedIds = orderedImages.map((item) => item.id).toList();
+      final orderMismatch = !listEquals(entriesIds, orderedIds);
+
       debugPrint(
         '[GridViewModule] order_comparison: '
-        'original=[${widget.state.images.take(3).map((e) => e.id.split('/').last).join(', ')}...] '
-        'ordered=[${orderedImages.take(3).map((e) => e.id.split('/').last).join(', ')}...] '
-        'orderChanged=$orderChanged',
+        '_entries=[${entriesIds.take(3).map((e) => e.split('/').last).join(', ')}...] '
+        'ordered=[${orderedIds.take(3).map((e) => e.split('/').last).join(', ')}...] '
+        'orderMismatch=$orderMismatch',
       );
 
       // [DIAGNOSTIC] Track orderedImages positions before syncLibrary
@@ -251,7 +254,7 @@ class GridViewModuleState extends State<GridViewModule> {
       // notify: false during build, then manually notify in postFrameCallback
       // This prevents "setState during build" error in GridLayoutSurface
       debugPrint('[GridViewModule] syncLibrary_params: '
-          'orderChanged=$orderChanged, notify=false (deferred)');
+          'orderMismatch=$orderMismatch, notify=false (deferred)');
       _layoutStore.syncLibrary(
         orderedImages,
         directoryPath: widget.state.activeDirectory?.path,
@@ -271,9 +274,9 @@ class GridViewModuleState extends State<GridViewModule> {
       final activeEntriesCount = _entries.where((e) => !e.isRemoving).length;
       final itemCountChanged = widget.state.images.length != activeEntriesCount;
       final willReconcile =
-          _entries.isEmpty || orderChanged || itemCountChanged;
+          _entries.isEmpty || orderMismatch || itemCountChanged;
       debugPrint('[GridViewModule] reconcile_decision: '
-          '_entries.isEmpty=${_entries.isEmpty}, orderChanged=$orderChanged, '
+          '_entries.isEmpty=${_entries.isEmpty}, orderMismatch=$orderMismatch, '
           'itemCountChanged=$itemCountChanged (images=${widget.state.images.length}, activeEntries=$activeEntriesCount), '
           'will_call=${willReconcile ? "_reconcileEntries" : "_updateEntriesProperties"}');
 
@@ -1872,6 +1875,13 @@ class GridViewModuleState extends State<GridViewModule> {
     final order = _entries.map((entry) => entry.item.id).toList();
     debugPrint('[GridViewModule] persist order path=$path order=$order');
     await repo.save(path, order);
+
+    // Sync order to ImageLibraryNotifier to keep state.images in sync
+    // This ensures _entries and state.images have the same order after drag&drop
+    if (mounted) {
+      final notifier = context.read<ImageLibraryNotifier>();
+      notifier.reorderImages(order);
+    }
   }
 
   void _handleReorderPointerDown(String id, int pointerId) {
