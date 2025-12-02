@@ -145,6 +145,30 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
         );
         _maybeUpdateGeometry(geometry);
 
+        // [FIX] Detect stale front snapshot and force sync
+        // This catches cases where _handleStoreChanged wasn't called
+        // (e.g., due to listener issues or job cancellation)
+        final storeSnapshot = _store.latestSnapshot;
+        if (storeSnapshot != null &&
+            !identical(_frontSnapshot, storeSnapshot) &&
+            !_mutationInProgress) {
+          // Stale front buffer detected - schedule forced sync
+          SchedulerBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            final currentStoreSnapshot = _store.latestSnapshot;
+            if (currentStoreSnapshot != null &&
+                !identical(_frontSnapshot, currentStoreSnapshot)) {
+              setState(() {
+                _frontSnapshot = currentStoreSnapshot;
+                _frontStates = _cloneStates(_store.viewStates);
+                _frontGeometry = currentStoreSnapshot.geometry;
+                print('[GridLayoutSurface] forced_sync_applied: '
+                    'snapshotId=${currentStoreSnapshot.id}');
+              });
+            }
+          });
+        }
+
         if (_gridHiddenForReset) {
           print('[GridLayoutSurface] RETURNING SizedBox.shrink due to _gridHiddenForReset=true');
           return const SizedBox.shrink();
@@ -226,41 +250,22 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     }
     final latestSnapshot = _store.latestSnapshot;
 
-    final prevSnapshotId = _frontSnapshot?.id;
-    final nextSnapshotId = latestSnapshot?.id;
-
-    // Check if snapshot changed using OBJECT REFERENCE comparison, not just ID
-    // This handles the case where hot restart resets the static ID counter,
-    // causing different snapshots to have the same ID (e.g., both "layout_snapshot_000001")
-    // Also check if IDs differ (handles normal case where IDs are unique)
-    final snapshotObjectChanged =
-        latestSnapshot != null && !identical(_frontSnapshot, latestSnapshot);
-    final snapshotIdChanged =
-        prevSnapshotId != nextSnapshotId && nextSnapshotId != null;
-    final snapshotChanged = snapshotObjectChanged || snapshotIdChanged;
-
     print('[GridLayoutSurface] store_changed: '
-        'prevSnapshot=$prevSnapshotId, nextSnapshot=$nextSnapshotId, '
-        'mutating=$_mutationInProgress, snapshotChanged=$snapshotChanged, '
-        'snapshotObjectChanged=$snapshotObjectChanged, snapshotIdChanged=$snapshotIdChanged, '
+        'newSnapshot=${latestSnapshot?.id}, '
         'viewStateCount=${_store.viewStates.length}');
 
+    // ALWAYS update front buffer when store notifies
+    // This ensures order changes from syncLibrary are immediately reflected
+    // regardless of mutation state. The minimap uses layoutStore.latestSnapshot
+    // directly, so we must keep _frontSnapshot in sync to avoid discrepancies.
     setState(() {
-      // Update front buffer if:
-      // 1. Not in mutation, OR
-      // 2. Snapshot changed (by object reference or ID - indicates order/content change)
-      if (!_mutationInProgress || snapshotChanged) {
-        _frontStates = _cloneStates(_store.viewStates);
-        _frontSnapshot = latestSnapshot;
-        if (latestSnapshot != null) {
-          _frontGeometry = latestSnapshot.geometry;
-          print('[GridLayoutSurface] front_snapshot_updated: '
-              'id=${latestSnapshot.id}, statesCount=${_frontStates?.length ?? 0}, '
-              'reason=${snapshotChanged ? "snapshotChanged" : "notMutating"}');
-        }
-      } else {
-        print('[GridLayoutSurface] store_changed but mutation in progress, skipping front buffer update');
+      _frontStates = _cloneStates(_store.viewStates);
+      _frontSnapshot = latestSnapshot;
+      if (latestSnapshot != null) {
+        _frontGeometry = latestSnapshot.geometry;
       }
+      print('[GridLayoutSurface] front_buffer_updated: '
+          'snapshotId=${latestSnapshot?.id}, statesCount=${_frontStates?.length ?? 0}');
     });
   }
 
