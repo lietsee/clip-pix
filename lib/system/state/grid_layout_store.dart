@@ -155,6 +155,22 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
   /// アスペクト比を解決できなかったカードIDのリスト。updateGeometryで処理される。
   final List<String> _pendingAspectRatioCardIds = [];
 
+  /// 高さが変更されてImageCardのリビルドが必要なカードIDのセット。
+  /// GridViewModuleがconsumePendingResizeNotifications()で消費する。
+  final Set<String> _pendingResizeNotifications = {};
+
+  /// 高さが変更されたカードをマーク（ImageCardリビルド用）
+  void _notifyCardResized(String id) {
+    _pendingResizeNotifications.add(id);
+  }
+
+  /// 保留中のリサイズ通知を消費して返す
+  Set<String> consumePendingResizeNotifications() {
+    final result = Set<String>.from(_pendingResizeNotifications);
+    _pendingResizeNotifications.clear();
+    return result;
+  }
+
   @override
   List<GridCardViewState> get viewStates => UnmodifiableListView(
         _orderedIds
@@ -802,6 +818,9 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
       );
       _viewStates[id] = newState;
 
+      // Notify that this card needs rebuild in ImageCard
+      _notifyCardResized(id);
+
       // Persist the calculated size
       await _persistence.saveBatch([
         GridLayoutPreferenceRecord(
@@ -901,6 +920,9 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
       );
       _viewStates[id] = updated;
       anyChanged = true;
+
+      // Notify that this card needs rebuild in ImageCard
+      _notifyCardResized(id);
     }
 
     // Hiveに全カードを保存

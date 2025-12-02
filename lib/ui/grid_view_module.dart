@@ -532,6 +532,10 @@ class GridViewModuleState extends State<GridViewModule> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    // カードの高さ変更通知を消費してバージョンをインクリメント
+    // これによりImageCardが新しいキーで再構築され、viewStateの高さが反映される
+    _syncResizedCardVersions();
+
     // Prevent rendering during reconciliation to avoid _entries/viewStates mismatch
     // Only show loading indicator for directory changes; for same-folder card add/delete,
     // keep existing grid to avoid visual flicker
@@ -2607,6 +2611,30 @@ class GridViewModuleState extends State<GridViewModule> {
   void _handleImagePreviewClosed(String itemId) {
     // Cleanup is now handled by ImagePreviewProcessManager
     debugPrint('[GridViewModule] Image preview closed for $itemId');
+  }
+
+  /// GridLayoutStoreからリサイズ通知を消費してImageCardのバージョンをインクリメント
+  /// これによりFlutterがウィジェットキーの変更を検知し、ImageCardが再構築される
+  void _syncResizedCardVersions() {
+    final resizedIds = _layoutStore.consumePendingResizeNotifications();
+    if (resizedIds.isEmpty) return;
+
+    bool anyChanged = false;
+    for (final id in resizedIds) {
+      final entryIndex = _entries.indexWhere((e) => e.item.id == id);
+      if (entryIndex >= 0) {
+        final entry = _entries[entryIndex];
+        entry.version += 1;
+        anyChanged = true;
+        debugPrint('[GridViewModule] resize_version_sync: '
+            'id=${id.split('/').last}, newVersion=${entry.version}');
+      }
+    }
+
+    if (anyChanged) {
+      debugPrint('[GridViewModule] resize_version_sync_complete: '
+          'resizedCount=${resizedIds.length}');
+    }
   }
 }
 

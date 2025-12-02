@@ -177,7 +177,16 @@ class _ImageCardState extends State<ImageCard>
     // リサイズ中は外部からのサイズ同期をスキップ
     if (!_isResizing) {
       final newSize = Size(widget.viewState.width, widget.viewState.height);
-      if (_sizeNotifier.value != newSize) {
+      final currentSize = _sizeNotifier.value;
+      // 1px以上の差がある場合はログ出力（デバッグ用）
+      if ((currentSize.width - newSize.width).abs() > 1.0 ||
+          (currentSize.height - newSize.height).abs() > 1.0) {
+        debugPrint('[ImageCard] didUpdateWidget_size_sync: '
+            'id=${widget.item.id.split('/').last}, '
+            'oldSize=$currentSize, newSize=$newSize');
+        _sizeNotifier.value = newSize;
+      } else if (_sizeNotifier.value != newSize) {
+        // 小さな差異は同期するがログ出力しない
         _sizeNotifier.value = newSize;
       }
     }
