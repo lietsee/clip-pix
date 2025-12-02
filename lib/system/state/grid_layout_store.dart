@@ -207,8 +207,13 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
       nextStates[item.id] = state;
       nextOrder.add(item.id);
 
-      // Mark new cards without custom height for aspect ratio resolution
-      if (isNewCard && record.customHeight == null) {
+      // 新規カード、またはデフォルト高さのままのカードはアスペクト比を再解決
+      // (過去に間違った高さで保存されたカードを修正するため)
+      final needsAspectRatioResolution = isNewCard ||
+          (record.customHeight == null &&
+           (record.height - GridLayoutPreferenceRecord.defaultHeight).abs() < 1.0);
+
+      if (needsAspectRatioResolution) {
         newCardIds.add(item.id);
       }
     }
@@ -279,11 +284,40 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
         debugPrint('[GridLayoutStore] snapshot_regenerated: '
             'prevId=$prevSnapshotId, newId=${_latestSnapshot?.id}');
       } else {
-        // No geometry available yet, mark for later regeneration
-        _pendingSnapshotRegeneration = true;
-        debugPrint('[GridLayoutStore] syncLibrary: geometry null, '
-            'setting pendingSnapshotRegeneration=true');
-        _invalidateSnapshot();
+        // No geometry available yet
+        // Try to use previous snapshot's geometry if available
+        final prevGeometry = _previousSnapshot?.geometry ?? _latestSnapshot?.geometry;
+        if (prevGeometry != null) {
+          // Regenerate snapshot with new order using previous geometry
+          final orderedStates = _orderedIds
+              .map((id) => _viewStates[id])
+              .whereType<GridCardViewState>()
+              .toList(growable: false);
+          final tempGeometry = GridLayoutGeometry(
+            columnCount: prevGeometry.columnCount,
+            columnWidth: prevGeometry.columnWidth,
+            gap: prevGeometry.gap,
+          );
+          final result = _layoutEngine.compute(
+            geometry: tempGeometry,
+            states: orderedStates,
+          );
+
+          final prevSnapshotId = _latestSnapshot?.id;
+          if (_latestSnapshot != null) {
+            _previousSnapshot = _latestSnapshot;
+          }
+          _latestSnapshot = result.snapshot;
+
+          debugPrint('[GridLayoutStore] syncLibrary: geometry null but prevGeometry available, '
+              'regenerated snapshot: prevId=$prevSnapshotId, newId=${_latestSnapshot?.id}');
+        } else {
+          // No previous geometry, mark for later regeneration
+          _pendingSnapshotRegeneration = true;
+          debugPrint('[GridLayoutStore] syncLibrary: geometry null and no prevGeometry, '
+              'setting pendingSnapshotRegeneration=true');
+          _invalidateSnapshot();
+        }
       }
     } else {
       // No changes, just invalidate (keeps previous behavior)
@@ -809,5 +843,93 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
 
     debugPrint('[GridLayoutStore] _resolveNewCardAspectRatios_complete: '
         'anyChanged=$anyChanged');
+  }
+
+  /// 全カードのアスペクト比を強制的に再解決し、Hiveとスナップショットを再同期。
+  /// 再読み込みボタンから呼び出される。
+  Future<void> forceFullResync() async {
+    debugPrint('[GridLayoutStore] forceFullResync: starting, '
+        'cardCount=${_orderedIds.length}');
+
+    final geometry = _geometry;
+    if (geometry == null) {
+      debugPrint('[GridLayoutStore] forceFullResync: skipped - no geometry');
+      return;
+    }
+
+    bool anyChanged = false;
+
+    // 全カードのアスペクト比を再解決（customHeight関係なく）
+    for (final id in _orderedIds) {
+      final current = _viewStates[id];
+      if (current == null) continue;
+
+      // アスペクト比を解決
+      final ratio = await _resolveAspectRatio(id, current);
+      if (!ratio.isFinite || ratio <= 0) continue;
+
+      // 実際の幅を計算
+      final span = current.columnSpan;
+      final gapCount = math.max(0, span - 1);
+      final gapWidth = geometry.gap * gapCount;
+      final actualWidth = geometry.columnWidth * span + gapWidth;
+
+      // 新しい高さを計算
+      final newHeight = actualWidth * ratio;
+
+      // 変更があるかチェック
+      if ((current.width - actualWidth).abs() < 1.0 &&
+          (current.height - newHeight).abs() < 1.0) {
+        continue;
+      }
+
+      debugPrint('[GridLayoutStore] forceFullResync: updating '
+          'id=${id.split('/').last}, '
+          'oldSize=${current.width.toStringAsFixed(1)}x${current.height.toStringAsFixed(1)}, '
+          'newSize=${actualWidth.toStringAsFixed(1)}x${newHeight.toStringAsFixed(1)}');
+
+      // viewStateを更新
+      final updated = GridCardViewState(
+        id: id,
+        width: actualWidth,
+        height: newHeight,
+        scale: current.scale,
+        columnSpan: current.columnSpan,
+        customHeight: newHeight,
+        offsetDx: current.offsetDx,
+        offsetDy: current.offsetDy,
+      );
+      _viewStates[id] = updated;
+      anyChanged = true;
+    }
+
+    // Hiveに全カードを保存
+    final mutations = _viewStates.values
+        .map((s) => _recordFromState(s))
+        .toList();
+    if (mutations.isNotEmpty) {
+      await _persistence.saveBatch(mutations);
+      debugPrint('[GridLayoutStore] forceFullResync: saved ${mutations.length} records to Hive');
+    }
+
+    // スナップショットを再生成
+    final orderedStates = _orderedIds
+        .map((id) => _viewStates[id])
+        .whereType<GridCardViewState>()
+        .toList(growable: false);
+    final result = _layoutEngine.compute(
+      geometry: geometry,
+      states: orderedStates,
+    );
+
+    if (_latestSnapshot != null) {
+      _previousSnapshot = _latestSnapshot;
+    }
+    _latestSnapshot = result.snapshot;
+
+    debugPrint('[GridLayoutStore] forceFullResync: complete, '
+        'anyChanged=$anyChanged, snapshotId=${_latestSnapshot?.id}');
+
+    notifyListeners();
   }
 }

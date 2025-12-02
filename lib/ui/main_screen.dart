@@ -312,10 +312,16 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
             ),
             IconButton(
               icon: const Icon(Icons.refresh),
-              tooltip: '再読み込み',
+              tooltip: '再読み込み（全体再同期）',
               onPressed: libraryInfo.activeDirectory == null
                   ? null
-                  : () => context.read<ImageLibraryNotifier>().refresh(),
+                  : () async {
+                      // まずライブラリを再読み込み
+                      await context.read<ImageLibraryNotifier>().refresh();
+                      // 次にグリッドレイアウトを強制再同期
+                      // (Hive・スナップショット・ミニマップを全て更新)
+                      await context.read<GridLayoutStore>().forceFullResync();
+                    },
             ),
             IconButton(
               icon: const Icon(Icons.folder_open),

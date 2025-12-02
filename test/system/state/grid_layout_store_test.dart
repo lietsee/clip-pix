@@ -143,6 +143,9 @@ void main() {
       await store.applyBulkSpan(span: 4);
       expect(store.viewStateFor('a').columnSpan, 4);
 
+      // Wait for any pending async operations (e.g., _resolveNewCardAspectRatios) to complete
+      await Future<void>.delayed(Duration.zero);
+
       var notifications = 0;
       store.addListener(() {
         notifications += 1;
