@@ -151,6 +151,10 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
   /// 再生成できなかった場合にtrueになる。updateGeometryで処理される。
   bool _pendingSnapshotRegeneration = false;
 
+  /// syncLibraryで新規カードが追加されたがgeometryがnullのため
+  /// アスペクト比を解決できなかったカードIDのリスト。updateGeometryで処理される。
+  final List<String> _pendingAspectRatioCardIds = [];
+
   @override
   List<GridCardViewState> get viewStates => UnmodifiableListView(
         _orderedIds
@@ -298,9 +302,16 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
         'newCardIds=${newCardIds.length}, '
         'first3Ids=${_orderedIds.take(3).map((id) => id.split('/').last).join(", ")}');
 
-    // Resolve aspect ratios for new cards asynchronously (fire-and-forget)
+    // Resolve aspect ratios for new cards asynchronously
     if (newCardIds.isNotEmpty) {
-      _resolveNewCardAspectRatios(newCardIds);
+      if (_geometry != null) {
+        _resolveNewCardAspectRatios(newCardIds);
+      } else {
+        // Store for later resolution in updateGeometry
+        _pendingAspectRatioCardIds.addAll(newCardIds);
+        debugPrint('[GridLayoutStore] syncLibrary: geometry null, '
+            'storing ${newCardIds.length} pending aspect ratio card IDs');
+      }
     }
   }
 
@@ -395,6 +406,15 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
 
     if (shouldNotify) {
       notifyListeners();
+    }
+
+    // Resolve pending aspect ratios from syncLibrary that ran when geometry was null
+    if (_pendingAspectRatioCardIds.isNotEmpty) {
+      final cardsToResolve = List<String>.from(_pendingAspectRatioCardIds);
+      _pendingAspectRatioCardIds.clear();
+      debugPrint('[GridLayoutStore] updateGeometry: resolving '
+          '${cardsToResolve.length} pending aspect ratio cards');
+      _resolveNewCardAspectRatios(cardsToResolve);
     }
   }
 

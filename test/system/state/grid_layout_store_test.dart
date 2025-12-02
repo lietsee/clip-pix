@@ -108,6 +108,8 @@ void main() {
         ),
         notify: false,
       );
+      // Wait for pending aspect ratio resolution triggered by updateGeometry
+      await Future<void>.delayed(Duration.zero);
       // Clear persistence records from updateGeometry call
       persistence.recordedBatches.clear();
 
