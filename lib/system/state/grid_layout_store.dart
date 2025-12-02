@@ -43,6 +43,9 @@ class GridLayoutPreferenceRecord {
 
 abstract class GridIntrinsicRatioResolver {
   Future<double?> resolve(String id, ContentItem? item);
+
+  /// キャッシュをクリアして次回の解決で実ファイルから再読み込みさせる
+  void clearCache() {}
 }
 
 abstract class GridLayoutCommandTarget {
@@ -876,6 +879,10 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
       return;
     }
 
+    // キャッシュをクリアして実ファイルから再読み込みを強制
+    _ratioResolver.clearCache();
+    debugPrint('[GridLayoutStore] forceFullResync: cleared ratio cache');
+
     bool anyChanged = false;
 
     // 全カードのアスペクト比を再解決（customHeight関係なく）
@@ -883,8 +890,24 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
       final current = _viewStates[id];
       if (current == null) continue;
 
+      // _items[id]がnullの場合のデバッグログ
+      final item = _items[id];
+      if (item == null) {
+        debugPrint('[GridLayoutStore] forceFullResync: item is null for '
+            'id=${id.split('/').last}');
+      }
+
       // アスペクト比を解決
       final ratio = await _resolveAspectRatio(id, current);
+
+      // 解決された比率のデバッグログ
+      final currentRatio = current.width > 0
+          ? current.height / current.width
+          : 1.0;
+      debugPrint('[GridLayoutStore] forceFullResync_ratio: '
+          'id=${id.split('/').last}, '
+          'ratio=${ratio.toStringAsFixed(4)}, '
+          'currentRatio=${currentRatio.toStringAsFixed(4)}');
       if (!ratio.isFinite || ratio <= 0) continue;
 
       // 実際の幅を計算

@@ -66,6 +66,12 @@ class FileImageRatioResolver implements GridIntrinsicRatioResolver {
   final Map<String, Future<double?>> _pending = {};
 
   @override
+  void clearCache() {
+    _cache.clear();
+    _pending.clear();
+  }
+
+  @override
   Future<double?> resolve(String id, ContentItem? item) {
     final cached = _cache[id];
     if (cached != null && cached.width > 0 && cached.height > 0) {
