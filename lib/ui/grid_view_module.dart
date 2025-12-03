@@ -60,6 +60,12 @@ class GridViewModuleState extends State<GridViewModule> {
   static const double _outerPadding = 12;
   static const double _gridGap = 3;
 
+  /// カスケード配置用オフセット（アプリ起動時にリセット）
+  static Offset _cascadeOffset = Offset.zero;
+  static const double _cascadeStep = 20.0;
+  static const double _cascadeMaxX = 400.0;
+  static const double _cascadeMaxY = 300.0;
+
   bool _isInitialized = false;
 
   final Map<String, Timer> _scaleDebounceTimers = {};
@@ -1710,6 +1716,22 @@ class GridViewModuleState extends State<GridViewModule> {
     _showFallbackPreview(item);
   }
 
+  /// カスケード配置用の次のオフセットを取得し、次回用に更新する
+  Offset _getNextCascadeOffset() {
+    final current = _cascadeOffset;
+    final newOffset = Offset(
+      _cascadeOffset.dx + _cascadeStep,
+      _cascadeOffset.dy + _cascadeStep,
+    );
+    // 画面サイズの半分を超えたらリセット
+    if (newOffset.dx > _cascadeMaxX || newOffset.dy > _cascadeMaxY) {
+      _cascadeOffset = Offset.zero;
+    } else {
+      _cascadeOffset = newOffset;
+    }
+    return current;
+  }
+
   Future<bool> _launchPreviewWindowProcess(ImageItem item) async {
     if (_imagePreviewManager == null) {
       debugPrint('[GridViewModule] ImagePreviewProcessManager is null');
@@ -1733,6 +1755,9 @@ class GridViewModuleState extends State<GridViewModule> {
     // Mark as launching to prevent duplicate launches
     _imagePreviewManager!.markLaunching(item.id);
 
+    // カスケード配置用オフセットを取得
+    final cascadeOffset = _getNextCascadeOffset();
+
     final payload = jsonEncode({
       'item': {
         'id': item.id,
@@ -1743,6 +1768,8 @@ class GridViewModuleState extends State<GridViewModule> {
         'source': item.source,
       },
       'alwaysOnTop': false,
+      'cascadeOffsetX': cascadeOffset.dx,
+      'cascadeOffsetY': cascadeOffset.dy,
     });
 
     try {
@@ -1838,6 +1865,9 @@ class GridViewModuleState extends State<GridViewModule> {
     // Mark as launching to prevent duplicate launches
     _processManager!.markLaunching(item.id);
 
+    // カスケード配置用オフセットを取得
+    final cascadeOffset = _getNextCascadeOffset();
+
     final payload = jsonEncode({
       'item': {
         'id': item.id,
@@ -1850,6 +1880,8 @@ class GridViewModuleState extends State<GridViewModule> {
         'favorite': item.favorite,
       },
       'alwaysOnTop': false,
+      'cascadeOffsetX': cascadeOffset.dx,
+      'cascadeOffsetY': cascadeOffset.dy,
     });
 
     try {

@@ -14,6 +14,7 @@ import 'package:logging/logging.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
+import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'data/file_info_manager.dart';
@@ -340,6 +341,10 @@ Future<void> _launchPreviewMode(String payload, int? parentPid) async {
 
       final initialTop = data['alwaysOnTop'] as bool? ?? false;
 
+      // カスケード配置用オフセット
+      final cascadeOffsetX = (data['cascadeOffsetX'] as num?)?.toDouble() ?? 0;
+      final cascadeOffsetY = (data['cascadeOffsetY'] as num?)?.toDouble() ?? 0;
+
       // Initialize window_manager for frameless window
       debugPrint('[ImagePreviewMode] Initializing window manager...');
       await windowManager.ensureInitialized();
@@ -408,10 +413,11 @@ Future<void> _launchPreviewMode(String payload, int? parentPid) async {
       }
 
       // Window options with saved or default bounds
+      final windowSize = restoredBounds?.size ?? const Size(1200, 800);
       final windowOptions = WindowOptions(
-        size: restoredBounds?.size ?? const Size(1200, 800),
+        size: windowSize,
         minimumSize: const Size(600, 400),
-        center: restoredBounds == null, // Only center if no saved position
+        center: false, // 位置は手動で設定する（カスケード対応）
         backgroundColor: Colors.transparent,
         skipTaskbar: false,
         titleBarStyle: TitleBarStyle.hidden,
@@ -431,12 +437,26 @@ Future<void> _launchPreviewMode(String payload, int? parentPid) async {
         await windowManager.show();
         debugPrint('[ImagePreviewMode] Window shown');
 
-        // Restore saved position if available
+        // 位置を設定（保存済み位置があれば復元、なければ中央+カスケードオフセット）
         if (restoredBounds != null) {
           await windowManager.setPosition(
             Offset(restoredBounds.left, restoredBounds.top),
           );
           debugPrint('[ImagePreviewMode] Position restored');
+        } else {
+          // 画面中央を基準にカスケードオフセットを適用
+          // screen_retriever でプライマリ画面サイズを取得
+          final displays = await screenRetriever.getAllDisplays();
+          final primaryDisplay = displays.firstWhere(
+            (d) => d.visiblePosition?.dx == 0 && d.visiblePosition?.dy == 0,
+            orElse: () => displays.first,
+          );
+          final screenWidth = primaryDisplay.size.width;
+          final screenHeight = primaryDisplay.size.height;
+          final centerX = (screenWidth - windowSize.width) / 2 + cascadeOffsetX;
+          final centerY = (screenHeight - windowSize.height) / 2 + cascadeOffsetY;
+          await windowManager.setPosition(Offset(centerX, centerY));
+          debugPrint('[ImagePreviewMode] Position set with cascade offset: ($centerX, $centerY)');
         }
 
         await windowManager.focus();
@@ -562,6 +582,10 @@ Future<void> _launchTextPreviewMode(String payload, int? parentPid) async {
 
       final initialTop = data['alwaysOnTop'] as bool? ?? false;
 
+      // カスケード配置用オフセット
+      final cascadeOffsetX = (data['cascadeOffsetX'] as num?)?.toDouble() ?? 0;
+      final cascadeOffsetY = (data['cascadeOffsetY'] as num?)?.toDouble() ?? 0;
+
       // Initialize window_manager for frameless window
       debugPrint('[TextPreviewMode] Initializing window manager...');
       await windowManager.ensureInitialized();
@@ -630,10 +654,11 @@ Future<void> _launchTextPreviewMode(String payload, int? parentPid) async {
       }
 
       // Window options with saved or default bounds
+      final windowSize = restoredBounds?.size ?? const Size(900, 700);
       final windowOptions = WindowOptions(
-        size: restoredBounds?.size ?? const Size(900, 700),
+        size: windowSize,
         minimumSize: const Size(400, 300),
-        center: restoredBounds == null, // Only center if no saved position
+        center: false, // 位置は手動で設定する（カスケード対応）
         backgroundColor: Colors.transparent,
         skipTaskbar: false,
         titleBarStyle: TitleBarStyle.hidden,
@@ -651,12 +676,26 @@ Future<void> _launchTextPreviewMode(String payload, int? parentPid) async {
         await windowManager.show();
         debugPrint('[TextPreviewMode] Window shown');
 
-        // Restore saved position if available
+        // 位置を設定（保存済み位置があれば復元、なければ中央+カスケードオフセット）
         if (restoredBounds != null) {
           await windowManager.setPosition(
             Offset(restoredBounds.left, restoredBounds.top),
           );
           debugPrint('[TextPreviewMode] Position restored');
+        } else {
+          // 画面中央を基準にカスケードオフセットを適用
+          // screen_retriever でプライマリ画面サイズを取得
+          final displays = await screenRetriever.getAllDisplays();
+          final primaryDisplay = displays.firstWhere(
+            (d) => d.visiblePosition?.dx == 0 && d.visiblePosition?.dy == 0,
+            orElse: () => displays.first,
+          );
+          final screenWidth = primaryDisplay.size.width;
+          final screenHeight = primaryDisplay.size.height;
+          final centerX = (screenWidth - windowSize.width) / 2 + cascadeOffsetX;
+          final centerY = (screenHeight - windowSize.height) / 2 + cascadeOffsetY;
+          await windowManager.setPosition(Offset(centerX, centerY));
+          debugPrint('[TextPreviewMode] Position set with cascade offset: ($centerX, $centerY)');
         }
 
         await windowManager.focus();
