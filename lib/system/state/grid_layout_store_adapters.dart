@@ -19,8 +19,9 @@ class GridLayoutHivePersistence implements GridLayoutPersistence {
   GridLayoutPreferenceRecord read(String id) {
     final pref = _repository.getOrCreate(id);
     debugPrint('[HivePersistence] read: id=${id.split('/').last}, '
-        'offsetDx=${pref.offsetDx.toStringAsFixed(2)}, '
-        'offsetDy=${pref.offsetDy.toStringAsFixed(2)}, '
+        'width=${pref.width.toStringAsFixed(1)}, '
+        'height=${pref.height.toStringAsFixed(1)}, '
+        'customHeight=${pref.customHeight?.toStringAsFixed(1)}, '
         'scale=${pref.scale.toStringAsFixed(2)}');
     return GridLayoutPreferenceRecord(
       id: pref.id,

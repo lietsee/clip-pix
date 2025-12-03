@@ -791,56 +791,53 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
         'resolving ${newCardIds.length} new cards');
 
     bool anyChanged = false;
+    int processed = 0;
+    int skipped = 0;
+    int ratioFailed = 0;
+    int alreadyCorrect = 0;
+    int updated = 0;
 
-    for (final id in newCardIds) {
-      final current = _viewStates[id];
-      if (current == null) continue;
+    try {
+      for (final id in newCardIds) {
+        processed++;
+        final current = _viewStates[id];
+        if (current == null) {
+          skipped++;
+          continue;
+        }
 
-      // Resolve aspect ratio from image file
-      final ratio = await _resolveAspectRatio(id, current);
-      if (!ratio.isFinite || ratio <= 0) continue;
+        // Resolve aspect ratio from image file
+        final ratio = await _resolveAspectRatio(id, current);
+        if (!ratio.isFinite || ratio <= 0) {
+          ratioFailed++;
+          continue;
+        }
 
-      // Calculate actual width based on geometry (same logic as GridLayoutLayoutEngine._computeWidth)
-      final span = current.columnSpan;
-      final gapCount = math.max(0, span - 1);
-      final gapWidth = geometry.gap * gapCount;
-      final actualWidth = geometry.columnWidth * span + gapWidth;
+        // Calculate actual width based on geometry (same logic as GridLayoutLayoutEngine._computeWidth)
+        final span = current.columnSpan;
+        final gapCount = math.max(0, span - 1);
+        final gapWidth = geometry.gap * gapCount;
+        final actualWidth = geometry.columnWidth * span + gapWidth;
 
-      // Calculate new height based on actual width and aspect ratio (ratio = height/width)
-      final newHeight = actualWidth * ratio;
+        // Calculate new height based on actual width and aspect ratio (ratio = height/width)
+        final newHeight = actualWidth * ratio;
 
-      // Skip if size is already correct (within tolerance)
-      if ((current.width - actualWidth).abs() < 1.0 &&
-          (current.height - newHeight).abs() < 1.0) {
-        continue;
-      }
+        // Skip if size is already correct (within tolerance)
+        if ((current.width - actualWidth).abs() < 1.0 &&
+            (current.height - newHeight).abs() < 1.0) {
+          alreadyCorrect++;
+          continue;
+        }
 
-      debugPrint('[GridLayoutStore] new_card_height_adjusted: '
-          'id=${id.split('/').last}, '
-          'oldSize=${current.width.toStringAsFixed(1)}x${current.height.toStringAsFixed(1)}, '
-          'newSize=${actualWidth.toStringAsFixed(1)}x${newHeight.toStringAsFixed(1)}, '
-          'ratio=${ratio.toStringAsFixed(3)}');
+        debugPrint('[GridLayoutStore] new_card_height_adjusted: '
+            'id=${id.split('/').last}, '
+            'oldSize=${current.width.toStringAsFixed(1)}x${current.height.toStringAsFixed(1)}, '
+            'newSize=${actualWidth.toStringAsFixed(1)}x${newHeight.toStringAsFixed(1)}, '
+            'ratio=${ratio.toStringAsFixed(3)}');
 
-      // Update viewState with actual width and calculated height
-      final newState = GridCardViewState(
-        id: current.id,
-        width: actualWidth,
-        height: newHeight,
-        scale: current.scale,
-        columnSpan: current.columnSpan,
-        customHeight: newHeight,
-        offsetDx: current.offsetDx,
-        offsetDy: current.offsetDy,
-      );
-      _viewStates[id] = newState;
-
-      // Notify that this card needs rebuild in ImageCard
-      _notifyCardResized(id);
-
-      // Persist the calculated size
-      await _persistence.saveBatch([
-        GridLayoutPreferenceRecord(
-          id: id,
+        // Update viewState with actual width and calculated height
+        final newState = GridCardViewState(
+          id: current.id,
           width: actualWidth,
           height: newHeight,
           scale: current.scale,
@@ -848,22 +845,48 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
           customHeight: newHeight,
           offsetDx: current.offsetDx,
           offsetDy: current.offsetDy,
-        ),
-      ]);
+        );
+        _viewStates[id] = newState;
 
-      anyChanged = true;
+        // Notify that this card needs rebuild in ImageCard
+        _notifyCardResized(id);
+
+        // Persist the calculated size
+        await _persistence.saveBatch([
+          GridLayoutPreferenceRecord(
+            id: id,
+            width: actualWidth,
+            height: newHeight,
+            scale: current.scale,
+            columnSpan: current.columnSpan,
+            customHeight: newHeight,
+            offsetDx: current.offsetDx,
+            offsetDy: current.offsetDy,
+          ),
+        ]);
+
+        updated++;
+        anyChanged = true;
+      }
+    } catch (e, stackTrace) {
+      debugPrint('[GridLayoutStore] _resolveNewCardAspectRatios ERROR: $e');
+      debugPrint('[GridLayoutStore] stackTrace: $stackTrace');
     }
+
+    debugPrint('[GridLayoutStore] _resolveNewCardAspectRatios_stats: '
+        'processed=$processed, skipped=$skipped, ratioFailed=$ratioFailed, '
+        'alreadyCorrect=$alreadyCorrect, updated=$updated');
 
     if (anyChanged) {
       // Regenerate snapshot with updated heights
-      final geometry = _geometry;
-      if (geometry != null) {
+      final currentGeometry = _geometry;
+      if (currentGeometry != null) {
         final orderedStates = _orderedIds
             .map((id) => _viewStates[id])
             .whereType<GridCardViewState>()
             .toList(growable: false);
         final result = _layoutEngine.compute(
-          geometry: geometry,
+          geometry: currentGeometry,
           states: orderedStates,
         );
         _latestSnapshot = result.snapshot;
