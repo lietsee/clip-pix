@@ -63,6 +63,10 @@ import 'ui/image_preview_window.dart';
 import 'ui/widgets/text_preview_window.dart';
 import 'system/window_bounds_service.dart';
 
+/// DEBUG: カード順序番号表示フラグ
+/// trueにするとカードの中央に配列インデックスを表示
+bool debugShowCardIndex = false;
+
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
 

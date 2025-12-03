@@ -52,6 +52,7 @@ class ImageCard extends StatefulWidget {
     this.onReorderEnd,
     this.onReorderCancel,
     this.onHoverChanged,
+    this.debugIndex,
   });
 
   final ImageItem item;
@@ -80,6 +81,9 @@ class ImageCard extends StatefulWidget {
   final void Function(String id)? onReorderEnd;
   final void Function(String id)? onReorderCancel;
   final void Function(bool isHovered)? onHoverChanged;
+
+  /// デバッグ用: カードの配列インデックス（debugShowCardIndex=trueの時に中央に表示）
+  final int? debugIndex;
 
   @override
   State<ImageCard> createState() => _ImageCardState();
@@ -671,7 +675,34 @@ class _ImageCardState extends State<ImageCard>
               ),
             ),
           ),
+        // デバッグ用: カード順序番号表示
+        if (widget.debugIndex != null) _buildDebugIndexOverlay(),
       ],
+    );
+  }
+
+  /// デバッグ用: カード中央に配列インデックスを表示
+  Widget _buildDebugIndexOverlay() {
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.black54,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '${widget.debugIndex}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 

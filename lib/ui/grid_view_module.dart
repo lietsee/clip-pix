@@ -37,6 +37,7 @@ import 'widgets/pinterest_grid.dart';
 import 'widgets/text_card.dart';
 import 'widgets/text_preview_window.dart';
 import 'package:path/path.dart' as p;
+import '../main.dart' show debugShowCardIndex;
 
 class GridViewModule extends StatefulWidget {
   const GridViewModule({
@@ -758,6 +759,7 @@ class GridViewModuleState extends State<GridViewModule> {
                           backgroundColor: cardBackgroundColor,
                           usePersistentKey: !isStaging,
                           snapshotId: snapshot?.id,
+                          index: index,
                         );
                         // Log only first few cards to avoid spam
                         if (index < 3) {
@@ -823,6 +825,7 @@ class GridViewModuleState extends State<GridViewModule> {
     required int span,
     required Color backgroundColor,
     required bool usePersistentKey,
+    required int index,
     String? snapshotId,
   }) {
     final item = entry.item;
@@ -889,6 +892,7 @@ class GridViewModuleState extends State<GridViewModule> {
                 onHoverChanged: (isHovered) {
                   _onCardHoverChanged(isHovered ? item.id : null);
                 },
+                debugIndex: debugShowCardIndex ? index : null,
               )
             : ImageCard(
                 item: item as ImageItem,
@@ -919,6 +923,7 @@ class GridViewModuleState extends State<GridViewModule> {
                 onHoverChanged: (isHovered) {
                   _onCardHoverChanged(isHovered ? item.id : null);
                 },
+                debugIndex: debugShowCardIndex ? index : null,
               ),
       ),
     );
