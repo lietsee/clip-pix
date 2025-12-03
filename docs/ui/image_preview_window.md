@@ -1,6 +1,6 @@
 # ImagePreviewWindow 詳細設計
 
-**最終更新**: 2025-11-30
+**最終更新**: 2025-12-03
 
 ## 1. 概要
 ImageCard から起動される単独ウィンドウ。対象画像を等倍またはウィンドウ幅で表示し、最前面表示の切替と閉じる操作のみを提供する。
@@ -91,3 +91,85 @@ ImageCard.onOpenPreview
 | macOS | `ps -p $pid` コマンド | 数十ミリ秒 |
 
 **コード位置:** `lib/main.dart` の `_isParentProcessAlive()` 関数
+
+## 9. カスケード配置 (2025-12-03追加)
+
+### 9.1 概要
+複数のプレビューウィンドウを開く際、各ウィンドウを少しずつずらして配置する機能。ウィンドウの完全な重なりを防ぐ。
+
+### 9.2 動作仕様
+| 操作 | 配置方法 |
+|------|----------|
+| ダブルクリックで開く | カスケードオフセットを適用（保存位置がない場合） |
+| アプリ再起動時の復元 | 保存された位置を使用（既存の動作） |
+| 端に到達 | オフセットを原点(0, 0)にリセット |
+
+### 9.3 オフセット設定
+| パラメータ | 値 |
+|------------|-----|
+| ステップ量 | +20px（X, Y両方向） |
+| 最大X | 400px |
+| 最大Y | 300px |
+
+### 9.4 実装詳細
+
+**状態管理** (`lib/ui/grid_view_module.dart`):
+```dart
+static Offset _cascadeOffset = Offset.zero;
+static const double _cascadeStep = 20.0;
+static const double _cascadeMaxX = 400.0;
+static const double _cascadeMaxY = 300.0;
+```
+
+**オフセット計算** (`_getNextCascadeOffset()`):
+```dart
+Offset _getNextCascadeOffset() {
+  final current = _cascadeOffset;
+  final newOffset = Offset(
+    _cascadeOffset.dx + _cascadeStep,
+    _cascadeOffset.dy + _cascadeStep,
+  );
+  // 最大値を超えたらリセット
+  if (newOffset.dx > _cascadeMaxX || newOffset.dy > _cascadeMaxY) {
+    _cascadeOffset = Offset.zero;
+  } else {
+    _cascadeOffset = newOffset;
+  }
+  return current;
+}
+```
+
+**ペイロード**:
+```dart
+{
+  // ... 既存フィールド
+  'cascadeOffsetX': cascadeOffset.dx,
+  'cascadeOffsetY': cascadeOffset.dy,
+}
+```
+
+### 9.5 配置計算 (`lib/main.dart`)
+1. `screen_retriever`で画面サイズを取得
+2. ウィンドウを画面中央に配置する座標を計算
+3. カスケードオフセットを加算
+4. `windowManager.setPosition()`で位置を設定
+
+### 9.6 図解
+```
+1枚目:              2枚目:              3枚目:
+┌─────────┐        ┌─────────┐        ┌─────────┐
+│ Preview │        │ Preview │        │ Preview │
+│    1    │        │    2    │        │    3    │
+└─────────┘        └─────────┘        └─────────┘
+   (0,0)            (+20,+20)          (+40,+40)
+
+最大到達後（リセット）:
+┌─────────┐
+│ Preview │ ← (0,0)に戻る
+│   21    │
+└─────────┘
+```
+
+### 9.7 関連ファイル
+- `lib/ui/grid_view_module.dart`: `_cascadeOffset`, `_getNextCascadeOffset()`
+- `lib/main.dart`: プレビュープロセスの位置設定ロジック

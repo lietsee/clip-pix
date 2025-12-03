@@ -1,6 +1,6 @@
 # MainScreen 詳細設計
 
-**最終更新**: 2025-11-29
+**最終更新**: 2025-12-03
 
 ## 1. 概要
 アプリのルート画面。フォルダ選択・タブ表示・GridView呼び出しを管理。
@@ -234,3 +234,41 @@ if (newlyAddedIds.isNotEmpty) {
 - **効果**: 青いボーダー（`Colors.blue.withOpacity(0.8)`）が明滅
 - **AnimationController**: `duration: 667ms`, `repeat(reverse: true)`
 - **自動停止**: 2秒後に`_highlightController.reset()`で解除
+
+## 16. サブディレクトリ作成機能 (2025-12-03追加)
+
+### 16.1 概要
+タブバー右端の「＋」ボタンから新規サブフォルダを作成できる機能。
+
+### 16.2 UI要素
+- **＋ボタン (`_AddFolderTab`)**: サブフォルダタブの右端に配置されたActionChip
+- **CreateFolderDialog**: フォルダ名入力ダイアログ
+
+### 16.3 ダイアログ仕様
+| 要素 | 説明 |
+|------|------|
+| フォルダ名入力欄 | TextField（autofocus有効） |
+| キャンセルボタン | ダイアログを閉じる（nullを返す） |
+| OKボタン | フォルダ作成＆移動（フォルダ名を返す） |
+
+### 16.4 バリデーション
+| 条件 | 結果 |
+|------|------|
+| 空文字 | OKボタン無効化 |
+| 既存フォルダ名と重複 | エラーメッセージ「同じ名前のフォルダが既に存在します」 |
+| `/` または `\` を含む | エラーメッセージ「フォルダ名に / や \\ は使用できません」 |
+
+### 16.5 操作フロー
+1. ＋ボタンをタップ
+2. `CreateFolderDialog`が表示される
+3. フォルダ名を入力（リアルタイムバリデーション）
+4. OKボタンをタップ（またはEnterキー）
+5. `Directory.create()`でフォルダを作成
+6. `SelectedFolderNotifier.switchToSubfolder()`で新しいフォルダへ移動
+
+### 16.6 関連ファイル
+- `lib/ui/widgets/create_folder_dialog.dart`: ダイアログウィジェット
+- `lib/ui/main_screen.dart`:
+  - `_AddFolderTab`: ＋ボタンウィジェット
+  - `_showCreateFolderDialog()`: ダイアログ表示＆フォルダ作成ロジック
+  - `_buildTabs()`: タブリスト構築（末尾に＋ボタン追加）
