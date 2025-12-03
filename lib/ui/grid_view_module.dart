@@ -129,6 +129,9 @@ class GridViewModuleState extends State<GridViewModule> {
       _imagePreviewManager = context.read<ImagePreviewProcessManager>();
       final orderedImages = _applyDirectoryOrder(widget.state.images);
       _entries = orderedImages.map(_createEntry).toList(growable: true);
+      // [DEBUG] 順序確認ログ
+      debugPrint('[GridViewModule] initState: entries order (first 15) = '
+          '${_entries.take(15).map((e) => e.item.id.split('/').last).toList()}');
       _layoutStore.syncLibrary(
         orderedImages,
         directoryPath: widget.state.activeDirectory?.path,

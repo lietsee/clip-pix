@@ -277,6 +277,10 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
       ..clear()
       ..addAll(nextOrder);
 
+    // [DEBUG] 順序確認ログ
+    debugPrint('[GridLayoutStore] syncLibrary: orderedIds (first 15) = '
+        '${_orderedIds.take(15).map((id) => id.split('/').last).toList()}');
+
     // Regenerate snapshot if order or content changed
     // This ensures PinterestGrid gets a new snapshot ID and can detect layout changes
     if (orderChanged || contentChanged) {
@@ -302,6 +306,9 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
         // [DIAGNOSTIC] Track snapshot regeneration
         debugPrint('[GridLayoutStore] snapshot_regenerated: '
             'prevId=$prevSnapshotId, newId=${_latestSnapshot?.id}');
+        // [DEBUG] スナップショット順序確認ログ
+        debugPrint('[GridLayoutStore] snapshot: entries order (first 15) = '
+            '${result.snapshot.entries.take(15).map((e) => e.id.split('/').last).toList()}');
       } else {
         // No geometry available yet
         // Try to use previous snapshot's geometry if available
@@ -330,6 +337,9 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
 
           debugPrint('[GridLayoutStore] syncLibrary: geometry null but prevGeometry available, '
               'regenerated snapshot: prevId=$prevSnapshotId, newId=${_latestSnapshot?.id}');
+          // [DEBUG] スナップショット順序確認ログ
+          debugPrint('[GridLayoutStore] snapshot: entries order (first 15) = '
+              '${result.snapshot.entries.take(15).map((e) => e.id.split('/').last).toList()}');
         } else {
           // No previous geometry, mark for later regeneration
           _pendingSnapshotRegeneration = true;
@@ -456,6 +466,9 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
         'changed=$changed, notify=$notify, shouldNotify=$shouldNotify, '
         'geometryChanged=$geometryChanged, '
         'orderedIdsFirst3=${_orderedIds.take(3).map((e) => e.split('/').last).join(', ')}');
+    // [DEBUG] スナップショット順序確認ログ
+    debugPrint('[GridLayoutStore] updateGeometry snapshot: entries order (first 15) = '
+        '${result.snapshot.entries.take(15).map((e) => e.id.split('/').last).toList()}');
 
     if (shouldNotify) {
       notifyListeners();

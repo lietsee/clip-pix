@@ -187,6 +187,9 @@ class _MinimapWidgetState extends State<_MinimapWidget> {
           print('[Minimap] snapshot empty: isNull=${snapshot == null}, entriesCount=${snapshot?.entries.length ?? 0}');
           return const SizedBox.shrink();
         }
+        // [DEBUG] ミニマップ用スナップショット順序確認（初回のみ）
+        debugPrint('[Minimap] using snapshot ${snapshot.id}, entries order (first 15) = '
+            '${snapshot.entries.take(15).map((e) => e.id.split('/').last).toList()}');
 
         final screenSize = MediaQuery.of(context).size;
         final contentDimensions = _calculateContentDimensions(snapshot);
