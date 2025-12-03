@@ -192,7 +192,8 @@ class GridViewModuleState extends State<GridViewModule> {
       // 旧データによる SizedBox.shrink() の大量生成を防ぐ
       // (大量の SizedBox.shrink がレンダーツリーを破損させ、ヒットテストが効かなくなる問題の修正)
       if (directoryChanged) {
-        print('[GridViewModule] didUpdateWidget: directory changed, clearing _entries');
+        print(
+            '[GridViewModule] didUpdateWidget: directory changed, clearing _entries');
         setState(() {
           _entries = [];
         });
@@ -237,7 +238,8 @@ class GridViewModuleState extends State<GridViewModule> {
 
       // Compare orderedImages with _entries to detect order mismatch
       // This catches cases where Hive order differs from _entries order
-      final entriesIds = _entries.where((e) => !e.isRemoving).map((e) => e.item.id).toList();
+      final entriesIds =
+          _entries.where((e) => !e.isRemoving).map((e) => e.item.id).toList();
       final orderedIds = orderedImages.map((item) => item.id).toList();
       final orderMismatch = !listEquals(entriesIds, orderedIds);
 
@@ -404,13 +406,16 @@ class GridViewModuleState extends State<GridViewModule> {
   /// 指定されたファイルパスのカードにスクロールし、2秒間ハイライト表示する
   void scrollToAndHighlight(String filePath) {
     debugPrint('[GridViewModule] scrollToAndHighlight: called with $filePath');
-    debugPrint('[GridViewModule] scrollToAndHighlight: _entries.length=${_entries.length}');
+    debugPrint(
+        '[GridViewModule] scrollToAndHighlight: _entries.length=${_entries.length}');
 
     // 該当アイテムのインデックスを特定
     final index = _entries.indexWhere((e) => e.item.id == filePath);
     if (index < 0) {
-      debugPrint('[GridViewModule] scrollToAndHighlight: item not found $filePath');
-      debugPrint('[GridViewModule] scrollToAndHighlight: available ids=${_entries.map((e) => e.item.id.split('/').last).take(5).toList()}...');
+      debugPrint(
+          '[GridViewModule] scrollToAndHighlight: item not found $filePath');
+      debugPrint(
+          '[GridViewModule] scrollToAndHighlight: available ids=${_entries.map((e) => e.item.id.split('/').last).take(5).toList()}...');
       return;
     }
     debugPrint('[GridViewModule] scrollToAndHighlight: found at index=$index');
@@ -418,7 +423,8 @@ class GridViewModuleState extends State<GridViewModule> {
     // ScrollControllerを取得（widget.controllerを優先）
     final scrollController = widget.controller;
     if (scrollController == null || !scrollController.hasClients) {
-      debugPrint('[GridViewModule] scrollToAndHighlight: no scroll controller or no clients');
+      debugPrint(
+          '[GridViewModule] scrollToAndHighlight: no scroll controller or no clients');
       return;
     }
 
@@ -428,16 +434,19 @@ class GridViewModuleState extends State<GridViewModule> {
       debugPrint('[GridViewModule] scrollToAndHighlight: no snapshot');
       return;
     }
-    debugPrint('[GridViewModule] scrollToAndHighlight: snapshot.entries.length=${snapshot.entries.length}');
+    debugPrint(
+        '[GridViewModule] scrollToAndHighlight: snapshot.entries.length=${snapshot.entries.length}');
 
     // entries内から該当idのrectを検索
     final snapshotEntry = snapshot.entries.cast<dynamic>().firstWhere(
-      (e) => e.id == filePath,
-      orElse: () => null,
-    );
+          (e) => e.id == filePath,
+          orElse: () => null,
+        );
     if (snapshotEntry == null) {
-      debugPrint('[GridViewModule] scrollToAndHighlight: rect not found in snapshot');
-      debugPrint('[GridViewModule] scrollToAndHighlight: snapshot ids=${snapshot.entries.take(5).map((e) => e.id.split('/').last).toList()}...');
+      debugPrint(
+          '[GridViewModule] scrollToAndHighlight: rect not found in snapshot');
+      debugPrint(
+          '[GridViewModule] scrollToAndHighlight: snapshot ids=${snapshot.entries.take(5).map((e) => e.id.split('/').last).toList()}...');
       return;
     }
     final rect = snapshotEntry.rect as Rect;
@@ -447,7 +456,8 @@ class GridViewModuleState extends State<GridViewModule> {
     final targetOffset = math.max(0.0, rect.top - _outerPadding);
     final maxExtent = scrollController.position.maxScrollExtent;
     final totalHeight = snapshot.totalHeight;
-    debugPrint('[GridViewModule] scrollToAndHighlight: targetOffset=$targetOffset, maxExtent=$maxExtent, totalHeight=$totalHeight');
+    debugPrint(
+        '[GridViewModule] scrollToAndHighlight: targetOffset=$targetOffset, maxExtent=$maxExtent, totalHeight=$totalHeight');
 
     // cacheExtentが効いていればmaxExtent >= targetOffsetになるはず
     // フォールバックとして段階的スクロールも残す
@@ -456,14 +466,17 @@ class GridViewModuleState extends State<GridViewModule> {
       _scrollToOffsetAndHighlight(scrollController, targetOffset, filePath);
     } else {
       // 目標位置がmaxScrollExtentを超えている → 段階的スクロール（フォールバック）
-      debugPrint('[GridViewModule] scrollToAndHighlight: target exceeds maxExtent, using incremental scroll');
+      debugPrint(
+          '[GridViewModule] scrollToAndHighlight: target exceeds maxExtent, using incremental scroll');
       _scrollIncrementally(scrollController, targetOffset, filePath);
     }
   }
 
   /// 指定オフセットにスクロールしてハイライトを設定
-  void _scrollToOffsetAndHighlight(ScrollController controller, double offset, String filePath) {
-    debugPrint('[GridViewModule] _scrollToOffsetAndHighlight: scrolling to $offset');
+  void _scrollToOffsetAndHighlight(
+      ScrollController controller, double offset, String filePath) {
+    debugPrint(
+        '[GridViewModule] _scrollToOffsetAndHighlight: scrolling to $offset');
     controller.animateTo(
       offset,
       duration: const Duration(milliseconds: 300),
@@ -473,27 +486,33 @@ class GridViewModuleState extends State<GridViewModule> {
   }
 
   /// 段階的スクロール（maxScrollExtentが足りない場合に再試行）
-  void _scrollIncrementally(ScrollController controller, double targetOffset, String filePath, [int attempt = 0]) {
+  void _scrollIncrementally(
+      ScrollController controller, double targetOffset, String filePath,
+      [int attempt = 0]) {
     const maxAttempts = 5;
     if (attempt >= maxAttempts) {
       // 最大試行回数に達した → 現在位置でハイライト設定
-      debugPrint('[GridViewModule] _scrollIncrementally: max attempts reached, setting highlight at current position');
+      debugPrint(
+          '[GridViewModule] _scrollIncrementally: max attempts reached, setting highlight at current position');
       _setHighlight(filePath);
       return;
     }
 
     final maxExtent = controller.position.maxScrollExtent;
-    debugPrint('[GridViewModule] _scrollIncrementally: attempt=$attempt, targetOffset=$targetOffset, maxExtent=$maxExtent');
+    debugPrint(
+        '[GridViewModule] _scrollIncrementally: attempt=$attempt, targetOffset=$targetOffset, maxExtent=$maxExtent');
 
     if (targetOffset <= maxExtent) {
       // 目標到達可能になった → 最終スクロール
-      debugPrint('[GridViewModule] _scrollIncrementally: target now reachable, final scroll');
+      debugPrint(
+          '[GridViewModule] _scrollIncrementally: target now reachable, final scroll');
       _scrollToOffsetAndHighlight(controller, targetOffset, filePath);
       return;
     }
 
     // まだ到達不可 → maxExtentまでスクロールしてレイアウト更新を待つ
-    debugPrint('[GridViewModule] _scrollIncrementally: scrolling to maxExtent=$maxExtent');
+    debugPrint(
+        '[GridViewModule] _scrollIncrementally: scrolling to maxExtent=$maxExtent');
     controller.animateTo(
       maxExtent,
       duration: const Duration(milliseconds: 150),
@@ -513,7 +532,8 @@ class GridViewModuleState extends State<GridViewModule> {
   /// ハイライト表示を設定し、2秒後にクリア
   void _setHighlight(String filePath) {
     _highlightTimer?.cancel();
-    debugPrint('[GridViewModule] _setHighlight: setting highlight for $filePath');
+    debugPrint(
+        '[GridViewModule] _setHighlight: setting highlight for $filePath');
     setState(() {
       _highlightedItemId = filePath;
     });
@@ -699,25 +719,29 @@ class GridViewModuleState extends State<GridViewModule> {
                         }
 
                         if (index >= _entries.length) {
-                          print('[GridViewModule] childBuilder[$index]: returning null (index >= _entries.length)');
+                          print(
+                              '[GridViewModule] childBuilder[$index]: returning null (index >= _entries.length)');
                           return null;
                         }
                         final entry = _entries[index];
 
                         // Skip entries being removed to avoid ViewState access errors
                         if (entry.isRemoving) {
-                          print('[GridViewModule] childBuilder[$index]: returning null (isRemoving) item=${entry.item.id.split('/').last}');
+                          print(
+                              '[GridViewModule] childBuilder[$index]: returning null (isRemoving) item=${entry.item.id.split('/').last}');
                           return null;
                         }
                         // Skip deleted items (not yet removed from _entries but already removed from state)
                         // This ensures deleted items are hidden immediately, before _reconcileEntries runs
                         if (!currentImageIds.contains(entry.item.id)) {
-                          print('[GridViewModule] childBuilder[$index]: returning SizedBox.shrink (not in currentImageIds) item=${entry.item.id.split('/').last}');
+                          print(
+                              '[GridViewModule] childBuilder[$index]: returning SizedBox.shrink (not in currentImageIds) item=${entry.item.id.split('/').last}');
                           return const SizedBox.shrink();
                         }
                         // Skip if viewState not yet synced (during initial load/folder change)
                         if (!layoutStore.hasViewState(entry.item.id)) {
-                          print('[GridViewModule] childBuilder[$index]: returning SizedBox.shrink (no viewState) item=${entry.item.id.split('/').last}');
+                          print(
+                              '[GridViewModule] childBuilder[$index]: returning SizedBox.shrink (no viewState) item=${entry.item.id.split('/').last}');
                           return const SizedBox.shrink();
                         }
                         final viewState = layoutStore.viewStateFor(
@@ -737,7 +761,8 @@ class GridViewModuleState extends State<GridViewModule> {
                         );
                         // Log only first few cards to avoid spam
                         if (index < 3) {
-                          print('[GridViewModule] childBuilder[$index]: built card item=${entry.item.id.split('/').last}');
+                          print(
+                              '[GridViewModule] childBuilder[$index]: built card item=${entry.item.id.split('/').last}');
                         }
                         return PinterestGridTile(
                           span: span,
@@ -1156,6 +1181,9 @@ class GridViewModuleState extends State<GridViewModule> {
   }
 
   void _handleResize(String id, Size newSize, {ResizeCorner? corner}) {
+    print('[GridViewModule] _handleResize: id=${id.split('/').last}, '
+        'size=$newSize, corner=$corner');
+
     // サイズからスパンを計算して、customSizeとcolumnSpanを一緒に更新
     final snapshot = _layoutStore.latestSnapshot;
     final geometry = snapshot?.geometry;
@@ -1175,9 +1203,12 @@ class GridViewModuleState extends State<GridViewModule> {
         (e) => e.id == id,
         orElse: () => snapshot.entries.first,
       );
-      final currentColumn =
-          (entry.rect.left / (geometry.columnWidth + geometry.gap)).round();
       final currentSpan = entry.columnSpan;
+      // rect.leftは正確にcolumnWidth+gapの倍数のはずだが、
+      // 浮動小数点誤差を考慮して+0.5してからfloorを使用
+      final currentColumn =
+          ((entry.rect.left + 0.5) / (geometry.columnWidth + geometry.gap))
+              .floor();
 
       switch (corner) {
         case ResizeCorner.topLeft:
@@ -1191,9 +1222,18 @@ class GridViewModuleState extends State<GridViewModule> {
         case ResizeCorner.topRight:
         case ResizeCorner.bottomRight:
           // 右ハンドル: 左端が固定 → 開始列を維持
-          preferredColumnStart = currentColumn.clamp(0, geometry.columnCount - span);
+          final maxStart = geometry.columnCount - span;
+          if (currentColumn > maxStart) {
+            print('[GridViewModule] _handleResize: WARNING - card at column '
+                '$currentColumn cannot fit span $span, shifting to column $maxStart');
+          }
+          preferredColumnStart = currentColumn.clamp(0, maxStart);
           break;
       }
+
+      print('[GridViewModule] _handleResize: currentColumn=$currentColumn, '
+          'currentSpan=$currentSpan, newSpan=$span, '
+          'preferredColumnStart=$preferredColumnStart');
     }
 
     unawaited(_layoutStore.updateCard(
@@ -1479,7 +1519,8 @@ class GridViewModuleState extends State<GridViewModule> {
     // 新規アイテムが追加された場合、最後の1件に自動スクロール＆ハイライト
     if (newlyAddedIds.isNotEmpty) {
       final latestNewId = newlyAddedIds.last;
-      debugPrint('[GridViewModule] _reconcileEntries: new item detected, scheduling scroll to $latestNewId');
+      debugPrint(
+          '[GridViewModule] _reconcileEntries: new item detected, scheduling scroll to $latestNewId');
       // レイアウト完了後にスクロール実行（2フレーム待つ）
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -2416,8 +2457,8 @@ class GridViewModuleState extends State<GridViewModule> {
     } else if (localPosition.dy > bottomThreshold &&
         localPosition.dy <= viewportHeight) {
       // 下部ゾーン: 下にスクロール
-      final intensity =
-          (localPosition.dy - bottomThreshold) / (viewportHeight - bottomThreshold);
+      final intensity = (localPosition.dy - bottomThreshold) /
+          (viewportHeight - bottomThreshold);
       _startAutoScroll(intensity * 10);
     } else {
       _stopAutoScroll();
