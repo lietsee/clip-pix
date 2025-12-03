@@ -15,6 +15,14 @@ import 'widgets/memo_edit_dialog.dart';
 import 'widgets/memo_tooltip_overlay.dart';
 import 'widgets/resize_preview_overlay.dart';
 
+/// リサイズハンドルの位置を表すenum
+enum ResizeCorner {
+  topLeft,
+  topRight,
+  bottomLeft,
+  bottomRight,
+}
+
 class ImageCard extends StatefulWidget {
   const ImageCard({
     super.key,
@@ -121,6 +129,8 @@ class _ImageCardState extends State<ImageCard>
   Offset? _resizeStartGlobalPosition;
   int _resizeStartSpan = 1;
   Size? _previewSize;
+  ResizeCorner? _resizeCorner;
+  Offset? _anchorPosition; // ドラッグ中の固定点（グローバル座標）
   ResizePreviewOverlayService? _overlayService;
   MemoTooltipOverlayService? _memoTooltipService;
   Timer? _memoHoverTimer;
@@ -513,36 +523,41 @@ class _ImageCardState extends State<ImageCard>
             right: 12,
             child: _fadeChild(child: _buildDeleteButton()), // 通常時はホバーで表示
           ),
-        // リサイズハンドル（右下）- 一括削除モード時は非表示
-        if (!widget.isDeletionMode)
+        // リサイズハンドル（四隅）- 一括削除モード時は非表示
+        if (!widget.isDeletionMode) ...[
+          // 右下
           Positioned(
             right: 0,
             bottom: 0,
             child: _fadeChild(
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onPanStart: _onResizeStart,
-                onPanUpdate: _onResizeUpdate,
-                onPanEnd: _onResizeEnd,
-                child: Container(
-                  width: 24,
-                  height: 24,
-                  decoration: const BoxDecoration(
-                    color: Color(0x44000000),
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(12),
-                    ),
-                  ),
-                  alignment: Alignment.bottomRight,
-                  child: const Icon(
-                    Icons.open_in_full,
-                    size: 16,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
+              child: _buildResizeHandle(ResizeCorner.bottomRight),
             ),
           ),
+          // 左下
+          Positioned(
+            left: 0,
+            bottom: 0,
+            child: _fadeChild(
+              child: _buildResizeHandle(ResizeCorner.bottomLeft),
+            ),
+          ),
+          // 右上
+          Positioned(
+            right: 0,
+            top: 0,
+            child: _fadeChild(
+              child: _buildResizeHandle(ResizeCorner.topRight),
+            ),
+          ),
+          // 左上
+          Positioned(
+            left: 0,
+            top: 0,
+            child: _fadeChild(
+              child: _buildResizeHandle(ResizeCorner.topLeft),
+            ),
+          ),
+        ],
         // お気に入りボタン（左下）
         // 一括削除モード時: favorite > 0 の場合のみ常時表示、通常時: ホバー時のみ表示
         if (widget.isDeletionMode && widget.item.favorite > 0)
@@ -671,7 +686,58 @@ class _ImageCardState extends State<ImageCard>
     );
   }
 
-  void _onResizeStart(DragStartDetails details) {
+  /// リサイズハンドルを構築する
+  Widget _buildResizeHandle(ResizeCorner corner) {
+    // コーナーに応じた角丸の位置を決定
+    BorderRadius borderRadius;
+    Alignment alignment;
+    double rotation;
+
+    switch (corner) {
+      case ResizeCorner.bottomRight:
+        borderRadius = const BorderRadius.only(topLeft: Radius.circular(12));
+        alignment = Alignment.bottomRight;
+        rotation = 0;
+      case ResizeCorner.bottomLeft:
+        borderRadius = const BorderRadius.only(topRight: Radius.circular(12));
+        alignment = Alignment.bottomLeft;
+        rotation = math.pi / 2; // 90度回転
+      case ResizeCorner.topRight:
+        borderRadius = const BorderRadius.only(bottomLeft: Radius.circular(12));
+        alignment = Alignment.topRight;
+        rotation = -math.pi / 2; // -90度回転
+      case ResizeCorner.topLeft:
+        borderRadius = const BorderRadius.only(bottomRight: Radius.circular(12));
+        alignment = Alignment.topLeft;
+        rotation = math.pi; // 180度回転
+    }
+
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onPanStart: (details) => _onResizeStart(details, corner),
+      onPanUpdate: _onResizeUpdate,
+      onPanEnd: _onResizeEnd,
+      child: Container(
+        width: 24,
+        height: 24,
+        decoration: BoxDecoration(
+          color: const Color(0x44000000),
+          borderRadius: borderRadius,
+        ),
+        alignment: alignment,
+        child: Transform.rotate(
+          angle: rotation,
+          child: const Icon(
+            Icons.open_in_full,
+            size: 16,
+            color: Colors.white,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _onResizeStart(DragStartDetails details, ResizeCorner corner) {
     // Get card's global position
     final RenderBox? box = context.findRenderObject() as RenderBox?;
     if (box == null) return;
@@ -679,11 +745,33 @@ class _ImageCardState extends State<ImageCard>
     final globalOffset = box.localToGlobal(Offset.zero);
     final currentSize = _sizeNotifier.value;
 
+    // ドラッグ中の固定点（アンカー）を計算（ドラッグコーナーの反対側）
+    Offset anchor;
+    switch (corner) {
+      case ResizeCorner.bottomRight:
+        // 左上が固定
+        anchor = globalOffset;
+      case ResizeCorner.bottomLeft:
+        // 右上が固定
+        anchor = Offset(globalOffset.dx + currentSize.width, globalOffset.dy);
+      case ResizeCorner.topRight:
+        // 左下が固定
+        anchor = Offset(globalOffset.dx, globalOffset.dy + currentSize.height);
+      case ResizeCorner.topLeft:
+        // 右下が固定
+        anchor = Offset(
+          globalOffset.dx + currentSize.width,
+          globalOffset.dy + currentSize.height,
+        );
+    }
+
     setState(() {
       _isResizing = true;
       _resizeStartSize = currentSize;
       _resizeStartGlobalPosition = details.globalPosition;
       _resizeStartSpan = _currentSpan;
+      _resizeCorner = corner;
+      _anchorPosition = anchor;
     });
 
     // Create and show overlay
@@ -701,12 +789,31 @@ class _ImageCardState extends State<ImageCard>
   }
 
   void _onResizeUpdate(DragUpdateDetails details) {
-    if (_resizeStartSize == null || _resizeStartGlobalPosition == null) {
+    if (_resizeStartSize == null ||
+        _resizeStartGlobalPosition == null ||
+        _resizeCorner == null ||
+        _anchorPosition == null) {
       return;
     }
+
     final delta = details.globalPosition - _resizeStartGlobalPosition!;
+
+    // コーナーに応じてデルタの符号を調整
+    // 左側のコーナーからドラッグする場合、dxを反転
+    double adjustedDx;
+    switch (_resizeCorner!) {
+      case ResizeCorner.bottomRight:
+      case ResizeCorner.topRight:
+        // 右方向へのドラッグで幅が増加
+        adjustedDx = delta.dx;
+      case ResizeCorner.bottomLeft:
+      case ResizeCorner.topLeft:
+        // 左方向へのドラッグで幅が増加（符号反転）
+        adjustedDx = -delta.dx;
+    }
+
     final targetWidth =
-        (_resizeStartSize!.width + delta.dx).clamp(_minWidth, _maxWidth);
+        (_resizeStartSize!.width + adjustedDx).clamp(_minWidth, _maxWidth);
     final snappedSpan = _snapSpan(targetWidth);
     final snappedWidth = _widthForSpan(snappedSpan);
 
@@ -717,23 +824,30 @@ class _ImageCardState extends State<ImageCard>
       newHeight = (snappedWidth / aspectRatio).clamp(_minHeight, _maxHeight);
     } else {
       // フォールバック: 画像未ロード時は垂直ドラッグに従う
+      // 上側コーナーの場合はdyを反転
+      double adjustedDy;
+      switch (_resizeCorner!) {
+        case ResizeCorner.bottomRight:
+        case ResizeCorner.bottomLeft:
+          adjustedDy = delta.dy;
+        case ResizeCorner.topRight:
+        case ResizeCorner.topLeft:
+          adjustedDy = -delta.dy;
+      }
       newHeight =
-          (_resizeStartSize!.height + delta.dy).clamp(_minHeight, _maxHeight);
+          (_resizeStartSize!.height + adjustedDy).clamp(_minHeight, _maxHeight);
     }
 
-    // Get card's current global position (might have scrolled)
-    final RenderBox? box = context.findRenderObject() as RenderBox?;
-    if (box == null) return;
-    final globalOffset = box.localToGlobal(Offset.zero);
+    // アンカー位置を基準にプレビューRectを計算
+    final previewRect = _calculatePreviewRect(
+      Size(snappedWidth, newHeight),
+      _anchorPosition!,
+      _resizeCorner!,
+    );
 
     // Update overlay
     _overlayService?.update(
-      globalRect: Rect.fromLTWH(
-        globalOffset.dx,
-        globalOffset.dy,
-        snappedWidth,
-        newHeight,
-      ),
+      globalRect: previewRect,
       columnSpan: snappedSpan,
     );
 
@@ -744,6 +858,39 @@ class _ImageCardState extends State<ImageCard>
         _currentSpan = snappedSpan;
         _previewSize = newSize;
       });
+    }
+  }
+
+  /// アンカー位置を基準にプレビューRectを計算する
+  Rect _calculatePreviewRect(Size size, Offset anchor, ResizeCorner corner) {
+    switch (corner) {
+      case ResizeCorner.bottomRight:
+        // 左上がアンカー
+        return Rect.fromLTWH(anchor.dx, anchor.dy, size.width, size.height);
+      case ResizeCorner.bottomLeft:
+        // 右上がアンカー
+        return Rect.fromLTWH(
+          anchor.dx - size.width,
+          anchor.dy,
+          size.width,
+          size.height,
+        );
+      case ResizeCorner.topRight:
+        // 左下がアンカー
+        return Rect.fromLTWH(
+          anchor.dx,
+          anchor.dy - size.height,
+          size.width,
+          size.height,
+        );
+      case ResizeCorner.topLeft:
+        // 右下がアンカー
+        return Rect.fromLTWH(
+          anchor.dx - size.width,
+          anchor.dy - size.height,
+          size.width,
+          size.height,
+        );
     }
   }
 
@@ -762,6 +909,8 @@ class _ImageCardState extends State<ImageCard>
       _resizeStartSize = null;
       _resizeStartGlobalPosition = null;
       _previewSize = null;
+      _resizeCorner = null;
+      _anchorPosition = null;
     });
 
     _attachImageStream(finalSize, _currentScale);
