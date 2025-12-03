@@ -1,5 +1,5 @@
 # GridView 詳細設計
-最終更新: 2025-11-30
+最終更新: 2025-12-03
 
 ## 1. 概要
 指定フォルダ内の画像を Pinterest 風に配置し、カードの列スパン・高さを尊重したタイルレイアウトを提供する。
@@ -38,8 +38,63 @@
 - ルート表示・サブフォルダ表示で同一レイアウトを共有し、スクロール位置はそれぞれ別の `ScrollController` で保持。
 
 ## 8. リサイズフロー
+
+### 8.1 基本フロー
 - 画像カードは各自 `ValueNotifier<Size>` を保持し、リサイズ中に列スパンへスナップ。確定時に `onResize` / `onSpanChange` を発火し Hive に保存。
 - サイズ更新や列スパン変更時には `_entries` を再構成し、`PinterestSliverGrid` が最適列を再計算する。
+
+### 8.2 preferredColumnStart による位置保持 (2025-12-03追加)
+
+リサイズ時にカードの開始列を保持するため、`preferredColumnStart` を計算して渡す。
+
+#### 8.2.1 計算ロジック (`_handleResize`)
+
+```dart
+void _handleResize(String id, Size newSize, {ResizeCorner? corner}) {
+  final snapshot = _layoutStore.latestSnapshot;
+  final entry = snapshot?.entries.firstWhereOrNull((e) => e.id == id);
+  if (entry == null) return;
+
+  final geometry = snapshot!.geometry;
+  final currentColumn = (entry.rect.left / (geometry.columnWidth + geometry.gap)).floor();
+  final currentEndColumn = currentColumn + entry.columnSpan - 1;
+
+  final newSpan = _computeSpan(newSize.width, geometry);
+  final maxStart = geometry.columnCount - newSpan;
+
+  int? preferredColumnStart;
+
+  // 幅が拡大する場合: 終了列を維持
+  if (newSpan > entry.columnSpan) {
+    preferredColumnStart = (currentEndColumn - newSpan + 1).clamp(0, maxStart);
+  }
+  // 幅が縮小する場合: 開始列を維持（clamp）
+  else if (newSpan < entry.columnSpan) {
+    preferredColumnStart = currentColumn.clamp(0, maxStart);
+  }
+  // 同一スパン: 現在の開始列を維持
+  else {
+    preferredColumnStart = currentColumn.clamp(0, maxStart);
+  }
+
+  // 上方向リサイズ時の順序調整
+  if (corner == ResizeCorner.topRight || corner == ResizeCorner.topLeft) {
+    _adjustCardOrderForUpwardResize(id, entry.rect, newSize);
+  }
+
+  _layoutStore.updateCard(
+    id: id,
+    customSize: newSize,
+    columnSpan: newSpan,
+    preferredColumnStart: preferredColumnStart,
+  );
+}
+```
+
+#### 8.2.2 効果
+- 右方向への拡大: 左端位置を維持し、右へ伸びる
+- 左方向への拡大: 右端位置を維持し、左へ伸びる
+- 縮小時: 元の開始列を可能な限り維持
 
 ## 9. ズーム & パン
 - ズームは右クリック＋ホイール時にのみ有効。カーソル位置を中心に拡大縮小。
@@ -437,3 +492,110 @@ void _scrollIncrementally(ScrollController controller, double targetOffset, Stri
 - **ImageCard.isHighlighted**: ハイライト状態を受け取りパルスアニメーション表示
 - **TextCard.isHighlighted**: 同上
 - **LayoutSnapshot.totalHeight**: グリッド全体の高さを計算
+
+---
+
+## 16. 上方向リサイズ時のカード順序調整 (2025-12-03追加)
+
+### 16.1 概要
+上方向（topRight/topLeft コーナー）へのリサイズ時、カードの最終位置がリサイズプレビュー位置と一致するよう、カードの順序を動的に調整する。
+
+### 16.2 問題の背景
+Masonry グリッドレイアウトでは、カードの Y 位置は**配列順序**で決まる。上方向にリサイズするとプレビュー枠は上に伸びるが、レイアウト確定後のカード位置は順序に依存するため、プレビューと最終位置が乖離する問題があった。
+
+### 16.3 解決策
+リサイズ確定前に`_adjustCardOrderForUpwardResize()`を呼び出し、カードの順序を調整することで、プレビュー位置と最終位置を一致させる。
+
+### 16.4 アルゴリズム (`_adjustCardOrderForUpwardResize`)
+
+```dart
+void _adjustCardOrderForUpwardResize(
+  String id,
+  Rect currentRect,
+  Size newSize,
+) {
+  final snapshot = _layoutStore.latestSnapshot;
+  if (snapshot == null) return;
+
+  // 1. ターゲット top を計算（現在の bottom - 新しい高さ）
+  final currentBottom = currentRect.bottom;
+  final targetTop = currentBottom - newSize.height;
+
+  // 2. 高さが増加していない場合はスキップ
+  if (targetTop >= currentRect.top - 1) return;
+
+  // 3. targetTop より上にある（top < targetTop）カードを数える
+  int targetIndex = 0;
+  for (final e in snapshot.entries) {
+    if (e.id == id) continue;
+    if (e.rect.top < targetTop) {
+      targetIndex++;
+    }
+  }
+
+  // 4. 現在のインデックスを取得
+  final currentIndex = _entries.indexWhere((e) => e.item.id == id);
+  if (currentIndex < 0 || currentIndex == targetIndex) return;
+
+  // 5. エントリーを移動
+  final movingEntry = _entries.removeAt(currentIndex);
+  final insertAt = targetIndex.clamp(0, _entries.length);
+  _entries.insert(insertAt, movingEntry);
+
+  // 6. GridLayoutStore の順序も更新
+  _layoutStore.moveCardToIndex(id, insertAt);
+
+  // 7. 順序を永続化
+  unawaited(_persistOrder());
+}
+```
+
+### 16.5 図解
+
+```
+リサイズ前:
+┌────────┐ Card A (index 0)
+│        │
+├────────┤
+│ Card B │ (index 1) ← 上方向にリサイズ
+├────────┤
+│ Card C │ (index 2)
+└────────┘
+
+プレビュー:
+┌────────┐ Card A
+├────────┤
+│        │ ← プレビュー枠（Card B が上に伸びる）
+│ Card B │
+├────────┤
+│ Card C │
+└────────┘
+
+順序調整なし（問題）:
+┌────────┐ Card A (index 0)
+├────────┤
+│        │ ← Card B は index 1 のまま
+│ Card B │    プレビューより下に配置される
+├────────┤
+│ Card C │
+└────────┘
+
+順序調整あり（解決）:
+Card B を index 0 に移動
+┌────────┐
+│        │ Card B (index 0) ← プレビュー位置と一致
+│ Card B │
+├────────┤
+│ Card A │ (index 1)
+├────────┤
+│ Card C │ (index 2)
+└────────┘
+```
+
+### 16.6 関連メソッド
+- `GridLayoutStore.moveCardToIndex(String id, int newIndex)`: カードを指定インデックスに移動
+- `_persistOrder()`: 順序を Hive に永続化
+
+### 16.7 制限事項
+- 上方向リサイズ（topRight/topLeft）のみで動作
+- 下方向リサイズ（bottomRight/bottomLeft）は順序調整不要（下方向への拡大はプレビューと一致）

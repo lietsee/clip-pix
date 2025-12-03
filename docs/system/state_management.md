@@ -1,5 +1,5 @@
 # State Management 詳細設計
-最終更新: 2025-11-30
+最終更新: 2025-12-03
 
 ## 1. 目的
 Provider + StateNotifier を用いて、フォルダ選択・監視制御・UI 更新を一元管理する。
@@ -335,3 +335,43 @@ final preservedState = existing != null
 **修正履歴** (commit f716f23):
 - `updateGeometry()`でレイアウトエンジン結果をマージする際、パンオフセットを保持
 - パン操作後に`updateGeometry()`が呼ばれてもオフセットがリセットされない
+
+### 10.8 moveCardToIndex メソッド (2025-12-03追加)
+
+#### 概要
+カードを指定インデックスに移動するメソッド。上方向リサイズ時のカード順序調整で使用。
+
+#### シグネチャ
+```dart
+void moveCardToIndex(String id, int newIndex);
+```
+
+#### 実装
+```dart
+void moveCardToIndex(String id, int newIndex) {
+  final currentIndex = _orderedIds.indexOf(id);
+  if (currentIndex < 0) {
+    debugPrint('[GridLayoutStore] moveCardToIndex: id not found: $id');
+    return;
+  }
+  if (currentIndex == newIndex) {
+    debugPrint('[GridLayoutStore] moveCardToIndex: already at index $newIndex');
+    return;
+  }
+
+  _orderedIds.removeAt(currentIndex);
+  final insertAt = newIndex.clamp(0, _orderedIds.length);
+  _orderedIds.insert(insertAt, id);
+
+  debugPrint('[GridLayoutStore] moveCardToIndex: moved $id from '
+      '$currentIndex to $insertAt');
+}
+```
+
+#### 特徴
+- **スナップショット再生成なし**: 順序変更のみでスナップショットは再生成しない
+- **notifyListeners なし**: 呼び出し元（`_adjustCardOrderForUpwardResize`）がリサイズ後にスナップショット更新を行うため
+- **永続化なし**: 呼び出し元で `_persistOrder()` を呼び出す
+
+#### 用途
+`GridViewModule._adjustCardOrderForUpwardResize()` から呼び出され、上方向リサイズ時にカードの順序を調整してプレビュー位置と最終位置を一致させる。

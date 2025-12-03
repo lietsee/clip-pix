@@ -1,7 +1,7 @@
 # ImageCard 実装仕様
 
-最終更新: 2025-11-25
-対象コミット: `f716f23`（fix: preserve pan offset in updateGeometry）
+最終更新: 2025-12-03
+対象コミット: `30276df`（feat: add four-corner resize handles for cards）
 
 本書は `lib/ui/image_card.dart` に実装されているカードコンポーネントの仕様・挙動・描画フローを整理したものです。GridViewModule/ClipPix のリファクタ作業で参照できるよう、ユーザー操作とコールバックの関係、描画制御、既知の制約を詳細にまとめます。
 
@@ -55,16 +55,65 @@ Focus
 
 ## 4. ユーザーインタラクション詳細
 
-### 4.1 リサイズ（右下ハンドル）
-- `GestureDetector` の `onPan*` で処理。
-- つまみ更新中は `_isResizing = true`、リアルタイムで `_sizeNotifier` を更新。
+### 4.1 リサイズ（四隅ハンドル）
+
+#### 4.1.1 ResizeCorner enum
+```dart
+enum ResizeCorner {
+  bottomRight,  // 右下（デフォルト）
+  bottomLeft,   // 左下
+  topRight,     // 右上
+  topLeft,      // 左上
+}
+```
+
+#### 4.1.2 ハンドル生成 (`_buildResizeHandle`)
+- 各コーナーに回転アイコン付きのハンドルを配置
+- `Positioned` で四隅に配置、`Transform.rotate` でアイコン方向を調整
+- サイズ: 28×28、タッチ領域は内部で確保
+
+#### 4.1.3 リサイズ開始 (`_onResizeStart`)
+- `_activeCorner` に操作中のコーナーを記録
+- `_anchorPosition` にアンカー位置（対角のコーナー座標）を保存:
+  - `bottomRight` → 左上がアンカー
+  - `bottomLeft` → 右上がアンカー
+  - `topRight` → 左下がアンカー
+  - `topLeft` → 右下がアンカー
+
+#### 4.1.4 リサイズ更新 (`_onResizeUpdate`)
+- 左側ハンドル（`bottomLeft`, `topLeft`）は `dx` を反転して計算
 - 横幅は列幅にスナップ:
   ```
   snappedSpan = round((width + gap) / (columnWidth + gap))
   snappedWidth = columnWidth * span + gap * (span - 1)
   ```
-- 高さは 100〜1080、幅は 100〜1920 に clamp。
-- 操作終了 (`onPanEnd`) 後に `onResize`, `onSpanChange` コールバックを呼ぶ。
+- 高さは 100〜1080、幅は 100〜1920 に clamp
+- `_sizeNotifier` をリアルタイム更新
+
+#### 4.1.5 プレビュー矩形計算 (`_calculatePreviewRect`)
+アンカー位置基準でプレビュー矩形を計算:
+```dart
+Rect _calculatePreviewRect(Size size) {
+  final anchor = _anchorPosition;
+  if (anchor == null) return Rect.zero;
+
+  switch (_activeCorner) {
+    case ResizeCorner.bottomRight:
+      return Rect.fromLTWH(anchor.dx, anchor.dy, size.width, size.height);
+    case ResizeCorner.bottomLeft:
+      return Rect.fromLTWH(anchor.dx - size.width, anchor.dy, size.width, size.height);
+    case ResizeCorner.topRight:
+      return Rect.fromLTWH(anchor.dx, anchor.dy - size.height, size.width, size.height);
+    case ResizeCorner.topLeft:
+      return Rect.fromLTWH(anchor.dx - size.width, anchor.dy - size.height, size.width, size.height);
+  }
+}
+```
+
+#### 4.1.6 リサイズ終了 (`onPanEnd`)
+- `onResize(id, size, corner: _activeCorner)` を呼び出し
+- `corner` パラメータで操作コーナーを親に通知（位置調整に使用）
+- `onSpanChange` で列スパンを永続化
 
 ### 4.2 ズーム & パン
 - **マウス**: 右クリック押下中にホイールスクロール→指数関数的ズーム（`exp(-Δy / 300)`）。
