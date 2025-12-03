@@ -1237,7 +1237,7 @@ class GridViewModuleState extends State<GridViewModule> {
 
       // 上方向へ拡大した場合、カード順序を調整してプレビュー位置に近づける
       if (corner == ResizeCorner.topRight || corner == ResizeCorner.topLeft) {
-        _adjustCardOrderForUpwardResize(id, entry, newSize);
+        _adjustCardOrderForUpwardResize(id, entry.rect, newSize);
       }
     }
 
@@ -1252,18 +1252,18 @@ class GridViewModuleState extends State<GridViewModule> {
   /// 上方向へのリサイズ時、カードをプレビュー位置に近い順序に移動
   void _adjustCardOrderForUpwardResize(
     String id,
-    LayoutSnapshotEntry entry,
+    Rect currentRect,
     Size newSize,
   ) {
     final snapshot = _layoutStore.latestSnapshot;
     if (snapshot == null) return;
 
     // 現在の下端から新しい高さを引いて、目標のtop位置を計算
-    final currentBottom = entry.rect.bottom;
+    final currentBottom = currentRect.bottom;
     final targetTop = currentBottom - newSize.height;
 
     // カードが高くならない場合は調整不要
-    if (targetTop >= entry.rect.top - 1) {
+    if (targetTop >= currentRect.top - 1) {
       print('[GridViewModule] _adjustCardOrder: no height increase, skip');
       return;
     }
