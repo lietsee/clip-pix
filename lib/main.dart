@@ -68,11 +68,21 @@ import 'system/window_bounds_service.dart';
 /// trueにするとカードの中央に配列インデックスを表示
 bool debugShowCardIndex = false;
 
+/// ポータブルモードフラグ（アプリ起動時に設定）
+/// trueの場合、Hiveデータとログを実行ファイルと同じディレクトリのdata/に保存
+bool isPortableMode = false;
+
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // DEBUG: ヒットテスト可視化（タブ切り替え後の操作不能バグ調査用）
   debugPaintPointersEnabled = false;
+
+  // ポータブルモードフラグのパース（最初に行う）
+  isPortableMode = args.contains('--portable');
+  if (isPortableMode) {
+    debugPrint('[main] Portable mode enabled');
+  }
 
   // 親PIDを取得（プレビューウィンドウが親プロセス終了時に自動終了するため）
   final parentPidIndex = args.indexOf('--parent-pid');
@@ -94,23 +104,17 @@ Future<void> main(List<String> args) async {
   }
 
   debugPrint('main start; Platform.isWindows=${Platform.isWindows}');
-  _configureLogging();
 
-  // Initialize Hive in AppData\Roaming\Clip-pix
-  final Directory hiveDir;
-  if (Platform.isWindows) {
-    final appData = Platform.environment['APPDATA'];
-    if (appData == null) {
-      throw Exception('APPDATA environment variable not found');
-    }
-    hiveDir = Directory(p.join(appData, 'Clip-pix'));
-  } else {
-    final appSupportDir = await getApplicationSupportDirectory();
-    hiveDir = Directory(p.join(appSupportDir.path, 'Clip-pix'));
-  }
+  // Initialize Hive using base directory
+  final baseDir = await _getHiveBaseDir();
+  final hiveDir = Directory(baseDir);
   await hiveDir.create(recursive: true);
   await Hive.initFlutter(hiveDir.path);
   debugPrint('[Hive] Initialized at: ${hiveDir.path}');
+
+  // Configure logging after base directory is determined
+  final logDir = await _getLogDir();
+  _configureLogging(logDir: logDir);
   _registerHiveAdapters();
   final boxes = await _openCoreBoxes();
 
@@ -129,11 +133,11 @@ Future<void> main(List<String> args) async {
   );
 }
 
-void _configureLogging() {
+void _configureLogging({Directory? logDir}) {
   Logger.root.level = Level.FINE;
   IOSink? sink;
   try {
-    final logsDir = Directory('logs');
+    final logsDir = logDir ?? Directory('logs');
     logsDir.createSync(recursive: true);
     final logFile = File(p.join(logsDir.path, 'app.log'));
     sink = logFile.openWrite(mode: FileMode.append);
@@ -241,6 +245,33 @@ Future<
   );
 }
 
+/// Hive/ログのベースディレクトリを取得
+/// ポータブルモード: <実行ファイルのディレクトリ>/data/
+/// 通常モード: %APPDATA%\Clip-pix\ (Windows) または ~/Library/Application Support/Clip-pix/ (macOS)
+Future<String> _getHiveBaseDir() async {
+  if (isPortableMode) {
+    final exePath = Platform.resolvedExecutable;
+    final exeDir = p.dirname(exePath);
+    return p.join(exeDir, 'data');
+  }
+  if (Platform.isWindows) {
+    final appData = Platform.environment['APPDATA'];
+    if (appData == null) {
+      throw Exception('APPDATA environment variable not found');
+    }
+    return p.join(appData, 'Clip-pix');
+  } else {
+    final appSupportDir = await getApplicationSupportDirectory();
+    return p.join(appSupportDir.path, 'Clip-pix');
+  }
+}
+
+/// ログディレクトリを取得（Hiveと同じベースディレクトリ内）
+Future<Directory> _getLogDir() async {
+  final baseDir = await _getHiveBaseDir();
+  return Directory(p.join(baseDir, 'logs'));
+}
+
 /// 親プロセスが生存しているかチェック
 /// Windows: Win32 OpenProcess + GetExitCodeProcess APIで確認（高速）
 /// macOS: psコマンドで確認
@@ -299,7 +330,9 @@ Future<void> _launchPreviewMode(String payload, int? parentPid) async {
 
   await runZonedGuarded(
     () async {
-      _configureLogging();
+      // Configure logging with proper directory
+      final logDir = await _getLogDir();
+      _configureLogging(logDir: logDir);
       debugPrint(
           '[ImagePreviewMode] Starting with payload length: ${payload.length}');
 
@@ -362,17 +395,7 @@ Future<void> _launchPreviewMode(String payload, int? parentPid) async {
       }
 
       try {
-        final String baseHiveDir;
-        if (Platform.isWindows) {
-          final appData = Platform.environment['APPDATA'];
-          if (appData == null) {
-            throw Exception('APPDATA environment variable not found');
-          }
-          baseHiveDir = p.join(appData, 'Clip-pix');
-        } else {
-          final appSupportDir = await getApplicationSupportDirectory();
-          baseHiveDir = p.join(appSupportDir.path, 'Clip-pix');
-        }
+        final baseHiveDir = await _getHiveBaseDir();
         final hiveDir = p.join(baseHiveDir, getHiveDirectoryName(item.id));
         debugPrint(
             '[ImagePreviewMode] Initializing Hive with directory: $hiveDir');
@@ -538,7 +561,9 @@ Future<void> _launchTextPreviewMode(String payload, int? parentPid) async {
 
   await runZonedGuarded(
     () async {
-      _configureLogging();
+      // Configure logging with proper directory
+      final logDir = await _getLogDir();
+      _configureLogging(logDir: logDir);
       debugPrint(
           '[TextPreviewMode] Starting with payload length: ${payload.length}');
 
@@ -603,17 +628,7 @@ Future<void> _launchTextPreviewMode(String payload, int? parentPid) async {
       }
 
       try {
-        final String baseHiveDir;
-        if (Platform.isWindows) {
-          final appData = Platform.environment['APPDATA'];
-          if (appData == null) {
-            throw Exception('APPDATA environment variable not found');
-          }
-          baseHiveDir = p.join(appData, 'Clip-pix');
-        } else {
-          final appSupportDir = await getApplicationSupportDirectory();
-          baseHiveDir = p.join(appSupportDir.path, 'Clip-pix');
-        }
+        final baseHiveDir = await _getHiveBaseDir();
         final hiveDir = p.join(baseHiveDir, getHiveDirectoryName(item.id));
         debugPrint(
             '[TextPreviewMode] Initializing Hive with directory: $hiveDir');

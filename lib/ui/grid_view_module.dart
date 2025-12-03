@@ -37,7 +37,7 @@ import 'widgets/pinterest_grid.dart';
 import 'widgets/text_card.dart';
 import 'widgets/text_preview_window.dart';
 import 'package:path/path.dart' as p;
-import '../main.dart' show debugShowCardIndex;
+import '../main.dart' show debugShowCardIndex, isPortableMode;
 
 class GridViewModule extends StatefulWidget {
   const GridViewModule({
@@ -1775,9 +1775,13 @@ class GridViewModuleState extends State<GridViewModule> {
     try {
       debugPrint(
           '[GridViewModule] Starting image preview process for ${item.id} (hashCode=${item.id.hashCode})');
+      final args = ['--preview', payload, '--parent-pid', '${pid}'];
+      if (isPortableMode) {
+        args.add('--portable');
+      }
       final process = await Process.start(
         exePath,
-        ['--preview', payload, '--parent-pid', '${pid}'],
+        args,
         mode: ProcessStartMode.normal,
       );
 
@@ -1887,9 +1891,13 @@ class GridViewModuleState extends State<GridViewModule> {
     try {
       debugPrint(
           '[GridViewModule] Starting process for ${item.id} (hashCode=${item.id.hashCode})');
+      final args = ['--preview-text', payload, '--parent-pid', '${pid}'];
+      if (isPortableMode) {
+        args.add('--portable');
+      }
       final process = await Process.start(
         exePath,
-        ['--preview-text', payload, '--parent-pid', '${pid}'],
+        args,
         mode: ProcessStartMode.normal,
       );
 
