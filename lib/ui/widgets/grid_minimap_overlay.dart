@@ -244,6 +244,7 @@ class _MinimapWidgetState extends State<_MinimapWidget> {
                     minimapWidth: minimapWidth,
                     minimapHeight: minimapHeight,
                     hoveredCardId: state.hoveredCardId,
+                    actualCardRects: layoutStore.actualCardRects,
                   ),
                 ),
               ),
@@ -345,6 +346,9 @@ class _MinimapPainter extends CustomPainter {
   final double minimapWidth;
   final double minimapHeight;
   final String? hoveredCardId;
+  /// PinterestSliverGridが計算した実際の位置データ
+  /// スナップショットの位置計算と実際のレンダリング位置の差異を解消するために使用
+  final Map<String, Rect> actualCardRects;
 
   _MinimapPainter({
     required this.snapshot,
@@ -354,22 +358,35 @@ class _MinimapPainter extends CustomPainter {
     required this.viewportWidth,
     required this.minimapWidth,
     required this.minimapHeight,
+    required this.actualCardRects,
     this.hoveredCardId,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
+    // actualCardRectsが利用可能な場合はそれを使用し、そうでなければsnapshotを使用
+    // これにより、PinterestSliverGridの実際のレイアウト結果と一致する
+    final useActualRects = actualCardRects.isNotEmpty;
+
     // Calculate total content dimensions
     double totalContentHeight = 0;
     double totalContentWidth = 0;
-    for (final entry in snapshot.entries) {
-      final bottom = entry.rect.bottom;
-      final right = entry.rect.right;
-      if (bottom > totalContentHeight) {
-        totalContentHeight = bottom;
+
+    if (useActualRects) {
+      for (final rect in actualCardRects.values) {
+        if (rect.bottom > totalContentHeight) totalContentHeight = rect.bottom;
+        if (rect.right > totalContentWidth) totalContentWidth = rect.right;
       }
-      if (right > totalContentWidth) {
-        totalContentWidth = right;
+    } else {
+      for (final entry in snapshot.entries) {
+        final bottom = entry.rect.bottom;
+        final right = entry.rect.right;
+        if (bottom > totalContentHeight) {
+          totalContentHeight = bottom;
+        }
+        if (right > totalContentWidth) {
+          totalContentWidth = right;
+        }
       }
     }
 
@@ -392,16 +409,35 @@ class _MinimapPainter extends CustomPainter {
       itemMap[item.id] = item;
     }
 
-    // Draw each card
-    for (final entry in snapshot.entries) {
-      final item = itemMap[entry.id];
+    // IDからRectを取得するヘルパー関数
+    Rect? getRectForId(String id) {
+      if (useActualRects) {
+        return actualCardRects[id];
+      } else {
+        for (final entry in snapshot.entries) {
+          if (entry.id == id) return entry.rect;
+        }
+        return null;
+      }
+    }
+
+    // Draw each card using actualCardRects if available
+    final cardIds = useActualRects
+        ? actualCardRects.keys.toList()
+        : snapshot.entries.map((e) => e.id).toList();
+
+    for (final id in cardIds) {
+      final item = itemMap[id];
       if (item == null) continue;
 
+      final rect = getRectForId(id);
+      if (rect == null) continue;
+
       final scaledRect = Rect.fromLTWH(
-        entry.rect.left * scale + xOffset,
-        entry.rect.top * scale,
-        entry.rect.width * scale,
-        entry.rect.height * scale,
+        rect.left * scale + xOffset,
+        rect.top * scale,
+        rect.width * scale,
+        rect.height * scale,
       );
 
       if (item.favorite > 0) {
@@ -435,7 +471,7 @@ class _MinimapPainter extends CustomPainter {
       }
 
       // Draw hover highlight if this card is hovered
-      final isHovered = entry.id == hoveredCardId;
+      final isHovered = id == hoveredCardId;
       if (isHovered) {
         final rrect =
             RRect.fromRectAndRadius(scaledRect, const Radius.circular(2));
@@ -548,6 +584,10 @@ class _MinimapPainter extends CustomPainter {
     final viewportHeightChanged = oldDelegate.viewportHeight != viewportHeight;
     final viewportWidthChanged = oldDelegate.viewportWidth != viewportWidth;
     final hoveredCardChanged = oldDelegate.hoveredCardId != hoveredCardId;
+    final actualRectsChanged = _actualRectsChanged(
+      oldDelegate.actualCardRects,
+      actualCardRects,
+    );
 
     // Deep comparison: only repaint if IDs or favorite states actually changed
     final imagesChanged = _imagesActuallyChanged(
@@ -560,7 +600,21 @@ class _MinimapPainter extends CustomPainter {
         viewportHeightChanged ||
         viewportWidthChanged ||
         hoveredCardChanged ||
+        actualRectsChanged ||
         imagesChanged;
+  }
+
+  /// Check if actualCardRects has changed
+  bool _actualRectsChanged(
+    Map<String, Rect> oldRects,
+    Map<String, Rect> newRects,
+  ) {
+    if (oldRects.length != newRects.length) return true;
+    for (final entry in newRects.entries) {
+      final oldRect = oldRects[entry.key];
+      if (oldRect != entry.value) return true;
+    }
+    return false;
   }
 
   /// Deep comparison of images list: only returns true if IDs or favorite states changed

@@ -82,9 +82,13 @@ class PinterestSliverGrid extends SliverMultiBoxAdaptorWidget {
     super.key,
     required SliverChildDelegate delegate,
     required this.gridDelegate,
+    this.onLayoutComplete,
   }) : super(delegate: delegate);
 
   final PinterestGridDelegate gridDelegate;
+
+  /// レイアウト完了時に呼ばれるコールバック（ミニマップ用）
+  final OnLayoutComplete? onLayoutComplete;
 
   @override
   RenderSliverPinterestGrid createRenderObject(BuildContext context) {
@@ -92,6 +96,7 @@ class PinterestSliverGrid extends SliverMultiBoxAdaptorWidget {
       childManager: context as SliverMultiBoxAdaptorElement,
       columnCount: gridDelegate.columnCount,
       gap: gridDelegate.gap,
+      onLayoutComplete: onLayoutComplete,
     );
   }
 
@@ -102,7 +107,8 @@ class PinterestSliverGrid extends SliverMultiBoxAdaptorWidget {
   ) {
     renderObject
       ..columnCount = gridDelegate.columnCount
-      ..gap = gridDelegate.gap;
+      ..gap = gridDelegate.gap
+      ..onLayoutComplete = onLayoutComplete;
   }
 }
 
@@ -111,15 +117,22 @@ class _ColumnState {
   double height;
 }
 
+/// カードのレイアウト情報を報告するコールバック
+typedef OnLayoutComplete = void Function(Map<int, Rect> childRects);
+
 /// Render object powering [PinterestSliverGrid].
 class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
   RenderSliverPinterestGrid({
     required RenderSliverBoxChildManager childManager,
     required int columnCount,
     required double gap,
+    this.onLayoutComplete,
   })  : _columnCount = columnCount,
         _gap = gap,
         super(childManager: childManager);
+
+  /// レイアウト完了時に呼ばれるコールバック（ミニマップ用）
+  OnLayoutComplete? onLayoutComplete;
 
   int get columnCount => _columnCount;
   int _columnCount;
@@ -435,6 +448,28 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
     }
 
     childManager.didFinishLayout();
+
+    // レイアウト完了後、ミニマップ用に位置データを報告
+    if (onLayoutComplete != null) {
+      final childRects = <int, Rect>{};
+      for (var child = firstChild; child != null; child = childAfter(child)) {
+        final pd = child.parentData;
+        if (pd is PinterestGridParentData && pd.index != null) {
+          final int span = pd.columnSpan.clamp(1, columnCount);
+          final double totalGaps = gap * (columnCount - 1);
+          final double columnWidthLocal =
+              columnCount == 0 ? 0 : (constraints.crossAxisExtent - totalGaps) / columnCount;
+          final double childWidth = columnWidthLocal * span + gap * (span - 1);
+          childRects[pd.index!] = Rect.fromLTWH(
+            pd.crossAxisOffset,
+            pd.layoutOffset ?? 0,
+            childWidth,
+            pd.paintExtent,
+          );
+        }
+      }
+      onLayoutComplete!(childRects);
+    }
   }
 
   @override

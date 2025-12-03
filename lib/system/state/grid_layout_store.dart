@@ -162,6 +162,10 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
   /// GridViewModuleがconsumePendingResizeNotifications()で消費する。
   final Set<String> _pendingResizeNotifications = {};
 
+  /// PinterestSliverGridが実際に計算した各カードの位置。
+  /// ミニマップはこのデータを参照してグリッドと同じ位置を表示する。
+  final Map<String, Rect> _actualCardRects = {};
+
   /// 高さが変更されたカードをマーク（ImageCardリビルド用）
   void _notifyCardResized(String id) {
     _pendingResizeNotifications.add(id);
@@ -172,6 +176,25 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     final result = Set<String>.from(_pendingResizeNotifications);
     _pendingResizeNotifications.clear();
     return result;
+  }
+
+  /// PinterestSliverGridが計算した実際の位置データ
+  Map<String, Rect> get actualCardRects => Map.unmodifiable(_actualCardRects);
+
+  /// PinterestSliverGridからの位置データを一括更新
+  /// [indexToRect] はカードのインデックスから位置へのマップ
+  /// [orderedIds] を使ってインデックスからIDに変換する
+  void updateActualCardRects(Map<int, Rect> indexToRect) {
+    _actualCardRects.clear();
+    for (final entry in indexToRect.entries) {
+      final index = entry.key;
+      if (index >= 0 && index < _orderedIds.length) {
+        final id = _orderedIds[index];
+        _actualCardRects[id] = entry.value;
+      }
+    }
+    // ミニマップ更新のため通知
+    notifyListeners();
   }
 
   @override

@@ -683,6 +683,11 @@ class GridViewModuleState extends State<GridViewModule> {
                       columnCount: columnCount,
                       gap: _gridGap,
                     ),
+                    onLayoutComplete: (childRects) {
+                      // PinterestSliverGridが計算した実際の位置をGridLayoutStoreに報告
+                      // ミニマップがこのデータを参照して位置の整合性を保つ
+                      _layoutStore.updateActualCardRects(childRects);
+                    },
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
                         // [DIAGNOSTIC] Log _entries order at build time (once per build)
