@@ -62,7 +62,7 @@ void main() {
                   child: ImageCard(
                     item: ImageItem(id: '1', filePath: imageFile.path),
                     viewState: viewState,
-                    onResize: (_, __) {},
+                    onResize: (_, __, {corner}) {},
                     onSpanChange: (_, span) => recordedSpans.add(span),
                     onZoom: (_, __) {},
                     onPan: (_, __) {},
@@ -129,7 +129,7 @@ void main() {
                   columnSpan: 1,
                   customHeight: 220,
                 ),
-                onResize: (_, __) {},
+                onResize: (_, __, {corner}) {},
                 onSpanChange: (_, __) {},
                 onZoom: (_, __) {},
                 onPan: (_, __) {},

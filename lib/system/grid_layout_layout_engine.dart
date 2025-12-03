@@ -37,8 +37,13 @@ class GridLayoutLayoutEngine {
       }
       nextStates.add(layoutState);
 
-      final placement =
-          _findPlacement(columnHeights, span, geometry.gap, height);
+      final placement = _findPlacement(
+        columnHeights,
+        span,
+        geometry.gap,
+        height,
+        preferredColumnStart: state.preferredColumnStart,
+      );
       final crossAxisOffset =
           placement.start * (geometry.columnWidth + geometry.gap);
       final rect = Rect.fromLTWH(
@@ -79,8 +84,13 @@ class GridLayoutLayoutEngine {
       final span = state.columnSpan.clamp(1, effectiveColumnCount);
       final width = _computeWidth(geometry, span);
       final height = state.height > 0 ? state.height : width;
-      final placement =
-          _findPlacement(columnHeights, span, geometry.gap, height);
+      final placement = _findPlacement(
+        columnHeights,
+        span,
+        geometry.gap,
+        height,
+        preferredColumnStart: state.preferredColumnStart,
+      );
       final crossAxisOffset =
           placement.start * (geometry.columnWidth + geometry.gap);
       entries.add(
@@ -127,13 +137,36 @@ class GridLayoutLayoutEngine {
     List<double> columnHeights,
     int span,
     double gap,
-    double height,
-  ) {
+    double height, {
+    int? preferredColumnStart,
+  }) {
     final columnCount = columnHeights.length;
     if (columnCount == 0) {
       return _Placement(0, 0);
     }
     final clampedSpan = math.max(1, math.min(span, columnCount));
+
+    // 優先列が指定されている場合、まずそこを使用
+    if (preferredColumnStart != null) {
+      final preferredStart =
+          preferredColumnStart.clamp(0, columnCount - clampedSpan);
+      if (preferredStart + clampedSpan <= columnCount) {
+        double candidateOffset = 0;
+        for (int c = 0; c < clampedSpan; c++) {
+          candidateOffset =
+              math.max(candidateOffset, columnHeights[preferredStart + c]);
+        }
+        final newHeight = candidateOffset + height;
+        for (int c = 0; c < clampedSpan; c++) {
+          final nextIndex = preferredStart + c;
+          columnHeights[nextIndex] =
+              newHeight + (nextIndex == columnCount - 1 ? 0 : gap);
+        }
+        return _Placement(preferredStart, candidateOffset);
+      }
+    }
+
+    // フォールバック: 従来の最短列アルゴリズム
     var bestStart = 0;
     double bestOffset = double.infinity;
     const epsilon = 0.001;

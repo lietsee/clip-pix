@@ -83,6 +83,7 @@ class GridCardViewState {
     required this.customHeight,
     this.offsetDx = 0.0,
     this.offsetDy = 0.0,
+    this.preferredColumnStart,
   });
 
   final String id;
@@ -93,6 +94,9 @@ class GridCardViewState {
   final double? customHeight;
   final double offsetDx;
   final double offsetDy;
+  /// リサイズ時の希望開始列（0インデックス）。nullは優先なし。
+  /// レイアウト計算後にクリアされる一時的なヒント。
+  final int? preferredColumnStart;
 
   Offset get offset => Offset(offsetDx, offsetDy);
 }
@@ -644,6 +648,7 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     double? scale,
     int? columnSpan,
     Offset? offset,
+    int? preferredColumnStart,
   }) async {
     print('[GridLayoutStore] updateCard ENTRY: id=${id.split('/').last}, offset=$offset');
     final current = _viewStates[id];
@@ -697,6 +702,7 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
       customHeight: nextCustomHeight,
       offsetDx: nextOffsetDx,
       offsetDy: nextOffsetDy,
+      preferredColumnStart: preferredColumnStart,
     );
 
     if (_viewStateEquals(current, nextState)) {
@@ -727,6 +733,21 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
         _previousSnapshot = _latestSnapshot;
       }
       _latestSnapshot = result.snapshot;
+
+      // preferredColumnStartは一時的なヒントなのでレイアウト計算後にクリア
+      if (preferredColumnStart != null) {
+        _viewStates[id] = GridCardViewState(
+          id: nextState.id,
+          width: nextState.width,
+          height: nextState.height,
+          scale: nextState.scale,
+          columnSpan: nextState.columnSpan,
+          customHeight: nextState.customHeight,
+          offsetDx: nextState.offsetDx,
+          offsetDy: nextState.offsetDy,
+          preferredColumnStart: null,
+        );
+      }
     }
 
     notifyListeners();

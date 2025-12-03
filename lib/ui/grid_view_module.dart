@@ -1155,9 +1155,10 @@ class GridViewModuleState extends State<GridViewModule> {
     unawaited(notifier.addOrUpdate(File(item.filePath)));
   }
 
-  void _handleResize(String id, Size newSize) {
+  void _handleResize(String id, Size newSize, {ResizeCorner? corner}) {
     // サイズからスパンを計算して、customSizeとcolumnSpanを一緒に更新
-    final geometry = _layoutStore.latestSnapshot?.geometry;
+    final snapshot = _layoutStore.latestSnapshot;
+    final geometry = snapshot?.geometry;
     int span = 1;
     if (geometry != null && geometry.columnWidth > 0) {
       final rawSpan = ((newSize.width + geometry.gap) /
@@ -1165,10 +1166,41 @@ class GridViewModuleState extends State<GridViewModule> {
           .round();
       span = rawSpan.clamp(1, geometry.columnCount);
     }
+
+    // リサイズコーナーから目標列を計算
+    int? preferredColumnStart;
+    if (corner != null && snapshot != null && geometry != null) {
+      // 現在のカード位置を取得
+      final entry = snapshot.entries.firstWhere(
+        (e) => e.id == id,
+        orElse: () => snapshot.entries.first,
+      );
+      final currentColumn =
+          (entry.rect.left / (geometry.columnWidth + geometry.gap)).round();
+      final currentSpan = entry.columnSpan;
+
+      switch (corner) {
+        case ResizeCorner.topLeft:
+        case ResizeCorner.bottomLeft:
+          // 左ハンドル: 右端が固定 → 列を左にシフト
+          // 新しい開始列 = 現在の終了列 - 新スパン + 1
+          final currentEndColumn = currentColumn + currentSpan - 1;
+          preferredColumnStart = (currentEndColumn - span + 1)
+              .clamp(0, geometry.columnCount - span);
+          break;
+        case ResizeCorner.topRight:
+        case ResizeCorner.bottomRight:
+          // 右ハンドル: 左端が固定 → 開始列を維持
+          preferredColumnStart = currentColumn.clamp(0, geometry.columnCount - span);
+          break;
+      }
+    }
+
     unawaited(_layoutStore.updateCard(
       id: id,
       customSize: newSize,
       columnSpan: span,
+      preferredColumnStart: preferredColumnStart,
     ));
   }
 

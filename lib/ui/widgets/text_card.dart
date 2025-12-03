@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../data/models/text_content_item.dart';
 import '../../system/state/grid_layout_store.dart';
+import '../image_card.dart' show ResizeCorner;
 import 'resize_preview_overlay.dart';
 import 'text_inline_editor.dart';
 
@@ -38,7 +39,7 @@ class TextCard extends StatefulWidget {
 
   final TextContentItem item;
   final GridCardViewState viewState;
-  final void Function(String id, Size newSize) onResize;
+  final void Function(String id, Size newSize, {ResizeCorner? corner}) onResize;
   final void Function(String id, int span)? onSpanChange;
   final void Function(String id, int favorite) onFavoriteToggle;
   final void Function(TextContentItem item) onCopyText;

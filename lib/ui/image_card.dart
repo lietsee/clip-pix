@@ -56,7 +56,7 @@ class ImageCard extends StatefulWidget {
 
   final ImageItem item;
   final GridCardViewState viewState;
-  final void Function(String id, Size newSize) onResize;
+  final void Function(String id, Size newSize, {ResizeCorner? corner}) onResize;
   final void Function(String id, int span) onSpanChange;
   final void Function(String id, double scale) onZoom;
   final void Function(String id, Offset offset) onPan;
@@ -904,6 +904,9 @@ class _ImageCardState extends State<ImageCard>
     final finalSize = _previewSize ?? _sizeNotifier.value;
     _sizeNotifier.value = finalSize;
 
+    // リサイズコーナーを保存してからクリア
+    final corner = _resizeCorner;
+
     setState(() {
       _isResizing = false;
       _resizeStartSize = null;
@@ -914,9 +917,9 @@ class _ImageCardState extends State<ImageCard>
     });
 
     _attachImageStream(finalSize, _currentScale);
-    // onResize で customSize と columnSpan を一緒に処理する
-    // (GridViewModule._handleResize 内でスパンを計算)
-    widget.onResize(widget.item.id, finalSize);
+    // onResize で customSize と columnSpan と resizeCorner を一緒に処理する
+    // (GridViewModule._handleResize 内でスパンと目標列を計算)
+    widget.onResize(widget.item.id, finalSize, corner: corner);
   }
 
   void _handlePointerDown(PointerDownEvent event) {
