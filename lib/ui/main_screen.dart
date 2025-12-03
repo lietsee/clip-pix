@@ -33,6 +33,7 @@ import '../system/state/watcher_status_state.dart';
 import '../system/text_saver.dart';
 import 'package:path/path.dart' as p;
 import 'grid_view_module.dart';
+import 'widgets/create_folder_dialog.dart';
 import 'widgets/grid_minimap_overlay.dart';
 import 'widgets/grid_settings_dialog.dart';
 
@@ -489,7 +490,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     return columnWidget;
   }
 
-  List<_FolderTab> _buildTabs(
+  List<Widget> _buildTabs(
     BuildContext context,
     SelectedFolderState state,
     Color foregroundColor,
@@ -497,12 +498,12 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   ) {
     final directory = state.current;
     if (directory == null) {
-      return const <_FolderTab>[];
+      return const <Widget>[];
     }
 
     final imageLibrary = context.read<ImageLibraryNotifier>();
 
-    final tabs = <_FolderTab>[
+    final tabs = <Widget>[
       _FolderTab(
         label: 'ルート',
         isActive: state.viewMode == FolderViewMode.root,
@@ -554,7 +555,56 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
       );
     }
 
+    // ＋ボタン（新規フォルダ作成）
+    tabs.add(
+      _AddFolderTab(
+        foregroundColor: foregroundColor,
+        backgroundColor: backgroundColor,
+        onTap: () => _showCreateFolderDialog(context, state, subdirs),
+      ),
+    );
+
     return tabs;
+  }
+
+  Future<void> _showCreateFolderDialog(
+    BuildContext context,
+    SelectedFolderState state,
+    List<Directory> existingSubdirs,
+  ) async {
+    final directory = state.current;
+    if (directory == null) return;
+
+    final existingNames = existingSubdirs.map((d) => p.basename(d.path)).toSet();
+
+    final newFolderName = await showDialog<String>(
+      context: context,
+      builder: (_) => CreateFolderDialog(
+        existingNames: existingNames,
+      ),
+    );
+
+    if (newFolderName != null && mounted) {
+      try {
+        // フォルダ作成
+        final newDir = Directory(p.join(directory.path, newFolderName));
+        await newDir.create();
+
+        // 作成したフォルダへ移動
+        if (mounted) {
+          await context
+              .read<SelectedFolderNotifier>()
+              .switchToSubfolder(newFolderName);
+        }
+      } catch (e) {
+        debugPrint('[MainScreen] Failed to create folder: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('フォルダの作成に失敗しました: $e')),
+          );
+        }
+      }
+    }
   }
 
   void _prepareRootScrollRestoreIfNeeded(SelectedFolderState state) {
@@ -1089,7 +1139,7 @@ class _TabBar extends StatelessWidget {
     required this.foregroundColor,
   });
 
-  final List<_FolderTab> tabs;
+  final List<Widget> tabs;
   final ScrollController controller;
   final Color backgroundColor;
   final Color foregroundColor;
@@ -1138,6 +1188,41 @@ class _FolderTab extends StatelessWidget {
         selectedColor: backgroundColor,
         backgroundColor: backgroundColor,
         checkmarkColor: foregroundColor,
+        elevation: 0,
+        side: BorderSide(color: foregroundColor, width: 1),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(color: foregroundColor, width: 1),
+        ),
+      ),
+    );
+  }
+}
+
+/// 新規フォルダ作成用の＋ボタン
+class _AddFolderTab extends StatelessWidget {
+  const _AddFolderTab({
+    required this.onTap,
+    required this.foregroundColor,
+    required this.backgroundColor,
+  });
+
+  final VoidCallback onTap;
+  final Color foregroundColor;
+  final Color backgroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      child: ActionChip(
+        label: Icon(
+          Icons.add,
+          size: 18,
+          color: foregroundColor,
+        ),
+        onPressed: onTap,
+        backgroundColor: backgroundColor,
         elevation: 0,
         side: BorderSide(color: foregroundColor, width: 1),
         shape: RoundedRectangleBorder(
