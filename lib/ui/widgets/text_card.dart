@@ -81,6 +81,8 @@ class _TextCardState extends State<TextCard>
   int? _resizeStartSpan;
   Size? _previewSize;
   ResizePreviewOverlayService? _overlayService;
+  ResizeCorner? _resizeCorner;
+  Offset? _anchorPosition;
   String _textContent = '';
   bool _isLoading = true;
   late ValueNotifier<Size> _sizeNotifier;
@@ -318,8 +320,29 @@ class _TextCardState extends State<TextCard>
                         ),
                       ),
                     ),
-                  // リサイズハンドル
-                  if (_showControls || _isResizing) _buildResizeHandle(),
+                  // リサイズハンドル（4コーナー）
+                  if (_showControls || _isResizing) ...[
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      child: _buildResizeHandle(ResizeCorner.topLeft),
+                    ),
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: _buildResizeHandle(ResizeCorner.topRight),
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      child: _buildResizeHandle(ResizeCorner.bottomLeft),
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: _buildResizeHandle(ResizeCorner.bottomRight),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -439,25 +462,33 @@ class _TextCardState extends State<TextCard>
     );
   }
 
-  Widget _buildResizeHandle() {
-    return Positioned(
-      bottom: 0,
-      right: 0,
-      child: GestureDetector(
-        onPanStart: _handleResizeStart,
-        onPanUpdate: _handleResizeUpdate,
-        onPanEnd: _handleResizeEnd,
-        child: MouseRegion(
-          cursor: SystemMouseCursors.resizeDownRight,
-          child: Container(
-            width: 24,
-            height: 24,
-            color: Colors.transparent,
-            child: const Icon(
-              Icons.drag_handle,
-              size: 16,
-              color: Colors.grey,
-            ),
+  Widget _buildResizeHandle(ResizeCorner corner) {
+    final MouseCursor cursor;
+    switch (corner) {
+      case ResizeCorner.topLeft:
+        cursor = SystemMouseCursors.resizeUpLeft;
+      case ResizeCorner.topRight:
+        cursor = SystemMouseCursors.resizeUpRight;
+      case ResizeCorner.bottomLeft:
+        cursor = SystemMouseCursors.resizeDownLeft;
+      case ResizeCorner.bottomRight:
+        cursor = SystemMouseCursors.resizeDownRight;
+    }
+
+    return GestureDetector(
+      onPanStart: (details) => _handleResizeStart(details, corner),
+      onPanUpdate: _handleResizeUpdate,
+      onPanEnd: _handleResizeEnd,
+      child: MouseRegion(
+        cursor: cursor,
+        child: Container(
+          width: 24,
+          height: 24,
+          color: Colors.transparent,
+          child: const Icon(
+            Icons.drag_handle,
+            size: 16,
+            color: Colors.grey,
           ),
         ),
       ),
@@ -512,7 +543,7 @@ class _TextCardState extends State<TextCard>
     }
   }
 
-  void _handleResizeStart(DragStartDetails details) {
+  void _handleResizeStart(DragStartDetails details, ResizeCorner corner) {
     // Get card's global position
     final RenderBox? box = context.findRenderObject() as RenderBox?;
     if (box == null) return;
@@ -520,11 +551,26 @@ class _TextCardState extends State<TextCard>
     final globalOffset = box.localToGlobal(Offset.zero);
     final currentSize = Size(widget.viewState.width, widget.viewState.height);
 
+    // 対角のコーナーをアンカーとして計算
+    Offset anchor;
+    switch (corner) {
+      case ResizeCorner.bottomRight:
+        anchor = globalOffset; // 左上固定
+      case ResizeCorner.bottomLeft:
+        anchor = Offset(globalOffset.dx + currentSize.width, globalOffset.dy); // 右上固定
+      case ResizeCorner.topRight:
+        anchor = Offset(globalOffset.dx, globalOffset.dy + currentSize.height); // 左下固定
+      case ResizeCorner.topLeft:
+        anchor = Offset(globalOffset.dx + currentSize.width, globalOffset.dy + currentSize.height); // 右下固定
+    }
+
     setState(() {
       _isResizing = true;
       _resizeStartSize = currentSize;
       _resizeStartGlobalPosition = details.globalPosition;
       _resizeStartSpan = _currentSpan;
+      _resizeCorner = corner;
+      _anchorPosition = anchor;
     });
 
     // Create and show overlay
@@ -542,31 +588,46 @@ class _TextCardState extends State<TextCard>
   }
 
   void _handleResizeUpdate(DragUpdateDetails details) {
-    if (_resizeStartSize == null || _resizeStartGlobalPosition == null) {
+    if (_resizeStartSize == null ||
+        _resizeStartGlobalPosition == null ||
+        _resizeCorner == null ||
+        _anchorPosition == null) {
       return;
     }
 
     final delta = details.globalPosition - _resizeStartGlobalPosition!;
+
+    // コーナーに応じてデルタを調整
+    double adjustedDx;
+    double adjustedDy;
+    switch (_resizeCorner!) {
+      case ResizeCorner.bottomRight:
+        adjustedDx = delta.dx;
+        adjustedDy = delta.dy;
+      case ResizeCorner.bottomLeft:
+        adjustedDx = -delta.dx;
+        adjustedDy = delta.dy;
+      case ResizeCorner.topRight:
+        adjustedDx = delta.dx;
+        adjustedDy = -delta.dy;
+      case ResizeCorner.topLeft:
+        adjustedDx = -delta.dx;
+        adjustedDy = -delta.dy;
+    }
+
     final targetWidth =
-        (_resizeStartSize!.width + delta.dx).clamp(100.0, 1920.0);
+        (_resizeStartSize!.width + adjustedDx).clamp(100.0, 1920.0);
     final snappedSpan = _snapSpan(targetWidth);
     final snappedWidth = _widthForSpan(snappedSpan);
     final newHeight =
-        (_resizeStartSize!.height + delta.dy).clamp(100.0, 1080.0);
+        (_resizeStartSize!.height + adjustedDy).clamp(100.0, 1080.0);
 
-    // Get card's current global position (might have scrolled)
-    final RenderBox? box = context.findRenderObject() as RenderBox?;
-    if (box == null) return;
-    final globalOffset = box.localToGlobal(Offset.zero);
+    // プレビュー矩形をアンカーベースで計算
+    final previewRect = _calculatePreviewRect(Size(snappedWidth, newHeight));
 
     // Update overlay
     _overlayService?.update(
-      globalRect: Rect.fromLTWH(
-        globalOffset.dx,
-        globalOffset.dy,
-        snappedWidth,
-        newHeight,
-      ),
+      globalRect: previewRect,
       columnSpan: snappedSpan,
     );
 
@@ -580,6 +641,21 @@ class _TextCardState extends State<TextCard>
     }
   }
 
+  /// アンカー位置とコーナーに基づいてプレビュー矩形を計算
+  Rect _calculatePreviewRect(Size size) {
+    final anchor = _anchorPosition!;
+    switch (_resizeCorner!) {
+      case ResizeCorner.bottomRight:
+        return Rect.fromLTWH(anchor.dx, anchor.dy, size.width, size.height);
+      case ResizeCorner.bottomLeft:
+        return Rect.fromLTWH(anchor.dx - size.width, anchor.dy, size.width, size.height);
+      case ResizeCorner.topRight:
+        return Rect.fromLTWH(anchor.dx, anchor.dy - size.height, size.width, size.height);
+      case ResizeCorner.topLeft:
+        return Rect.fromLTWH(anchor.dx - size.width, anchor.dy - size.height, size.width, size.height);
+    }
+  }
+
   void _handleResizeEnd(DragEndDetails details) {
     // Hide overlay
     _overlayService?.hide();
@@ -590,15 +666,20 @@ class _TextCardState extends State<TextCard>
     final finalSize = _previewSize ?? _sizeNotifier.value;
     _sizeNotifier.value = finalSize;
 
+    // コーナーを保存してからリセット
+    final corner = _resizeCorner;
+
     setState(() {
       _isResizing = false;
       _resizeStartSize = null;
       _resizeStartGlobalPosition = null;
       _previewSize = null;
+      _resizeCorner = null;
+      _anchorPosition = null;
     });
 
-    // ドラッグ終了時にGridLayoutStoreに永続化
-    widget.onResize(widget.item.id, finalSize);
+    // ドラッグ終了時にGridLayoutStoreに永続化（cornerパラメータを渡す）
+    widget.onResize(widget.item.id, finalSize, corner: corner);
 
     if (_resizeStartSpan != null && _currentSpan != _resizeStartSpan) {
       widget.onSpanChange?.call(widget.item.id, _currentSpan);
