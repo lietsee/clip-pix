@@ -1157,13 +1157,13 @@ class GridViewModuleState extends State<GridViewModule> {
 
   void _handleResize(String id, Size newSize) {
     // サイズからスパンを計算して、customSizeとcolumnSpanを一緒に更新
-    final geometry = _layoutStore.geometry;
+    final geometry = _layoutStore.latestSnapshot?.geometry;
     int span = 1;
     if (geometry != null && geometry.columnWidth > 0) {
-      span = ((newSize.width + geometry.gap) /
+      final rawSpan = ((newSize.width + geometry.gap) /
               (geometry.columnWidth + geometry.gap))
-          .round()
-          .clamp(1, geometry.columnCount);
+          .round();
+      span = rawSpan.clamp(1, geometry.columnCount);
     }
     unawaited(_layoutStore.updateCard(
       id: id,
