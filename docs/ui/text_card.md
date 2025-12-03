@@ -1,7 +1,7 @@
 # TextCard 実装仕様
 
-**最終更新**: 2025-11-30
-**対象コミット**: `2faa96e`（refactor: change edit flow to use hover button instead of single-click）
+**最終更新**: 2025-12-03
+**対象コミット**: `891aa92`（feat: add 4-corner resize support to TextCard）
 
 本書は `lib/ui/widgets/text_card.dart` に実装されているテキストカードコンポーネントの仕様を整理したものです。
 
@@ -23,14 +23,14 @@ TextCard は `TextContentItem`（`.txt` ファイル）を表示するための�
 
 ```
 ┌────────────────────────────────┐
-│ [編集]                   [削除] │ ← ホバー時のみ表示
+│[⤢] [編集]             [削除] [⤡]│ ← ホバー時のみ表示、左上/右上リサイズハンドル
 ├────────────────────────────────┤
 │                                │
 │   テキストコンテンツ表示         │
 │   （スクロール可能）             │
 │                                │
 ├────────────────────────────────┤
-│ [♥]                      [⤡]  │ ← お気に入り / リサイズハンドル
+│[⤡] [♥]                    [⤢]│ ← 左下/右下リサイズハンドル、お気に入り
 └────────────────────────────────┘
 ```
 
@@ -52,11 +52,13 @@ TextCard は `TextContentItem`（`.txt` ファイル）を表示するための�
 - ダブルクリックで `TextPreviewWindow` を別プロセスで起動
 - 編集中・削除モード中はダブルクリック無効
 
-### 4.3 リサイズ
+### 4.3 リサイズ（2025-12-03 4コーナー対応）
 
-- 右下ハンドルをドラッグ
+- **4つのコーナー**（topLeft, topRight, bottomLeft, bottomRight）からリサイズ可能
 - 列幅にスナップ
 - ImageCard と同一のロジック
+- アンカーポイント計算（対角コーナーを固定）
+- 上方向リサイズ時のカード順序調整に対応
 
 ### 4.4 お気に入り
 
@@ -67,7 +69,7 @@ TextCard は `TextContentItem`（`.txt` ファイル）を表示するための�
 
 | 名称 | 型 | 説明 |
 |------|-----|------|
-| `onResize` | `Function(String id, Size)` | サイズ変更通知 |
+| `onResize` | `Function(String id, Size, {ResizeCorner? corner})` | サイズ変更通知（コーナー情報付き） |
 | `onSpanChange` | `Function(String id, int)?` | 列スパン変更通知 |
 | `onFavoriteToggle` | `Function(String id, int)` | お気に入り状態変更 |
 | `onCopyText` | `Function(TextContentItem)` | テキストコピー要求 |
@@ -86,4 +88,5 @@ TextCard は `TextContentItem`（`.txt` ファイル）を表示するための�
 
 | 日付 | コミット | 内容 |
 |------|----------|------|
+| 2025-12-03 | `891aa92` | 4コーナーリサイズ対応。ImageCardと同等のリサイズ機能を実装。 |
 | 2025-11-30 | `2faa96e` | シングルクリック編集を廃止、ホバーボタン編集に変更。メモ編集機能を削除。 |
