@@ -914,10 +914,9 @@ class _ImageCardState extends State<ImageCard>
     });
 
     _attachImageStream(finalSize, _currentScale);
+    // onResize で customSize と columnSpan を一緒に処理する
+    // (GridViewModule._handleResize 内でスパンを計算)
     widget.onResize(widget.item.id, finalSize);
-    if (_currentSpan != _resizeStartSpan) {
-      widget.onSpanChange(widget.item.id, _currentSpan);
-    }
   }
 
   void _handlePointerDown(PointerDownEvent event) {
