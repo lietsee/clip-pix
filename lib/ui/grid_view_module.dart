@@ -1234,6 +1234,11 @@ class GridViewModuleState extends State<GridViewModule> {
       print('[GridViewModule] _handleResize: currentColumn=$currentColumn, '
           'currentSpan=$currentSpan, newSpan=$span, '
           'preferredColumnStart=$preferredColumnStart');
+
+      // 上方向へ拡大した場合、カード順序を調整してプレビュー位置に近づける
+      if (corner == ResizeCorner.topRight || corner == ResizeCorner.topLeft) {
+        _adjustCardOrderForUpwardResize(id, entry, newSize);
+      }
     }
 
     unawaited(_layoutStore.updateCard(
@@ -1242,6 +1247,58 @@ class GridViewModuleState extends State<GridViewModule> {
       columnSpan: span,
       preferredColumnStart: preferredColumnStart,
     ));
+  }
+
+  /// 上方向へのリサイズ時、カードをプレビュー位置に近い順序に移動
+  void _adjustCardOrderForUpwardResize(
+    String id,
+    LayoutSnapshotEntry entry,
+    Size newSize,
+  ) {
+    final snapshot = _layoutStore.latestSnapshot;
+    if (snapshot == null) return;
+
+    // 現在の下端から新しい高さを引いて、目標のtop位置を計算
+    final currentBottom = entry.rect.bottom;
+    final targetTop = currentBottom - newSize.height;
+
+    // カードが高くならない場合は調整不要
+    if (targetTop >= entry.rect.top - 1) {
+      print('[GridViewModule] _adjustCardOrder: no height increase, skip');
+      return;
+    }
+
+    // 目標Y位置より上にあるカードの数を数える
+    // → その位置に挿入すれば、プレビューに近い位置に配置される
+    int targetIndex = 0;
+    for (final e in snapshot.entries) {
+      if (e.id == id) continue; // 自分自身はスキップ
+      if (e.rect.top < targetTop) {
+        targetIndex++;
+      }
+    }
+
+    // 現在の順序を取得
+    final currentIndex = _entries.indexWhere((e) => e.item.id == id);
+    if (currentIndex < 0 || currentIndex == targetIndex) {
+      print('[GridViewModule] _adjustCardOrder: no move needed, '
+          'current=$currentIndex, target=$targetIndex');
+      return;
+    }
+
+    print('[GridViewModule] _adjustCardOrder: moving card from index '
+        '$currentIndex to $targetIndex (targetTop=$targetTop)');
+
+    // _entries内で順序を変更
+    final movingEntry = _entries.removeAt(currentIndex);
+    final insertAt = targetIndex.clamp(0, _entries.length);
+    _entries.insert(insertAt, movingEntry);
+
+    // _layoutStoreの順序も更新（updateCardの前に実行が必要）
+    _layoutStore.moveCardToIndex(id, insertAt);
+
+    // 順序を永続化
+    unawaited(_persistOrder());
   }
 
   void _handleZoom(String id, double scale) {

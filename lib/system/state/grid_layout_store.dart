@@ -94,6 +94,7 @@ class GridCardViewState {
   final double? customHeight;
   final double offsetDx;
   final double offsetDy;
+
   /// リサイズ時の希望開始列（0インデックス）。nullは優先なし。
   /// レイアウト計算後にクリアされる一時的なヒント。
   final int? preferredColumnStart;
@@ -216,6 +217,28 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
   /// 現在の順序付きIDリストを取得（ミニマップとの同期用）
   List<String> get orderedIds => List.unmodifiable(_orderedIds);
 
+  /// カードを指定インデックスに移動（リサイズ時の順序調整用）
+  /// スナップショットは更新しない（後続のupdateCardで更新される）
+  void moveCardToIndex(String id, int newIndex) {
+    final currentIndex = _orderedIds.indexOf(id);
+    if (currentIndex < 0) {
+      debugPrint('[GridLayoutStore] moveCardToIndex: id not found: $id');
+      return;
+    }
+    if (currentIndex == newIndex) {
+      debugPrint(
+          '[GridLayoutStore] moveCardToIndex: already at index $newIndex');
+      return;
+    }
+
+    _orderedIds.removeAt(currentIndex);
+    final insertAt = newIndex.clamp(0, _orderedIds.length);
+    _orderedIds.insert(insertAt, id);
+
+    debugPrint('[GridLayoutStore] moveCardToIndex: moved $id from '
+        '$currentIndex to $insertAt');
+  }
+
   void syncLibrary(
     List<ContentItem> items, {
     String? directoryPath,
@@ -257,7 +280,8 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
       // (過去に間違った高さで保存されたカードを修正するため)
       final needsAspectRatioResolution = isNewCard ||
           (record.customHeight == null &&
-           (record.height - GridLayoutPreferenceRecord.defaultHeight).abs() < 1.0);
+              (record.height - GridLayoutPreferenceRecord.defaultHeight).abs() <
+                  1.0);
 
       if (needsAspectRatioResolution) {
         newCardIds.add(item.id);
@@ -339,7 +363,8 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
       } else {
         // No geometry available yet
         // Try to use previous snapshot's geometry if available
-        final prevGeometry = _previousSnapshot?.geometry ?? _latestSnapshot?.geometry;
+        final prevGeometry =
+            _previousSnapshot?.geometry ?? _latestSnapshot?.geometry;
         if (prevGeometry != null) {
           // Regenerate snapshot with new order using previous geometry
           final orderedStates = _orderedIds
@@ -362,7 +387,8 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
           }
           _latestSnapshot = result.snapshot;
 
-          debugPrint('[GridLayoutStore] syncLibrary: geometry null but prevGeometry available, '
+          debugPrint(
+              '[GridLayoutStore] syncLibrary: geometry null but prevGeometry available, '
               'regenerated snapshot: prevId=$prevSnapshotId, newId=${_latestSnapshot?.id}');
           // [DEBUG] スナップショット順序確認ログ
           debugPrint('[GridLayoutStore] snapshot: entries order (first 15) = '
@@ -370,7 +396,8 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
         } else {
           // No previous geometry, mark for later regeneration
           _pendingSnapshotRegeneration = true;
-          debugPrint('[GridLayoutStore] syncLibrary: geometry null and no prevGeometry, '
+          debugPrint(
+              '[GridLayoutStore] syncLibrary: geometry null and no prevGeometry, '
               'setting pendingSnapshotRegeneration=true');
           _invalidateSnapshot();
         }
@@ -494,7 +521,8 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
         'geometryChanged=$geometryChanged, '
         'orderedIdsFirst3=${_orderedIds.take(3).map((e) => e.split('/').last).join(', ')}');
     // [DEBUG] スナップショット順序確認ログ
-    debugPrint('[GridLayoutStore] updateGeometry snapshot: entries order (first 15) = '
+    debugPrint(
+        '[GridLayoutStore] updateGeometry snapshot: entries order (first 15) = '
         '${result.snapshot.entries.take(15).map((e) => e.id.split('/').last).toList()}');
 
     if (shouldNotify) {
@@ -650,7 +678,8 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     Offset? offset,
     int? preferredColumnStart,
   }) async {
-    print('[GridLayoutStore] updateCard ENTRY: id=${id.split('/').last}, offset=$offset');
+    print(
+        '[GridLayoutStore] updateCard ENTRY: id=${id.split('/').last}, offset=$offset');
     final current = _viewStates[id];
     if (current == null) {
       throw StateError('ViewState for $id is not loaded');
@@ -981,9 +1010,8 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
       final ratio = await _resolveAspectRatio(id, current);
 
       // 解決された比率のデバッグログ
-      final currentRatio = current.width > 0
-          ? current.height / current.width
-          : 1.0;
+      final currentRatio =
+          current.width > 0 ? current.height / current.width : 1.0;
       debugPrint('[GridLayoutStore] forceFullResync_ratio: '
           'id=${id.split('/').last}, '
           'ratio=${ratio.toStringAsFixed(4)}, '
@@ -1029,12 +1057,12 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     }
 
     // Hiveに全カードを保存
-    final mutations = _viewStates.values
-        .map((s) => _recordFromState(s))
-        .toList();
+    final mutations =
+        _viewStates.values.map((s) => _recordFromState(s)).toList();
     if (mutations.isNotEmpty) {
       await _persistence.saveBatch(mutations);
-      debugPrint('[GridLayoutStore] forceFullResync: saved ${mutations.length} records to Hive');
+      debugPrint(
+          '[GridLayoutStore] forceFullResync: saved ${mutations.length} records to Hive');
     }
 
     // スナップショットを再生成
