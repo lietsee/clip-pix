@@ -723,24 +723,29 @@ class _ImageCardState extends State<ImageCard>
     BorderRadius borderRadius;
     Alignment alignment;
     double rotation;
+    bool flipX;
 
     switch (corner) {
       case ResizeCorner.bottomRight:
         borderRadius = const BorderRadius.only(topLeft: Radius.circular(12));
         alignment = Alignment.bottomRight;
         rotation = 0;
+        flipX = true;
       case ResizeCorner.bottomLeft:
         borderRadius = const BorderRadius.only(topRight: Radius.circular(12));
         alignment = Alignment.bottomLeft;
         rotation = math.pi / 2; // 90度回転
+        flipX = true;
       case ResizeCorner.topRight:
         borderRadius = const BorderRadius.only(bottomLeft: Radius.circular(12));
         alignment = Alignment.topRight;
         rotation = -math.pi / 2; // -90度回転
+        flipX = true;
       case ResizeCorner.topLeft:
         borderRadius = const BorderRadius.only(bottomRight: Radius.circular(12));
         alignment = Alignment.topLeft;
         rotation = math.pi; // 180度回転
+        flipX = true;
     }
 
     return GestureDetector(
@@ -756,8 +761,11 @@ class _ImageCardState extends State<ImageCard>
           borderRadius: borderRadius,
         ),
         alignment: alignment,
-        child: Transform.rotate(
-          angle: rotation,
+        child: Transform(
+          alignment: Alignment.center,
+          transform: Matrix4.identity()
+            ..scale(flipX ? -1.0 : 1.0, 1.0)
+            ..rotateZ(rotation),
           child: const Icon(
             Icons.open_in_full,
             size: 16,
