@@ -15,6 +15,7 @@ class SelectedFolderState {
     required this.viewDirectory,
     required this.isMinimapAlwaysVisible,
     required this.scrollToTopRequested,
+    required this.isBookmarkResolved,
     this.bookmarkData,
   });
 
@@ -28,6 +29,7 @@ class SelectedFolderState {
         viewDirectory: null,
         isMinimapAlwaysVisible: false,
         scrollToTopRequested: false,
+        isBookmarkResolved: true, // No bookmark needed for initial state
       );
 
   final Directory? current;
@@ -39,6 +41,10 @@ class SelectedFolderState {
   final Directory? viewDirectory;
   final bool isMinimapAlwaysVisible;
   final bool scrollToTopRequested;
+
+  /// Whether the security-scoped bookmark has been resolved (macOS).
+  /// UI should wait for this to be true before attempting to load directory contents.
+  final bool isBookmarkResolved;
 
   /// Security-scoped bookmark data for macOS (Base64 encoded).
   /// Used to restore folder access after app restart on macOS.
@@ -54,6 +60,7 @@ class SelectedFolderState {
     Directory? viewDirectory,
     bool? isMinimapAlwaysVisible,
     bool? scrollToTopRequested,
+    bool? isBookmarkResolved,
     String? bookmarkData,
   }) {
     return SelectedFolderState(
@@ -67,6 +74,7 @@ class SelectedFolderState {
       isMinimapAlwaysVisible:
           isMinimapAlwaysVisible ?? this.isMinimapAlwaysVisible,
       scrollToTopRequested: scrollToTopRequested ?? this.scrollToTopRequested,
+      isBookmarkResolved: isBookmarkResolved ?? this.isBookmarkResolved,
       bookmarkData: bookmarkData ?? this.bookmarkData,
     );
   }
@@ -110,6 +118,8 @@ class SelectedFolderState {
           : (currentPath != null ? Directory(currentPath) : null),
       isMinimapAlwaysVisible: json['isMinimapAlwaysVisible'] as bool? ?? false,
       scrollToTopRequested: json['scrollToTopRequested'] as bool? ?? false,
+      // Bookmark needs to be resolved after restore, so start as false
+      isBookmarkResolved: false,
       bookmarkData: json['bookmarkData'] as String?,
     );
   }
@@ -130,6 +140,7 @@ class SelectedFolderState {
         other.viewDirectory?.path == viewDirectory?.path &&
         other.isMinimapAlwaysVisible == isMinimapAlwaysVisible &&
         other.scrollToTopRequested == scrollToTopRequested &&
+        other.isBookmarkResolved == isBookmarkResolved &&
         other.bookmarkData == bookmarkData;
   }
 
@@ -144,6 +155,7 @@ class SelectedFolderState {
         viewDirectory?.path,
         isMinimapAlwaysVisible,
         scrollToTopRequested,
+        isBookmarkResolved,
         bookmarkData,
       );
 }

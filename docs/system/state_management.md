@@ -1,5 +1,5 @@
 # State Management 詳細設計
-最終更新: 2025-12-03
+最終更新: 2025-12-07
 
 ## 1. 目的
 Provider + StateNotifier を用いて、フォルダ選択・監視制御・UI 更新を一元管理する。
@@ -23,6 +23,7 @@ Provider + StateNotifier を用いて、フォルダ選択・監視制御・UI �
 | `currentTab` | `String?` | 選択中のサブフォルダ名（`viewMode=subfolder` の時に有効） |
 | `rootScrollOffset` | `double` | ルート表示時のスクロール位置 |
 | `isValid` | `bool` | フォルダが存在し書き込み可能か |
+| `isBookmarkResolved` | `bool` | ブックマーク解決完了フラグ（macOS、2025-12-07追加） |
 | `bookmarkData` | `String?` | macOS Security-Scoped Bookmark（Base64エンコード） |
 
 ### 3.1 アクション
@@ -75,6 +76,31 @@ abstract class BookmarkService {
 **プラットフォーム対応**:
 - macOS: `MacOSBookmarkService` - MethodChannel経由でSwiftコードを呼び出し
 - Windows: `_NoOpBookmarkService` - 何もしない（サンドボックス制限なし）
+
+**ブックマーク解決待機の仕組み** (2025-12-07追加):
+
+macOSでは`restoreFromHive()`がasyncだがコンストラクタでawaitできないため、ブックマーク解決前にUIがディレクトリアクセスを試みる可能性がある。これを防ぐため`isBookmarkResolved`フラグを導入:
+
+```
+[アプリ起動時のタイミング]
+1. SelectedFolderNotifier() コンストラクタ
+   → restoreFromHive() 開始（awaitなし）
+   → state.isBookmarkResolved = false（fromJsonのデフォルト）
+
+2. UI（MainScreen）がbuild()
+   → _ensureDirectorySync() 呼び出し
+   → isBookmarkResolved == false なので早期リターン
+   → _lastSyncedFolder = null にリセット
+
+3. restoreFromHive() 完了
+   → _resolveBookmarkIfNeeded() 完了（権限取得）
+   → state.isBookmarkResolved = true に更新
+
+4. 状態変更でUIリビルド
+   → _lastSyncedFolder != currentPath（nullにリセット済み）
+   → _ensureDirectorySync() 実行
+   → ディレクトリ読み込み成功
+```
 
 ## 4. WatcherStatusState
 | フィールド | 型 | 説明 |

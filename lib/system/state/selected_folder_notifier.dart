@@ -42,6 +42,10 @@ class SelectedFolderNotifier extends StateNotifier<SelectedFolderState> {
     await _resolveBookmarkIfNeeded();
 
     _validateCurrentFolder();
+
+    // Mark bookmark resolution as complete - UI can now access the directory
+    state = state.copyWith(isBookmarkResolved: true);
+    debugLog('[SelectedFolderNotifier] Bookmark resolution complete');
   }
 
   /// Resolves security-scoped bookmark to restore folder access on macOS.

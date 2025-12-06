@@ -940,9 +940,18 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
         'viewDirectory=${selectedState.viewDirectory?.path}, '
         'current=${selectedState.current?.path}, '
         'viewMode=${selectedState.viewMode}, '
+        'isBookmarkResolved=${selectedState.isBookmarkResolved}, '
         '_isSyncing=$_isSyncing, '
         '_lastSyncedFolder=$_lastSyncedFolder, '
         '_lastLoadedPath=$_lastLoadedPath');
+
+    // Wait for bookmark resolution before attempting directory access (macOS)
+    if (!selectedState.isBookmarkResolved) {
+      debugPrint('[MainScreen] _ensureDirectorySync skipped: waiting for bookmark resolution');
+      // Reset _lastSyncedFolder so sync triggers when bookmark is resolved
+      _lastSyncedFolder = null;
+      return;
+    }
 
     // Re-entry guard: prevent concurrent executions
     if (_isSyncing) {
