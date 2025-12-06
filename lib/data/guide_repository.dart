@@ -26,6 +26,12 @@ class GuideRepository extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// セッションフラグをリセット（チュートリアル完了時に呼ばれる）
+  void resetSessionFlag() {
+    _sessionCompleted = false;
+    notifyListeners();
+  }
+
   /// ガイド完了状態を設定（永続化）
   Future<void> setFirstGuideCompleted(bool completed) async {
     await _box.put(_keyFirstGuide, completed);

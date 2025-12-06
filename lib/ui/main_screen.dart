@@ -114,8 +114,10 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
 
   void _onGuideComplete() {
     debugPrint('[MainScreen] Guide completed');
-    // Mark guide as completed in repository (session only, not persisted)
-    context.read<GuideRepository>().markSessionCompleted();
+    // Mark guide as completed (session + persistent)
+    final guideRepo = context.read<GuideRepository>();
+    guideRepo.markSessionCompleted();
+    guideRepo.setFirstGuideCompleted(true); // 永続化して次回起動時に表示しない
   }
 
   @override

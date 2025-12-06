@@ -1362,7 +1362,10 @@ class ClipPixApp extends StatelessWidget {
           builder: (context, onboardingRepo, guideRepo, _) {
             if (!onboardingRepo.hasCompletedOnboarding) {
               return OnboardingScreen(
-                onComplete: () => onboardingRepo.markSessionCompleted(),
+                onComplete: () {
+                  onboardingRepo.markSessionCompleted();
+                  guideRepo.resetGuide(); // チュートリアル後にガイドも表示（永続化フラグもリセット）
+                },
               );
             }
             return MainScreen(

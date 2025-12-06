@@ -354,6 +354,7 @@ class _GridSettingsDialogState extends State<GridSettingsDialog> {
         OutlinedButton.icon(
           onPressed: () async {
             await context.read<OnboardingRepository>().resetOnboarding();
+            await context.read<GuideRepository>().resetGuide(); // チュートリアル後にガイドも表示
             if (mounted) {
               Navigator.of(context).pop();
             }
