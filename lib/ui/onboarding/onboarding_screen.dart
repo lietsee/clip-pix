@@ -26,7 +26,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   bool _dontShowAgain = false;
 
   /// 最小ウィンドウサイズ
-  static const double _minWindowHeight = 600.0;
+  static const double _minWindowHeight = 750.0;
   static const double _minWindowWidth = 800.0;
 
   @override
