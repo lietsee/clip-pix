@@ -110,7 +110,8 @@ class ImageLibraryNotifier extends StateNotifier<ImageLibraryState> {
   }
 
   Future<void> updateMemo(String imageId, String memo) async {
-    if (_fileInfoManager == null) {
+    final fileInfoManager = _fileInfoManager;
+    if (fileInfoManager == null) {
       _logger.warning('FileInfoManager not available for memo update');
       return;
     }
@@ -126,7 +127,7 @@ class ImageLibraryNotifier extends StateNotifier<ImageLibraryState> {
 
     try {
       // Update memo in FileInfoManager
-      await _fileInfoManager!.updateMemo(
+      await fileInfoManager.updateMemo(
         imageFilePath: item.filePath,
         memo: memo,
         savedAt: item.savedAt,
@@ -147,7 +148,8 @@ class ImageLibraryNotifier extends StateNotifier<ImageLibraryState> {
   }
 
   Future<void> updateFavorite(String imageId, int favorite) async {
-    if (_fileInfoManager == null) {
+    final fileInfoManager = _fileInfoManager;
+    if (fileInfoManager == null) {
       _logger.warning('FileInfoManager not available for favorite update');
       return;
     }
@@ -163,7 +165,7 @@ class ImageLibraryNotifier extends StateNotifier<ImageLibraryState> {
 
     try {
       // Update favorite in FileInfoManager
-      await _fileInfoManager!.updateFavorite(
+      await fileInfoManager.updateFavorite(
         imageFilePath: item.filePath,
         favorite: favorite,
         savedAt: item.savedAt,

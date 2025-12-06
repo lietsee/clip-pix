@@ -119,9 +119,9 @@ class DeleteService {
     _logger.fine('Moved to trash: $itemPath -> $trashFilePath');
 
     // Move metadata to .trash folder's .fileInfo.json
-    if (_fileInfoManager != null) {
+    if (_fileInfoManager case final fileInfoManager?) {
       try {
-        await _fileInfoManager!.moveMetadata(
+        await fileInfoManager.moveMetadata(
           fromPath: itemPath,
           toPath: trashFilePath,
         );
@@ -137,9 +137,9 @@ class DeleteService {
     }
 
     // Remove card preferences from Hive
-    if (_preferencesRepository != null) {
+    if (_preferencesRepository case final preferencesRepository?) {
       try {
-        await _preferencesRepository!.remove(itemPath);
+        await preferencesRepository.remove(itemPath);
         _logger.fine('Removed card preferences: $itemPath');
       } catch (error, stackTrace) {
         _logger.warning(

@@ -12,16 +12,22 @@ import 'package:provider/provider.dart';
 
 import '../data/file_info_manager.dart';
 import '../data/grid_card_preferences_repository.dart';
+// ignore: unused_import (used for debugLog)
+import '../system/debug_log.dart';
 import '../data/grid_layout_settings_repository.dart';
 import '../data/grid_order_repository.dart';
 import '../data/models/content_item.dart';
 import '../data/models/content_type.dart';
 import '../data/models/grid_layout_settings.dart';
 import '../data/models/image_item.dart';
+import '../data/models/pdf_content_item.dart';
 import '../data/models/text_content_item.dart';
 import '../system/clipboard_copy_service.dart';
+import '../system/pdf_thumbnail_cache_service.dart';
+import 'package:pdfx/pdfx.dart' as pdfx;
 import '../system/delete_service.dart' as clip_pix_delete;
 import '../system/image_preview_process_manager.dart';
+import '../system/pdf_preview_process_manager.dart';
 import '../system/text_preview_process_manager.dart';
 import '../system/state/deletion_mode_notifier.dart';
 import '../system/state/deletion_mode_state.dart';
@@ -33,6 +39,7 @@ import '../system/state/selected_folder_state.dart';
 import '../system/window/window_finder.dart';
 import 'image_card.dart';
 import 'widgets/grid_layout_surface.dart';
+import 'widgets/pdf_card.dart';
 import 'widgets/pinterest_grid.dart';
 import 'widgets/text_card.dart';
 import 'widgets/text_preview_window.dart';
@@ -76,7 +83,7 @@ class GridViewModuleState extends State<GridViewModule> {
   bool _needsImageRestorationRetry = false;
   TextPreviewProcessManager? _processManager;
   ImagePreviewProcessManager? _imagePreviewManager;
-  GridLayoutSettingsRepository? _layoutSettingsRepository;
+  PdfPreviewProcessManager? _pdfPreviewManager;
   GridOrderRepository? _orderRepository;
   late GridLayoutStore _layoutStore;
   OverlayEntry? _dragOverlay;
@@ -120,20 +127,16 @@ class GridViewModuleState extends State<GridViewModule> {
   // vs same-folder card add/delete (keep existing grid to avoid flicker)
   bool _isDirectoryChangeReconcile = false;
 
-  // Track viewDirectory from SelectedFolderState to detect tab changes
-  // (ImageLibraryState.activeDirectory updates asynchronously, so we need
-  // to detect changes directly from SelectedFolderState in build())
-  String? _lastViewDirectory;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_isInitialized) {
       _layoutStore = context.read<GridLayoutStore>();
-      _layoutSettingsRepository = context.read<GridLayoutSettingsRepository>();
       _orderRepository = context.read<GridOrderRepository>();
       _processManager = context.read<TextPreviewProcessManager>();
       _imagePreviewManager = context.read<ImagePreviewProcessManager>();
+      _pdfPreviewManager = context.read<PdfPreviewProcessManager>();
       final orderedImages = _applyDirectoryOrder(widget.state.images);
       _entries = orderedImages.map(_createEntry).toList(growable: true);
       // [DEBUG] 順序確認ログ
@@ -199,7 +202,7 @@ class GridViewModuleState extends State<GridViewModule> {
       // 旧データによる SizedBox.shrink() の大量生成を防ぐ
       // (大量の SizedBox.shrink がレンダーツリーを破損させ、ヒットテストが効かなくなる問題の修正)
       if (directoryChanged) {
-        print(
+        debugLog(
             '[GridViewModule] didUpdateWidget: directory changed, clearing _entries');
         setState(() {
           _entries = [];
@@ -219,7 +222,7 @@ class GridViewModuleState extends State<GridViewModule> {
           final imageParentDir = p.dirname(firstImagePath);
           final imagesMatchDirectory = imageParentDir == newDirPath;
 
-          print('[GridViewModule] didUpdateWidget: directory check - '
+          debugLog('[GridViewModule] didUpdateWidget: directory check - '
               'newDirPath=$newDirPath, imageParentDir=$imageParentDir, '
               'match=$imagesMatchDirectory');
 
@@ -612,7 +615,6 @@ class GridViewModuleState extends State<GridViewModule> {
           'imagesMismatch=$imagesMismatch, showing loading');
       return const Center(child: CircularProgressIndicator());
     }
-    _lastViewDirectory = currentViewDirectory;
 
     final layoutStore = context.watch<GridLayoutStore>();
     final mutationController = context.watch<GridLayoutMutationController>();
@@ -621,7 +623,7 @@ class GridViewModuleState extends State<GridViewModule> {
     final isMutating = mutationController.isMutating;
     final shouldHideGrid = mutationController.shouldHideGrid;
     // 診断ログ: 操作不能バグの原因特定用
-    print(
+    debugLog(
       '[GridViewModule] build: isMutating=$isMutating, shouldHideGrid=$shouldHideGrid',
     );
     assert(() {
@@ -719,14 +721,14 @@ class GridViewModuleState extends State<GridViewModule> {
                       (context, index) {
                         // [DIAGNOSTIC] Log _entries order at build time (once per build)
                         if (index == 0) {
-                          print('[GridViewModule] childBuilder START: '
+                          debugLog('[GridViewModule] childBuilder START: '
                               '_entriesCount=${_entries.length}, '
                               'viewStatesCount=${layoutStore.viewStates.length}, '
                               'isStaging=$isStaging, snapshotId=${snapshot?.id}');
                         }
 
                         if (index >= _entries.length) {
-                          print(
+                          debugLog(
                               '[GridViewModule] childBuilder[$index]: returning null (index >= _entries.length)');
                           return null;
                         }
@@ -734,20 +736,20 @@ class GridViewModuleState extends State<GridViewModule> {
 
                         // Skip entries being removed to avoid ViewState access errors
                         if (entry.isRemoving) {
-                          print(
+                          debugLog(
                               '[GridViewModule] childBuilder[$index]: returning null (isRemoving) item=${entry.item.id.split('/').last}');
                           return null;
                         }
                         // Skip deleted items (not yet removed from _entries but already removed from state)
                         // This ensures deleted items are hidden immediately, before _reconcileEntries runs
                         if (!currentImageIds.contains(entry.item.id)) {
-                          print(
+                          debugLog(
                               '[GridViewModule] childBuilder[$index]: returning SizedBox.shrink (not in currentImageIds) item=${entry.item.id.split('/').last}');
                           return const SizedBox.shrink();
                         }
                         // Skip if viewState not yet synced (during initial load/folder change)
                         if (!layoutStore.hasViewState(entry.item.id)) {
-                          print(
+                          debugLog(
                               '[GridViewModule] childBuilder[$index]: returning SizedBox.shrink (no viewState) item=${entry.item.id.split('/').last}');
                           return const SizedBox.shrink();
                         }
@@ -769,7 +771,7 @@ class GridViewModuleState extends State<GridViewModule> {
                         );
                         // Log only first few cards to avoid spam
                         if (index < 3) {
-                          print(
+                          debugLog(
                               '[GridViewModule] childBuilder[$index]: built card item=${entry.item.id.split('/').last}');
                         }
                         return PinterestGridTile(
@@ -791,7 +793,7 @@ class GridViewModuleState extends State<GridViewModule> {
       ),
     );
 
-    print('[GridViewModule] returning outer Stack: '
+    debugLog('[GridViewModule] returning outer Stack: '
         'shouldHideGrid=$shouldHideGrid, isMutating=$isMutating, '
         'hasOverlay=$shouldHideGrid, '
         '_entriesCount=${_entries.length}, '
@@ -871,66 +873,94 @@ class GridViewModuleState extends State<GridViewModule> {
         key: animatedKey,
         duration: _animationDuration,
         opacity: entry.opacity,
-        child: item.contentType == ContentType.text
-            ? TextCard(
-                item: item as TextContentItem,
-                viewState: viewState,
-                onResize: _handleResize,
-                onSpanChange: _handleSpanChange,
-                onFavoriteToggle: _handleFavorite,
-                onCopyText: _handleCopyText,
-                onOpenPreview: _showTextPreviewDialog,
-                onSaveText: _handleSaveText,
-                columnWidth: columnWidth,
-                columnCount: columnCount,
-                columnGap: _gridGap,
-                backgroundColor: const Color(0xFF72CC82),
-                isDeletionMode: isDeletionMode,
-                isSelected: isSelected,
-                isHighlighted: _highlightedItemId == item.id,
-                onDelete: _handleDeleteText,
-                onSelectionToggle: _handleSelectionToggle,
-                onReorderPointerDown: _handleReorderPointerDown,
-                onStartReorder: _startReorder,
-                onReorderUpdate: _updateReorder,
-                onReorderEnd: _endReorder,
-                onReorderCancel: _handleReorderCancel,
-                onHoverChanged: (isHovered) {
-                  _onCardHoverChanged(isHovered ? item.id : null);
-                },
-                debugIndex: debugShowCardIndex ? index : null,
-              )
-            : ImageCard(
-                item: item as ImageItem,
-                viewState: viewState,
-                onResize: _handleResize,
-                onSpanChange: _handleSpanChange,
-                onZoom: _handleZoom,
-                onPan: _handlePan,
-                onRetry: _handleRetry,
-                onOpenPreview: _showPreviewDialog,
-                onCopyImage: _handleCopy,
-                onEditMemo: _handleEditMemo,
-                onFavoriteToggle: _handleFavorite,
-                columnWidth: columnWidth,
-                columnCount: columnCount,
-                columnGap: _gridGap,
-                isDeletionMode: isDeletionMode,
-                isSelected: isSelected,
-                isHighlighted: _highlightedItemId == item.id,
-                onDelete: _handleDeleteImage,
-                onSelectionToggle: _handleSelectionToggle,
-                onReorderPointerDown: _handleReorderPointerDown,
-                onStartReorder: _startReorder,
-                onReorderUpdate: _updateReorder,
-                onReorderEnd: _endReorder,
-                onReorderCancel: _handleReorderCancel,
-                backgroundColor: backgroundColor,
-                onHoverChanged: (isHovered) {
-                  _onCardHoverChanged(isHovered ? item.id : null);
-                },
-                debugIndex: debugShowCardIndex ? index : null,
-              ),
+        child: switch (item.contentType) {
+          ContentType.text => TextCard(
+              item: item as TextContentItem,
+              viewState: viewState,
+              onResize: _handleResize,
+              onSpanChange: _handleSpanChange,
+              onFavoriteToggle: _handleFavorite,
+              onCopyText: _handleCopyText,
+              onOpenPreview: _showTextPreviewDialog,
+              onSaveText: _handleSaveText,
+              columnWidth: columnWidth,
+              columnCount: columnCount,
+              columnGap: _gridGap,
+              backgroundColor: const Color(0xFF72CC82),
+              isDeletionMode: isDeletionMode,
+              isSelected: isSelected,
+              isHighlighted: _highlightedItemId == item.id,
+              onDelete: _handleDeleteText,
+              onSelectionToggle: _handleSelectionToggle,
+              onReorderPointerDown: _handleReorderPointerDown,
+              onStartReorder: _startReorder,
+              onReorderUpdate: _updateReorder,
+              onReorderEnd: _endReorder,
+              onReorderCancel: _handleReorderCancel,
+              onHoverChanged: (isHovered) {
+                _onCardHoverChanged(isHovered ? item.id : null);
+              },
+              debugIndex: debugShowCardIndex ? index : null,
+            ),
+          ContentType.pdf => PdfCard(
+              item: item as PdfContentItem,
+              viewState: viewState,
+              thumbnailService: context.read<PdfThumbnailCacheService>(),
+              onResize: _handleResize,
+              onSpanChange: _handleSpanChange,
+              onFavoriteToggle: _handleFavorite,
+              onOpenPreview: _showPdfPreview,
+              columnWidth: columnWidth,
+              columnCount: columnCount,
+              columnGap: _gridGap,
+              backgroundColor: const Color(0xFFE57373),
+              isDeletionMode: isDeletionMode,
+              isSelected: isSelected,
+              isHighlighted: _highlightedItemId == item.id,
+              onDelete: _handleDeletePdf,
+              onSelectionToggle: _handleSelectionToggle,
+              onReorderPointerDown: _handleReorderPointerDown,
+              onStartReorder: _startReorder,
+              onReorderUpdate: _updateReorder,
+              onReorderEnd: _endReorder,
+              onReorderCancel: _handleReorderCancel,
+              onHoverChanged: (isHovered) {
+                _onCardHoverChanged(isHovered ? item.id : null);
+              },
+              debugIndex: debugShowCardIndex ? index : null,
+            ),
+          ContentType.image => ImageCard(
+              item: item as ImageItem,
+              viewState: viewState,
+              onResize: _handleResize,
+              onSpanChange: _handleSpanChange,
+              onZoom: _handleZoom,
+              onPan: _handlePan,
+              onRetry: _handleRetry,
+              onOpenPreview: _showPreviewDialog,
+              onCopyImage: _handleCopy,
+              onEditMemo: _handleEditMemo,
+              onFavoriteToggle: _handleFavorite,
+              columnWidth: columnWidth,
+              columnCount: columnCount,
+              columnGap: _gridGap,
+              isDeletionMode: isDeletionMode,
+              isSelected: isSelected,
+              isHighlighted: _highlightedItemId == item.id,
+              onDelete: _handleDeleteImage,
+              onSelectionToggle: _handleSelectionToggle,
+              onReorderPointerDown: _handleReorderPointerDown,
+              onStartReorder: _startReorder,
+              onReorderUpdate: _updateReorder,
+              onReorderEnd: _endReorder,
+              onReorderCancel: _handleReorderCancel,
+              backgroundColor: backgroundColor,
+              onHoverChanged: (isHovered) {
+                _onCardHoverChanged(isHovered ? item.id : null);
+              },
+              debugIndex: debugShowCardIndex ? index : null,
+            ),
+        },
       ),
     );
   }
@@ -972,6 +1002,10 @@ class GridViewModuleState extends State<GridViewModule> {
   }
 
   void _handleDeleteText(TextContentItem item) {
+    _showDeleteConfirmationAndExecute([item.id], itemName: p.basename(item.id));
+  }
+
+  void _handleDeletePdf(PdfContentItem item) {
     _showDeleteConfirmationAndExecute([item.id], itemName: p.basename(item.id));
   }
 
@@ -1134,6 +1168,203 @@ class GridViewModuleState extends State<GridViewModule> {
     );
   }
 
+  Future<void> _showPdfPreview(PdfContentItem item) async {
+    if (_pdfPreviewManager == null) {
+      debugPrint('[GridViewModule] PdfPreviewProcessManager is null');
+      _showFallbackPdfPreview(item);
+      return;
+    }
+
+    // 起動中の場合は何もしない
+    if (_pdfPreviewManager!.isLaunching(item.id)) {
+      debugPrint('[GridViewModule] PDF preview already launching for ${item.id}');
+      return;
+    }
+
+    // 既存のウィンドウがあればアクティブ化を試みる
+    if (_pdfPreviewManager!.isRunning(item.id)) {
+      debugPrint(
+          '[GridViewModule] Attempting to activate existing PDF preview window for ${item.id}');
+      final windowTitle = 'clip_pix_pdf_${item.id.hashCode}';
+      debugPrint('[GridViewModule] Window title to find: $windowTitle');
+
+      if (isWindowOpen(windowTitle)) {
+        activateWindow(windowTitle);
+        debugPrint('[GridViewModule] Successfully activated PDF preview window');
+        return;
+      } else {
+        // ウィンドウが見つからない場合はプロセスをクリーンアップ
+        debugPrint(
+            '[GridViewModule] Process manager will clean up dead PDF process for ${item.id}');
+      }
+    }
+
+    // 新しいウィンドウを起動
+    if (await _launchPdfPreviewWindowProcess(item)) {
+      return;
+    }
+    _showFallbackPdfPreview(item);
+  }
+
+  void _showFallbackPdfPreview(PdfContentItem item) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        child: SizedBox(
+          width: 800,
+          height: 600,
+          child: Column(
+            children: [
+              // ヘッダー
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.picture_as_pdf, color: Colors.red.shade400),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        p.basename(item.filePath),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text('${item.pageCount}ページ'),
+                    const SizedBox(width: 16),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                    ),
+                  ],
+                ),
+              ),
+              // PDFビューア
+              Expanded(
+                child: _PdfViewerWidget(filePath: item.filePath),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<bool> _launchPdfPreviewWindowProcess(PdfContentItem item) async {
+    if (_pdfPreviewManager == null) {
+      debugPrint('[GridViewModule] PdfPreviewProcessManager is null');
+      return false;
+    }
+
+    // Check if already launching or running
+    if (_pdfPreviewManager!.isLaunching(item.id) ||
+        _pdfPreviewManager!.isRunning(item.id)) {
+      debugPrint('[GridViewModule] PDF preview already active for ${item.id}');
+      return false;
+    }
+
+    _pdfPreviewManager!.markLaunching(item.id);
+
+    try {
+      final exePath = Platform.resolvedExecutable;
+      debugPrint('[GridViewModule] Launching PDF preview: $exePath');
+
+      // Prepare payload for the preview process
+      final payload = jsonEncode({
+        'item': {
+          'id': item.id,
+          'filePath': item.filePath,
+          'sourceType': item.sourceType.index,
+          'savedAt': item.savedAt?.toIso8601String(),
+          'source': item.source,
+          'memo': item.memo,
+          'favorite': item.favorite,
+          'pageCount': item.pageCount,
+        },
+        'alwaysOnTop': false,
+        'currentPage': 1,
+        'cascadeOffsetX': _cascadeOffset.dx,
+        'cascadeOffsetY': _cascadeOffset.dy,
+      });
+
+      // Update cascade offset for next window
+      _cascadeOffset = Offset(
+        (_cascadeOffset.dx + _cascadeStep) % _cascadeMaxX,
+        (_cascadeOffset.dy + _cascadeStep) % _cascadeMaxY,
+      );
+
+      final args = [
+        '--preview-pdf',
+        payload,
+        '--parent-pid',
+        pid.toString(),
+      ];
+      if (isPortableMode) {
+        args.insert(0, '--portable');
+      }
+
+      final process = await Process.start(exePath, args);
+      debugPrint('[GridViewModule] PDF preview process started (PID: ${process.pid})');
+
+      // Register with process manager
+      await _pdfPreviewManager!.registerProcess(item.id, process);
+
+      // Forward stdout/stderr
+      process.stdout.listen((data) {
+        final lines = String.fromCharCodes(data).trim().split('\n');
+        for (final line in lines) {
+          if (line.isNotEmpty) {
+            debugPrint('[PdfPreview:${item.id.hashCode}] $line');
+          }
+        }
+      });
+      process.stderr.listen((data) {
+        final lines = String.fromCharCodes(data).trim().split('\n');
+        for (final line in lines) {
+          if (line.isNotEmpty) {
+            debugPrint('[PdfPreview:${item.id.hashCode} ERROR] $line');
+          }
+        }
+      });
+
+      debugPrint(
+          '[GridViewModule] PDF process started, waiting for process to stabilize...');
+
+      // プロセス起動後、短い待機時間でプロセス状態を確認
+      await Future<void>.delayed(const Duration(seconds: 1));
+
+      // プロセスがまだ実行中なら成功とみなす（macOS対応）
+      if (_pdfPreviewManager!.isRunning(item.id)) {
+        debugPrint(
+            '[GridViewModule] PDF preview process is running, assuming success');
+        return true;
+      }
+
+      // ウィンドウ出現をポーリング（Windows向けフォールバック、2秒）
+      final windowTitle = 'clip_pix_pdf_${item.id.hashCode}';
+      for (var i = 0; i < 20; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        if (isWindowOpen(windowTitle)) {
+          debugPrint('[GridViewModule] PDF preview window appeared');
+          return true;
+        }
+      }
+
+      debugPrint(
+          '[GridViewModule] PDF preview process not running, launch failed');
+      _pdfPreviewManager!.removeLaunching(item.id);
+      return false;
+    } catch (error, stackTrace) {
+      debugPrint('[GridViewModule] Failed to launch PDF preview: $error');
+      debugPrint('$stackTrace');
+      _pdfPreviewManager!.removeLaunching(item.id);
+      return false;
+    }
+  }
+
   void _handleSaveText(String textId, String text) async {
     try {
       // テキストファイルに書き込み
@@ -1192,7 +1423,7 @@ class GridViewModuleState extends State<GridViewModule> {
   }
 
   void _handleResize(String id, Size newSize, {ResizeCorner? corner}) {
-    print('[GridViewModule] _handleResize: id=${id.split('/').last}, '
+    debugLog('[GridViewModule] _handleResize: id=${id.split('/').last}, '
         'size=$newSize, corner=$corner');
 
     // サイズからスパンを計算して、customSizeとcolumnSpanを一緒に更新
@@ -1235,14 +1466,14 @@ class GridViewModuleState extends State<GridViewModule> {
           // 右ハンドル: 左端が固定 → 開始列を維持
           final maxStart = geometry.columnCount - span;
           if (currentColumn > maxStart) {
-            print('[GridViewModule] _handleResize: WARNING - card at column '
+            debugLog('[GridViewModule] _handleResize: WARNING - card at column '
                 '$currentColumn cannot fit span $span, shifting to column $maxStart');
           }
           preferredColumnStart = currentColumn.clamp(0, maxStart);
           break;
       }
 
-      print('[GridViewModule] _handleResize: currentColumn=$currentColumn, '
+      debugLog('[GridViewModule] _handleResize: currentColumn=$currentColumn, '
           'currentSpan=$currentSpan, newSpan=$span, '
           'preferredColumnStart=$preferredColumnStart');
 
@@ -1275,7 +1506,7 @@ class GridViewModuleState extends State<GridViewModule> {
 
     // カードが高くならない場合は調整不要
     if (targetTop >= currentRect.top - 1) {
-      print('[GridViewModule] _adjustCardOrder: no height increase, skip');
+      debugLog('[GridViewModule] _adjustCardOrder: no height increase, skip');
       return;
     }
 
@@ -1292,12 +1523,12 @@ class GridViewModuleState extends State<GridViewModule> {
     // 現在の順序を取得
     final currentIndex = _entries.indexWhere((e) => e.item.id == id);
     if (currentIndex < 0 || currentIndex == targetIndex) {
-      print('[GridViewModule] _adjustCardOrder: no move needed, '
+      debugLog('[GridViewModule] _adjustCardOrder: no move needed, '
           'current=$currentIndex, target=$targetIndex');
       return;
     }
 
-    print('[GridViewModule] _adjustCardOrder: moving card from index '
+    debugLog('[GridViewModule] _adjustCardOrder: moving card from index '
         '$currentIndex to $targetIndex (targetTop=$targetTop)');
 
     // _entries内で順序を変更
@@ -1320,7 +1551,7 @@ class GridViewModuleState extends State<GridViewModule> {
   }
 
   void _handlePan(String id, Offset offset) {
-    print(
+    debugLog(
         '[GridViewModule] _handlePan: id=${id.split('/').last}, offset=$offset');
     unawaited(_layoutStore.updateCard(id: id, offset: offset));
   }
@@ -1397,7 +1628,6 @@ class GridViewModuleState extends State<GridViewModule> {
 
           final oldFavorite = entry.item.favorite;
           final newFavorite = newItem.favorite;
-          final oldItem = entry.item;
           entry.item = newItem; // Update item properties
 
           if (itemChanged) {
@@ -1807,11 +2037,30 @@ class GridViewModuleState extends State<GridViewModule> {
       // Note: process exit monitoring is handled by ImagePreviewProcessManager
 
       debugPrint(
-          '[GridViewModule] Process started, waiting for window to appear...');
+          '[GridViewModule] Process started, waiting for process to stabilize...');
 
-      // Wait for window to appear (poll for 10 seconds)
+      // プロセス起動後、短い待機時間でプロセス状態を確認
+      await Future<void>.delayed(const Duration(seconds: 1));
+
+      // プロセスがまだ実行中か確認（非同期でexitCodeをチェック）
+      final exitCodeFuture = process.exitCode;
+      final hasExited = await Future.any([
+        exitCodeFuture.then((_) => true),
+        Future.delayed(const Duration(milliseconds: 100), () => false),
+      ]);
+
+      if (!hasExited) {
+        // プロセスがまだ実行中なら成功とみなす（macOS対応）
+        await _imagePreviewManager!
+            .registerProcess(item.id, process, alwaysOnTop: false);
+        debugPrint(
+            '[GridViewModule] Image preview process is running, assuming success');
+        return true;
+      }
+
+      // ウィンドウ出現をポーリング（Windows向けフォールバック、2秒）
       bool windowAppeared = false;
-      for (int i = 0; i < 100; i++) {
+      for (int i = 0; i < 20; i++) {
         await Future.delayed(const Duration(milliseconds: 100));
         if (_isImagePreviewWindowOpen(item.id)) {
           windowAppeared = true;
@@ -1829,8 +2078,7 @@ class GridViewModuleState extends State<GridViewModule> {
         return true;
       } else {
         debugPrint(
-            '[GridViewModule] ERROR: Window did not appear after 10s, killing process');
-        process.kill();
+            '[GridViewModule] ERROR: Process exited and window did not appear');
         _imagePreviewManager!.removeLaunching(item.id);
         return false;
       }
@@ -1923,11 +2171,30 @@ class GridViewModuleState extends State<GridViewModule> {
       // Note: process exit monitoring is handled by TextPreviewProcessManager
 
       debugPrint(
-          '[GridViewModule] Process started, waiting for window to appear...');
+          '[GridViewModule] Process started, waiting for process to stabilize...');
 
-      // Wait for window to appear (poll for 10 seconds)
+      // プロセス起動後、短い待機時間でプロセス状態を確認
+      await Future<void>.delayed(const Duration(seconds: 1));
+
+      // プロセスがまだ実行中か確認（非同期でexitCodeをチェック）
+      final exitCodeFuture = process.exitCode;
+      final hasExited = await Future.any([
+        exitCodeFuture.then((_) => true),
+        Future.delayed(const Duration(milliseconds: 100), () => false),
+      ]);
+
+      if (!hasExited) {
+        // プロセスがまだ実行中なら成功とみなす（macOS対応）
+        await _processManager!
+            .registerProcess(item.id, process, alwaysOnTop: false);
+        debugPrint(
+            '[GridViewModule] Text preview process is running, assuming success');
+        return true;
+      }
+
+      // ウィンドウ出現をポーリング（Windows向けフォールバック、2秒）
       bool windowAppeared = false;
-      for (int i = 0; i < 100; i++) {
+      for (int i = 0; i < 20; i++) {
         await Future.delayed(const Duration(milliseconds: 100));
         if (_isTextPreviewWindowOpen(item.id)) {
           windowAppeared = true;
@@ -1945,8 +2212,7 @@ class GridViewModuleState extends State<GridViewModule> {
         return true;
       } else {
         debugPrint(
-            '[GridViewModule] ERROR: Window did not appear after 10s, killing process');
-        process.kill();
+            '[GridViewModule] ERROR: Process exited and window did not appear');
         _processManager!.removeLaunching(item.id);
         return false;
       }
@@ -2029,11 +2295,8 @@ class GridViewModuleState extends State<GridViewModule> {
         .where((element) => element.value > 1)
         .map((e) => e.key)
         .toList();
-    final layoutStore = _layoutStore;
-    List<String> viewStateIds = const [];
-    if (layoutStore != null) {
-      viewStateIds = layoutStore.viewStates.map((state) => state.id).toList();
-    }
+    final viewStateIds =
+        _layoutStore.viewStates.map((state) => state.id).toList();
     final entryIds = entries.map((e) => e.item.id).toList();
     final entrySet = entryIds.toSet();
     final viewSet = viewStateIds.toSet();
@@ -2177,11 +2440,6 @@ class GridViewModuleState extends State<GridViewModule> {
       return;
     }
     final overlayState = Overlay.of(cardContext);
-    if (overlayState == null) {
-      debugPrint(
-          '[GridViewModule] reorder_start abort reason=no_overlay id=$id');
-      return;
-    }
     final origin = box.localToGlobal(Offset.zero);
     _dragPointerOffset = globalPosition - origin;
     _dragOverlayOffset = origin;
@@ -2493,17 +2751,17 @@ class GridViewModuleState extends State<GridViewModule> {
       }
     }
 
-    if (bestRect != null && bestInsertIndex != null) {
-      return _DropTarget(rect: bestRect!, insertIndex: bestInsertIndex!);
+    if (bestRect case final rect? when bestInsertIndex != null) {
+      return _DropTarget(rect: rect, insertIndex: bestInsertIndex);
     }
 
-    if (firstRect != null && globalPosition.dy < firstRect!.top) {
-      return _DropTarget(rect: firstRect!, insertIndex: 0);
+    if (firstRect case final rect? when globalPosition.dy < rect.top) {
+      return _DropTarget(rect: rect, insertIndex: 0);
     }
 
-    if (lastRect != null) {
+    if (lastRect case final rect?) {
       final insertIndex = (lastIndex ?? (_entries.length - 1)) + 1;
-      return _DropTarget(rect: lastRect!, insertIndex: insertIndex);
+      return _DropTarget(rect: rect, insertIndex: insertIndex);
     }
 
     if (_draggedEntry != null) {
@@ -2850,4 +3108,103 @@ class _DropTarget {
 
   final Rect rect;
   final int insertIndex;
+}
+
+/// PDF表示用ウィジェット（pdfx使用）
+class _PdfViewerWidget extends StatefulWidget {
+  const _PdfViewerWidget({required this.filePath});
+
+  final String filePath;
+
+  @override
+  State<_PdfViewerWidget> createState() => _PdfViewerWidgetState();
+}
+
+class _PdfViewerWidgetState extends State<_PdfViewerWidget> {
+  late final pdfx.PdfController _pdfController;
+  int _currentPage = 1;
+  int _totalPages = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _pdfController = pdfx.PdfController(
+      document: pdfx.PdfDocument.openFile(widget.filePath),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pdfController.dispose();
+    super.dispose();
+  }
+
+  void _onPageChanged(int page) {
+    if (!mounted) return;
+    final total = _pdfController.pagesCount ?? 0;
+    if (page != _currentPage || total != _totalPages) {
+      setState(() {
+        _currentPage = page;
+        _totalPages = total;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Expanded(
+          child: pdfx.PdfView(
+            controller: _pdfController,
+            scrollDirection: Axis.vertical,
+            pageSnapping: false,
+            onPageChanged: _onPageChanged,
+            onDocumentLoaded: (document) {
+              setState(() {
+                _totalPages = document.pagesCount;
+              });
+            },
+          ),
+        ),
+        // ページナビゲーション
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade100,
+            border: Border(top: BorderSide(color: Colors.grey.shade300)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.chevron_left),
+                onPressed: _currentPage > 1 ? _previousPage : null,
+              ),
+              Text('$_currentPage / $_totalPages'),
+              IconButton(
+                icon: const Icon(Icons.chevron_right),
+                onPressed:
+                    _currentPage < _totalPages ? _nextPage : null,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _previousPage() {
+    _pdfController.previousPage(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  void _nextPage() {
+    _pdfController.nextPage(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
 }

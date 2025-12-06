@@ -73,8 +73,8 @@ class MetadataWriter {
     }
 
     // .fileInfo.json にも追加（新仕様）
-    if (_fileInfoManager != null) {
-      await _fileInfoManager!.upsertMetadata(
+    if (_fileInfoManager case final fileInfoManager?) {
+      await fileInfoManager.upsertMetadata(
         imageFilePath: imageFile.path,
         fileName: record.fileName,
         savedAt: record.savedAt,

@@ -29,6 +29,7 @@ dependencies:
   state_notifier: ^0.7.2
   audioplayers: ^6.1.0
   path_provider: ^2.1.0
+  pdfx: ^2.6.0
 
 dev_dependencies:
   flutter_test:

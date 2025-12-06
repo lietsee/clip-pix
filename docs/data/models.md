@@ -1,7 +1,7 @@
 # データモデル
 
 **作成日**: 2025-10-28
-**最終更新**: 2025-11-27
+**最終更新**: 2025-12-06
 **ステータス**: 実装完了
 
 ## モデル一覧
@@ -50,7 +50,21 @@ class TextContentItem extends ContentItem {
 }
 ```
 
-### ContentType (2025-11-27追加)
+### PdfContentItem (2025-12-06追加)
+
+PDFファイルを表すモデル（ContentItemのサブクラス）。
+
+```dart
+class PdfContentItem extends ContentItem {
+  final int pageCount;           // ページ数
+
+  // ContentTypeは常にContentType.pdf
+}
+```
+
+**HiveAdapter**: TypeID 11
+
+### ContentType (2025-11-27追加、2025-12-06更新)
 
 コンテンツの種別。
 
@@ -58,8 +72,11 @@ class TextContentItem extends ContentItem {
 enum ContentType {
   image,  // 画像ファイル（.jpg, .jpeg, .png）
   text,   // テキストファイル（.txt）
+  pdf,    // PDFファイル（.pdf）
 }
 ```
+
+**HiveAdapter**: TypeID 6
 
 ### ImageSourceType
 
@@ -351,6 +368,7 @@ class GridCardPreferenceAdapter extends TypeAdapter<GridCardPreference> {
 
 | 日付 | 内容 |
 |------|------|
+| 2025-12-06 | PdfContentItem追加、ContentTypeにpdf追加 |
 | 2025-11-27 | ContentItem基底クラス、TextContentItem、ContentType、DeletionModeState追加 |
 | 2025-11-25 | GridCardPreferenceにpanOffset追加 |
 | 2025-10-28 | 初版作成 |

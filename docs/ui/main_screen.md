@@ -1,17 +1,17 @@
 # MainScreen 詳細設計
 
-**最終更新**: 2025-12-03
+**最終更新**: 2025-12-06
 
 ## 1. 概要
 アプリのルート画面。フォルダ選択・タブ表示・GridView呼び出しを管理。
 
 ## 2. 責務
-- 選択フォルダを保持し、ルート直下のコンテンツ（画像・テキスト）とサブフォルダを切り替え表示。
+- 選択フォルダを保持し、ルート直下のコンテンツ（画像・テキスト・PDF）とサブフォルダを切り替え表示。
 - 表示フェーズ（ルートギャラリー／サブフォルダ）変更時に該当フォルダのコンテンツをロード。
 - FileWatcher, ClipboardMonitor の起動管理。
 - AppBar・メニューバー操作からフォルダ選択モーダルを呼び出し、結果を状態に反映。
 - 選択履歴を Provider 状態と Hive に同期し、未選択時はプレースホルダを表示。
-- プレビューウィンドウプロセスの管理（ImagePreviewProcessManager, TextPreviewProcessManager）。
+- プレビューウィンドウプロセスの管理（ImagePreviewProcessManager, TextPreviewProcessManager, PdfPreviewProcessManager）。
 - 一括削除モードの管理（DeletionModeNotifier）。
 
 ## 3. 入出力
@@ -30,6 +30,7 @@
 - Provider(StateNotifier)
 - ImagePreviewProcessManager（画像プレビューウィンドウ管理）
 - TextPreviewProcessManager（テキストプレビューウィンドウ管理）
+- PdfPreviewProcessManager（PDFプレビューウィンドウ管理）
 - DeletionModeNotifier（一括削除モード管理）
 
 ## 5. エラーハンドリング
@@ -37,6 +38,7 @@
 - ClipboardMonitor異常：リトライ3回後にログ出力。
 - フォルダ選択キャンセル時：状態変更なし、UIは直前のフォルダを維持。
 - ログ書き込み失敗時：`./logs/app.log` 再生成を試行し、不可なら SnackBar で通知。
+- **PathAccessException対策** (2025-12-06): `_buildTabs()` でのサブディレクトリ列挙時、macOSサンドボックス環境でセキュリティブックマーク解決前にアクセスした場合、空リストを返してUIをブロックしない。
 
 ## 6. 状態永続化
 - 最後に選択したフォルダ・サブフォルダ、表示モード、および直近3件のフォルダ履歴を Hive に保存。
@@ -121,19 +123,20 @@ class DeletionModeState {
 4. 確認後、選択されたファイルを削除
 5. ImageLibraryNotifierに削除通知 → グリッド更新
 
-## 13. プレビューウィンドウ管理 (2025-11-27追加)
+## 13. プレビューウィンドウ管理 (2025-11-27追加、2025-12-06更新)
 
 ### 13.1 概要
-画像・テキストプレビューは別プロセスとして起動し、常に最前面表示が可能。
+画像・テキスト・PDFプレビューは別プロセスとして起動し、常に最前面表示が可能。
 
 ### 13.2 コンポーネント
 | マネージャー | 対象 | プレビューウィンドウ |
 |-------------|------|---------------------|
 | `ImagePreviewProcessManager` | `ImageItem` | `ImagePreviewWindow` |
 | `TextPreviewProcessManager` | `TextContentItem` | `TextPreviewWindow` |
+| `PdfPreviewProcessManager` | `PdfContentItem` | `PdfPreviewWindow` |
 
 ### 13.3 起動方法
-- `ImageCard` / `TextCard` のダブルクリック
+- `ImageCard` / `TextCard` / `PdfCard` のダブルクリック
 - Enter キー
 - コンテキストメニュー「プレビューを開く」
 

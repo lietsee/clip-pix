@@ -112,11 +112,6 @@ class PinterestSliverGrid extends SliverMultiBoxAdaptorWidget {
   }
 }
 
-class _ColumnState {
-  _ColumnState(this.height);
-  double height;
-}
-
 /// カードのレイアウト情報を報告するコールバック
 typedef OnLayoutComplete = void Function(Map<int, Rect> childRects);
 
@@ -197,7 +192,6 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
     final columnHeights = List<double>.filled(columnCount, 0);
     final double childCrossAxisStride = columnWidth + gap;
 
-    bool reachedEnd = false;
     int leadingGarbage = 0;
     int trailingGarbage = 0;
 
@@ -287,7 +281,6 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
       // 全カラムの最小高さがtargetを超えたら、全カラムがビューポートをカバー済み
       final double minColumnHeight = columnHeights.reduce(math.min);
       if (minColumnHeight > targetEndScrollOffset) {
-        reachedEnd = true;
         break;
       }
 
@@ -421,32 +414,6 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
     );
     geometry = computedGeometry;
 
-    final viewportStart = constraints.scrollOffset;
-    // viewportEnd は381行目で定義済み
-
-    if (leadingTrackedChild != null && trailingTrackedChild != null) {
-      final leadingData =
-          leadingTrackedChild.parentData! as PinterestGridParentData;
-      final trailingData =
-          trailingTrackedChild.parentData! as PinterestGridParentData;
-      // debugPrint(
-      //   '[ScrollDebug] sliver layout done: '
-      //   'geometry.scrollExtent=${computedGeometry.scrollExtent.toStringAsFixed(1)} '
-      //   'geometry.paintExtent=${computedGeometry.paintExtent.toStringAsFixed(1)} '
-      //   'leadingOffset=${leadingData.layoutOffset?.toStringAsFixed(1)} '
-      //   'trailingOffset=${trailingData.layoutOffset?.toStringAsFixed(1)} '
-      //   'lastPaintExtent=${trailingData.paintExtent.toStringAsFixed(1)} '
-      //   'underflow=${computedGeometry.scrollExtent <= constraints.scrollOffset}\n'
-      //   'visibleChildren=${_describeChildrenInViewport(viewportStart, viewportEnd)}',
-      // );
-    } else {
-      // debugPrint(
-      //   '[ScrollDebug] sliver layout done: no children '
-      //   'geometry.scrollExtent=${computedGeometry.scrollExtent.toStringAsFixed(1)} '
-      //   'geometry.paintExtent=${computedGeometry.paintExtent.toStringAsFixed(1)}',
-      // );
-    }
-
     childManager.didFinishLayout();
 
     // レイアウト完了後、ミニマップ用に位置データを報告
@@ -488,43 +455,5 @@ class RenderSliverPinterestGrid extends RenderSliverMultiBoxAdaptor {
       return 0;
     }
     return (parentData.layoutOffset ?? 0) - constraints.scrollOffset;
-  }
-
-  String _describeChildren() {
-    final buffer = StringBuffer();
-    RenderBox? child = firstChild;
-    while (child != null) {
-      final data = child.parentData! as PinterestGridParentData;
-      buffer.write(
-        '[offset=${data.layoutOffset?.toStringAsFixed(1)}, '
-        'span=${data.columnSpan}, paint=${data.paintExtent.toStringAsFixed(1)}]',
-      );
-      child = childAfter(child);
-      if (child != null) {
-        buffer.write(', ');
-      }
-    }
-    return buffer.isEmpty ? 'none' : buffer.toString();
-  }
-
-  String _describeChildrenInViewport(double viewportStart, double viewportEnd) {
-    final buffer = StringBuffer();
-    RenderBox? child = firstChild;
-    while (child != null) {
-      final data = child.parentData! as PinterestGridParentData;
-      final double start = data.layoutOffset ?? 0;
-      final double end = start + (data.paintExtent ?? 0);
-      final bool overlaps = end > viewportStart && start < viewportEnd;
-      buffer.write(
-        '[offset=${start.toStringAsFixed(1)}, '
-        'end=${end.toStringAsFixed(1)}, '
-        'visible=$overlaps]',
-      );
-      child = childAfter(child);
-      if (child != null) {
-        buffer.write(', ');
-      }
-    }
-    return buffer.isEmpty ? 'none' : buffer.toString();
   }
 }

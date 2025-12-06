@@ -5,6 +5,7 @@ import 'package:flutter_state_notifier/flutter_state_notifier.dart';
 
 import '../../data/open_previews_repository.dart';
 import '../image_preview_process_manager.dart';
+import '../pdf_preview_process_manager.dart';
 import '../text_preview_process_manager.dart';
 import 'deletion_mode_notifier.dart';
 import 'deletion_mode_state.dart';
@@ -38,6 +39,9 @@ class AppStateProvider {
       ),
       ChangeNotifierProvider<ImagePreviewProcessManager>(
         create: (_) => ImagePreviewProcessManager(repository: openPreviewsRepo),
+      ),
+      ChangeNotifierProvider<PdfPreviewProcessManager>(
+        create: (_) => PdfPreviewProcessManager(repository: openPreviewsRepo),
       ),
     ];
   }

@@ -1,13 +1,13 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
 import 'package:state_notifier/state_notifier.dart';
 
 import '../bookmark/bookmark_service.dart';
+import '../debug_log.dart';
 import 'folder_view_mode.dart';
 import 'selected_folder_state.dart';
 
@@ -105,29 +105,29 @@ class SelectedFolderNotifier extends StateNotifier<SelectedFolderState> {
   }
 
   Future<void> switchToRoot() async {
-    print('[SelectedFolderNotifier] switchToRoot START');
+    debugLog('[SelectedFolderNotifier] switchToRoot START');
     final current = state.current;
-    print('[SelectedFolderNotifier] switchToRoot: current=$current');
+    debugLog('[SelectedFolderNotifier] switchToRoot: current=$current');
     state = state.copyWith(
       viewMode: FolderViewMode.root,
       currentTab: null,
       viewDirectory: current,
     );
-    print('[SelectedFolderNotifier] switchToRoot: state updated');
+    debugLog('[SelectedFolderNotifier] switchToRoot: state updated');
     await persist();
-    print('[SelectedFolderNotifier] switchToRoot END');
+    debugLog('[SelectedFolderNotifier] switchToRoot END');
   }
 
   Future<void> switchToSubfolder(String name) async {
-    print('[SelectedFolderNotifier] switchToSubfolder START: $name');
+    debugLog('[SelectedFolderNotifier] switchToSubfolder START: $name');
     final base = state.current;
     if (base == null) {
-      print('[SelectedFolderNotifier] switchToSubfolder: base is null, returning');
+      debugLog('[SelectedFolderNotifier] switchToSubfolder: base is null, returning');
       return;
     }
     final subfolder = Directory(p.join(base.path, name));
 
-    print('[SelectedFolderNotifier] switchToSubfolder: '
+    debugLog('[SelectedFolderNotifier] switchToSubfolder: '
         'name=$name, '
         'subfolder=${subfolder.path}, '
         'oldViewMode=${state.viewMode}, '
@@ -138,10 +138,10 @@ class SelectedFolderNotifier extends StateNotifier<SelectedFolderState> {
       currentTab: name,
       viewDirectory: subfolder,
     );
-    print('[SelectedFolderNotifier] switchToSubfolder: state updated');
+    debugLog('[SelectedFolderNotifier] switchToSubfolder: state updated');
     await persist();
 
-    print('[SelectedFolderNotifier] switchToSubfolder END: $name');
+    debugLog('[SelectedFolderNotifier] switchToSubfolder END: $name');
   }
 
   void updateRootScroll(double offset) {

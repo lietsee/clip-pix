@@ -327,6 +327,8 @@ class FileInfoManager {
     switch (ext) {
       case '.txt':
         return ContentType.text;
+      case '.pdf':
+        return ContentType.pdf;
       case '.jpg':
       case '.jpeg':
       case '.png':

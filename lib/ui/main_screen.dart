@@ -8,6 +8,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../data/file_info_manager.dart';
 import '../data/grid_card_preferences_repository.dart';
+import '../system/debug_log.dart';
 import '../data/grid_layout_settings_repository.dart';
 import '../data/models/grid_layout_settings.dart';
 import '../data/models/image_entry.dart';
@@ -501,8 +502,6 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
       return const <Widget>[];
     }
 
-    final imageLibrary = context.read<ImageLibraryNotifier>();
-
     final tabs = <Widget>[
       _FolderTab(
         label: 'ルート',
@@ -510,25 +509,32 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
         foregroundColor: foregroundColor,
         backgroundColor: backgroundColor,
         onTap: () async {
-          print('[MainScreen] Root tab clicked START');
+          debugLog('[MainScreen] Root tab clicked START');
           try {
             await context.read<SelectedFolderNotifier>().switchToRoot();
-            print('[MainScreen] Root tab clicked END - success');
+            debugLog('[MainScreen] Root tab clicked END - success');
           } catch (e, stack) {
-            print('[MainScreen] Root tab clicked ERROR: $e');
-            print('[MainScreen] Stack: $stack');
+            debugLog('[MainScreen] Root tab clicked ERROR: $e');
+            debugLog('[MainScreen] Stack: $stack');
           }
         },
       ),
     ];
 
-    final subdirs = directory
-        .listSync(followLinks: false)
-        .whereType<Directory>()
-        .where((dir) =>
-            !p.basename(dir.path).startsWith('.')) // Skip hidden folders
-        .toList()
-      ..sort((a, b) => a.path.compareTo(b.path));
+    List<Directory> subdirs;
+    try {
+      subdirs = directory
+          .listSync(followLinks: false)
+          .whereType<Directory>()
+          .where((dir) =>
+              !p.basename(dir.path).startsWith('.')) // Skip hidden folders
+          .toList()
+        ..sort((a, b) => a.path.compareTo(b.path));
+    } catch (e) {
+      // macOSサンドボックスでブックマーク解決前にアクセスした場合
+      debugLog('[MainScreen] _buildTabs: listSync failed, returning empty subdirs: $e');
+      subdirs = [];
+    }
 
     for (final dir in subdirs) {
       final name = p.basename(dir.path);
@@ -540,15 +546,15 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           foregroundColor: foregroundColor,
           backgroundColor: backgroundColor,
           onTap: () async {
-            print('[MainScreen] Tab clicked START: $name');
+            debugLog('[MainScreen] Tab clicked START: $name');
             try {
               await context
                   .read<SelectedFolderNotifier>()
                   .switchToSubfolder(name);
-              print('[MainScreen] Tab clicked END - success: $name');
+              debugLog('[MainScreen] Tab clicked END - success: $name');
             } catch (e, stack) {
-              print('[MainScreen] Tab clicked ERROR: $name - $e');
-              print('[MainScreen] Stack: $stack');
+              debugLog('[MainScreen] Tab clicked ERROR: $name - $e');
+              debugLog('[MainScreen] Stack: $stack');
             }
           },
         ),
@@ -935,10 +941,10 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   }
 
   void _showMinimap(BuildContext context, SelectedFolderState folderState) {
-    print('[MainScreen] _showMinimap called: viewMode=${folderState.viewMode}');
+    debugLog('[MainScreen] _showMinimap called: viewMode=${folderState.viewMode}');
 
     if (_minimapService?.isVisible == true) {
-      print('[MainScreen] _showMinimap: already visible, returning');
+      debugLog('[MainScreen] _showMinimap: already visible, returning');
       return; // Already showing and mounted
     }
 
@@ -953,7 +959,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
         ? _rootScrollController
         : _gridSubfolderScrollController;
 
-    print(
+    debugLog(
         '[MainScreen] _showMinimap: controller hasClients=${scrollController.hasClients}, snapshotEntries=${layoutStore.latestSnapshot?.entries.length ?? 0}');
 
     _minimapService = MinimapOverlayService();

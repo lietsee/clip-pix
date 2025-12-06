@@ -23,8 +23,7 @@ class ImagePreviewProcessManager extends ChangeNotifier {
 
   /// Get open previews from repository for restoration
   List<dynamic> getOpenPreviews() {
-    if (_repository == null) return [];
-    return _repository!.getAll();
+    return _repository?.getAll() ?? [];
   }
 
   /// Remove old preview entries from repository

@@ -1,6 +1,6 @@
 # ClipPix ドキュメント一覧
 
-**最終更新**: 2025-11-30
+**最終更新**: 2025-12-06
 
 ClipPixプロジェクトの全ドキュメントとその概要です。
 
@@ -19,7 +19,7 @@ ClipPixプロジェクトの全ドキュメントとその概要です。
 
 | ファイル | 概要 |
 |---------|------|
-| [models.md](./data/models.md) | データモデル定義（ContentItem, ImageItem, TextContentItem, GridCardPreference, GridLayoutSettings等） |
+| [models.md](./data/models.md) | データモデル定義（ContentItem, ImageItem, TextContentItem, PdfContentItem, GridCardPreference, GridLayoutSettings等） |
 | [json_schema.md](./data/json_schema.md) | `.fileInfo.json` 統合メタデータファイルのJSONスキーマ仕様 |
 | [repositories.md](./data/repositories.md) | Hiveベースのリポジトリクラス群（GridLayoutSettingsRepository, GridCardPreferencesRepository, GridOrderRepository, ImageRepository, OpenPreviewsRepository等） |
 
@@ -75,8 +75,10 @@ ClipPixプロジェクトの全ドキュメントとその概要です。
 | [grid_view.md](./ui/grid_view.md) | Pinterestスタイルグリッド表示、カードリサイズ、ズーム、ドラッグ&ドロップ、Entry Reconciliation |
 | [image_card.md](./ui/image_card.md) | 画像カードコンポーネント、リサイズ・ズーム・パン操作、コピー・プレビュー、リオーダー |
 | [text_card.md](./ui/text_card.md) | テキストカードコンポーネント、ホバーボタン編集、インライン編集、お気に入り |
-| [image_preview_window.md](./ui/image_preview_window.md) | 画像プレビューウィンドウ、最前面表示、プロセス管理、TextPreviewWindowとの関係 |
+| [pdf_card.md](./ui/pdf_card.md) | PDFカードコンポーネント、サムネイル表示、ページ数バッジ、プレビュー |
+| [image_preview_window.md](./ui/image_preview_window.md) | 画像プレビューウィンドウ、最前面表示、プロセス管理、TextPreviewWindow/PdfPreviewWindowとの関係 |
 | [grid_settings_dialog.md](./ui/grid_settings_dialog.md) | グリッド設定ダイアログ、列数設定、背景色、一括サイズ調整、Undo/Redo |
+| [onboarding.md](./ui/onboarding.md) | オンボーディング（初回起動チュートリアル）、スライド形式、再表示機能 |
 
 ---
 
@@ -138,8 +140,10 @@ docs/
 │   ├── grid_view.md
 │   ├── image_card.md
 │   ├── text_card.md
+│   ├── pdf_card.md
 │   ├── image_preview_window.md
-│   └── grid_settings_dialog.md
+│   ├── grid_settings_dialog.md
+│   └── onboarding.md
 │
 ├── architecture/                         ← アーキテクチャ
 │   ├── data_flow.md
@@ -166,13 +170,14 @@ docs/
 | 画像保存 | image_saver.md, file_watcher.md |
 | テキスト保存 | text_saver.md, file_watcher.md |
 | URL画像ダウンロード | url_download_service.md, clipboard_monitor.md |
-| グリッド表示 | grid_view.md, image_card.md, grid_rendering_pipeline.md |
+| グリッド表示 | grid_view.md, image_card.md, text_card.md, pdf_card.md, grid_rendering_pipeline.md |
 | ミニマップ | main_screen.md (セクション14), grid_minimap_overlay.dart |
 | グリッドレイアウト計算 | grid_layout_layout_engine.md, grid_layout_surface.md |
 | 設定管理 | grid_settings_dialog.md, state_management.md, repositories.md |
 | プレビューウィンドウ | image_preview_window.md, main_screen.md |
 | 一括削除 | main_screen.md, state_management.md |
 | ウィンドウ位置保存 | window_bounds_service.md |
+| オンボーディング | onboarding.md, grid_settings_dialog.md |
 
 ### 実装ファイルとドキュメントの対応
 
@@ -190,8 +195,11 @@ docs/
 | `lib/ui/grid_view_module.dart` | grid_view.md |
 | `lib/ui/image_card.dart` | image_card.md |
 | `lib/ui/widgets/text_card.dart` | text_card.md |
+| `lib/ui/widgets/pdf_card.dart` | pdf_card.md |
 | `lib/ui/image_preview_window.dart` | image_preview_window.md |
 | `lib/ui/widgets/grid_layout_surface.dart` | grid_layout_surface.md |
 | `lib/ui/widgets/grid_settings_dialog.dart` | grid_settings_dialog.md |
 | `lib/ui/widgets/grid_minimap_overlay.dart` | main_screen.md (セクション14) |
+| `lib/ui/onboarding/onboarding_screen.dart` | onboarding.md |
+| `lib/data/onboarding_repository.dart` | onboarding.md |
 | `lib/data/grid_card_preferences_repository.dart` | repositories.md |

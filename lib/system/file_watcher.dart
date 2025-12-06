@@ -43,6 +43,7 @@ class FileWatcherService {
     '.jpeg',
     '.png',
     '.txt',
+    '.pdf',
   };
 
   Future<void> start(Directory directory) async {

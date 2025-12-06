@@ -5,15 +5,15 @@ import 'package:logging/logging.dart';
 
 import '../data/open_previews_repository.dart';
 
-/// Manages text preview window processes independently of widget tree
+/// Manages PDF preview window processes independently of widget tree
 ///
 /// This ensures preview processes are properly killed when the app exits,
 /// even if widget dispose() methods are not called during abrupt shutdown.
-class TextPreviewProcessManager extends ChangeNotifier {
-  TextPreviewProcessManager({OpenPreviewsRepository? repository})
+class PdfPreviewProcessManager extends ChangeNotifier {
+  PdfPreviewProcessManager({OpenPreviewsRepository? repository})
       : _repository = repository;
 
-  final Logger _logger = Logger('TextPreviewProcessManager');
+  final Logger _logger = Logger('PdfPreviewProcessManager');
   final Map<String, Process> _processes = {};
   final Set<String> _launching = {};
   final OpenPreviewsRepository? _repository;
@@ -45,7 +45,7 @@ class TextPreviewProcessManager extends ChangeNotifier {
   /// Mark a process as launching (prevents duplicate launches)
   void markLaunching(String itemId) {
     _launching.add(itemId);
-    debugPrint('[TextPreviewProcessManager] Marked $itemId as launching');
+    debugPrint('[PdfPreviewProcessManager] Marked $itemId as launching');
   }
 
   /// Register a running process
@@ -58,15 +58,15 @@ class TextPreviewProcessManager extends ChangeNotifier {
     await _repository?.add(itemId, alwaysOnTop: alwaysOnTop);
 
     debugPrint(
-        '[TextPreviewProcessManager] Registered process for $itemId (PID: ${process.pid}, alwaysOnTop: $alwaysOnTop)');
+        '[PdfPreviewProcessManager] Registered process for $itemId (PID: ${process.pid}, alwaysOnTop: $alwaysOnTop)');
 
     // Monitor process exit
     process.exitCode.then((exitCode) {
       debugPrint(
-          '[TextPreviewProcessManager] Process $itemId exited with code $exitCode');
+          '[PdfPreviewProcessManager] Process $itemId exited with code $exitCode');
       if (exitCode != 0) {
         _logger.warning(
-            'Text preview process $itemId crashed (exit code $exitCode)');
+            'PDF preview process $itemId crashed (exit code $exitCode)');
       }
       _handleProcessExit(itemId);
     });
@@ -76,7 +76,7 @@ class TextPreviewProcessManager extends ChangeNotifier {
   void removeLaunching(String itemId) {
     _launching.remove(itemId);
     debugPrint(
-        '[TextPreviewProcessManager] Removed launching flag for $itemId');
+        '[PdfPreviewProcessManager] Removed launching flag for $itemId');
   }
 
   /// Handle process exit (cleanup tracking)
@@ -84,7 +84,7 @@ class TextPreviewProcessManager extends ChangeNotifier {
     _processes.remove(itemId);
     _repository?.remove(itemId);
     debugPrint(
-        '[TextPreviewProcessManager] Cleaned up tracking for $itemId after exit');
+        '[PdfPreviewProcessManager] Cleaned up tracking for $itemId after exit');
     notifyListeners();
   }
 
@@ -92,17 +92,17 @@ class TextPreviewProcessManager extends ChangeNotifier {
   bool killProcess(String itemId) {
     final process = _processes[itemId];
     if (process == null) {
-      debugPrint('[TextPreviewProcessManager] No process found for $itemId');
+      debugPrint('[PdfPreviewProcessManager] No process found for $itemId');
       return false;
     }
 
-    debugPrint('[TextPreviewProcessManager] Killing process $itemId');
+    debugPrint('[PdfPreviewProcessManager] Killing process $itemId');
     final killed = process.kill();
     if (killed) {
       _processes.remove(itemId);
       _repository?.remove(itemId);
       debugPrint(
-          '[TextPreviewProcessManager] Removed $itemId from open previews repository');
+          '[PdfPreviewProcessManager] Removed $itemId from open previews repository');
     }
     notifyListeners();
     return killed;
@@ -112,13 +112,13 @@ class TextPreviewProcessManager extends ChangeNotifier {
   Future<void> killAll(
       {Duration gracePeriod = const Duration(milliseconds: 500)}) async {
     debugPrint(
-        '[TextPreviewProcessManager] Killing all ${_processes.length} preview processes');
+        '[PdfPreviewProcessManager] Killing all ${_processes.length} preview processes');
 
     // Send kill signal and wait for exit
     final futures = <Future<void>>[];
     for (final entry in _processes.entries) {
       debugPrint(
-          '[TextPreviewProcessManager] Killing process ${entry.key} (PID: ${entry.value.pid})');
+          '[PdfPreviewProcessManager] Killing process ${entry.key} (PID: ${entry.value.pid})');
       entry.value.kill();
 
       // Wait for process exit with timeout
@@ -126,9 +126,9 @@ class TextPreviewProcessManager extends ChangeNotifier {
         entry.value.exitCode
             .timeout(gracePeriod)
             .then((code) => debugPrint(
-                '[TextPreviewProcessManager] Process ${entry.key} exited with code $code'))
+                '[PdfPreviewProcessManager] Process ${entry.key} exited with code $code'))
             .catchError((_) => debugPrint(
-                '[TextPreviewProcessManager] Process ${entry.key} exit timed out')),
+                '[PdfPreviewProcessManager] Process ${entry.key} exit timed out')),
       );
     }
 
@@ -139,7 +139,7 @@ class TextPreviewProcessManager extends ChangeNotifier {
     _launching.clear();
     // DON'T clear repository - preserve for next session restoration
     debugPrint(
-        '[TextPreviewProcessManager] All processes killed (repository preserved for restoration)');
+        '[PdfPreviewProcessManager] All processes killed (repository preserved for restoration)');
     notifyListeners();
   }
 

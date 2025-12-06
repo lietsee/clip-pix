@@ -1,6 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
+
+import '../debug_log.dart';
 
 /// Tracks batched mutations that require the grid to be hidden/offstage.
 class GridLayoutMutationController extends ChangeNotifier {
@@ -30,8 +31,7 @@ class GridLayoutMutationController extends ChangeNotifier {
   /// 閾値を低く設定し、ディレクトリ切り替え時の不整合を早期にリセットする。
   void resetIfInconsistent() {
     if (_depth > 3 || _hideDepth > 2) {
-      // NOTE: debugPrintは呼ばれないことがあるのでprintを使用
-      print(
+      debugLog(
         '[GridLayoutMutationController] INCONSISTENT STATE DETECTED: '
         'depth=$_depth hideDepth=$_hideDepth beginCount=$debugBeginCount endCount=$debugEndCount; forcing reset',
       );
@@ -48,8 +48,7 @@ class GridLayoutMutationController extends ChangeNotifier {
   /// 不整合状態を即座にクリアして操作不能を防ぐ。
   void forceReset() {
     if (_depth > 0 || _hideDepth > 0) {
-      // NOTE: debugPrintは呼ばれないことがあるのでprintを使用
-      print(
+      debugLog(
         '[GridLayoutMutationController] forceReset: '
         'depth=$_depth hideDepth=$_hideDepth',
       );
@@ -83,8 +82,7 @@ class GridLayoutMutationController extends ChangeNotifier {
       _activeFrameNumber = frameStamp;
       _concurrentFrameBegins = 1;
     }
-    // NOTE: debugPrintは呼ばれないことがあるのでprintを使用
-    print(
+    debugLog(
       '[GridLayoutMutationController] begin depth=$_depth frameTime=$_activeFrameNumber concurrentBegins=$_concurrentFrameBegins '
       'hide=$hideGrid hideDepth=$_hideDepth '
       'phase=${SchedulerBinding.instance.schedulerPhase} transientCallbacks=${SchedulerBinding.instance.transientCallbackCount} '
@@ -107,8 +105,7 @@ class GridLayoutMutationController extends ChangeNotifier {
       hideFlag = _hideStack.removeLast();
     }
     if (hideGrid != null && hideFlag != hideGrid) {
-      // NOTE: debugPrintは呼ばれないことがあるのでprintを使用
-      print(
+      debugLog(
         '[GridLayoutMutationController] end mismatched hide flag detected provided=$hideGrid stack=$hideFlag',
       );
     }
@@ -122,8 +119,7 @@ class GridLayoutMutationController extends ChangeNotifier {
       frameStamp =
           SchedulerBinding.instance.currentFrameTimeStamp?.inMicroseconds;
     }
-    // NOTE: debugPrintは呼ばれないことがあるのでprintを使用
-    print(
+    debugLog(
       '[GridLayoutMutationController] end depth=$_depth frameTime=$frameStamp '
       'hide=$hideFlag hideDepth=$_hideDepth '
       'phase=${SchedulerBinding.instance.schedulerPhase} transientCallbacks=${SchedulerBinding.instance.transientCallbackCount} '

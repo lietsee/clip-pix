@@ -4,12 +4,14 @@ import 'dart:io';
 
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
+import 'package:pdfx/pdfx.dart';
 
 import 'file_info_manager.dart';
 import 'models/content_item.dart';
 import 'models/content_type.dart';
 import 'models/image_item.dart';
 import 'models/image_source_type.dart';
+import 'models/pdf_content_item.dart';
 import 'models/text_content_item.dart';
 
 class ImageRepository {
@@ -22,7 +24,7 @@ class ImageRepository {
   final Logger _logger;
   final FileInfoManager? _fileInfoManager;
 
-  static const _supportedExtensions = <String>{'.jpg', '.jpeg', '.png', '.txt'};
+  static const _supportedExtensions = <String>{'.jpg', '.jpeg', '.png', '.txt', '.pdf'};
 
   Future<List<ContentItem>> loadForDirectory(Directory directory) async {
     try {
@@ -36,10 +38,10 @@ class ImageRepository {
           .toList();
 
       // ファイルシステムと.fileInfo.jsonの整合性を取る（非ブロッキング）
-      if (_fileInfoManager != null) {
+      if (_fileInfoManager case final fileInfoManager?) {
         // バックグラウンドで同期実行（UIをブロックしない）
         unawaited(
-          _fileInfoManager!
+          fileInfoManager
               .syncWithFileSystem(
             directory.path,
             files.map((f) => f.path).toList(),
@@ -106,6 +108,18 @@ class ImageRepository {
           memo: metadata?.memo ?? '',
           favorite: metadata?.favorite ?? 0,
         );
+      } else if (contentType == ContentType.pdf) {
+        final pageCount = await _getPdfPageCount(file.path);
+        return PdfContentItem(
+          id: file.path,
+          filePath: file.path,
+          sourceType: metadata?.sourceType ?? ImageSourceType.unknown,
+          savedAt: metadata?.savedAt ?? stat.modified.toUtc(),
+          source: metadata?.source,
+          memo: metadata?.memo ?? '',
+          favorite: metadata?.favorite ?? 0,
+          pageCount: pageCount,
+        );
       } else {
         return ImageItem(
           id: file.path,
@@ -134,6 +148,8 @@ class ImageRepository {
     switch (ext) {
       case '.txt':
         return ContentType.text;
+      case '.pdf':
+        return ContentType.pdf;
       case '.jpg':
       case '.jpeg':
       case '.png':
@@ -143,11 +159,24 @@ class ImageRepository {
     }
   }
 
+  /// PDFのページ数を取得
+  Future<int> _getPdfPageCount(String filePath) async {
+    try {
+      final document = await PdfDocument.openFile(filePath);
+      final count = document.pagesCount;
+      await document.close();
+      return count;
+    } catch (e) {
+      _logger.warning('Failed to get PDF page count for $filePath', e);
+      return 1;
+    }
+  }
+
   Future<_Metadata?> _readMetadata(File imageFile) async {
     // 優先1: .fileInfo.json から読み込み（新仕様）
-    if (_fileInfoManager != null) {
+    if (_fileInfoManager case final fileInfoManager?) {
       try {
-        final entry = await _fileInfoManager!.getMetadata(imageFile.path);
+        final entry = await fileInfoManager.getMetadata(imageFile.path);
         if (entry != null) {
           _logger
               .fine('Metadata loaded from .fileInfo.json: ${imageFile.path}');

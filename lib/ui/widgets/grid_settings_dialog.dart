@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../data/grid_layout_settings_repository.dart';
 import '../../data/models/grid_layout_settings.dart';
+import '../../data/onboarding_repository.dart';
 import '../../system/audio_service.dart';
 import '../../system/clipboard_monitor.dart';
 import '../../system/state/grid_resize_controller.dart';
@@ -63,6 +64,10 @@ class _GridSettingsDialogState extends State<GridSettingsDialog> {
             _buildBulkResizeSection(resizeController),
             const SizedBox(height: 16),
             _buildUndoRedoSection(resizeController),
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 16),
+            _buildTutorialSection(),
           ],
         ),
       ),
@@ -334,6 +339,26 @@ class _GridSettingsDialogState extends State<GridSettingsDialog> {
             icon: const Icon(Icons.redo),
             label: const Text('サイズをやり直す'),
           ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTutorialSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('ヘルプ', style: TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: () async {
+            await context.read<OnboardingRepository>().resetOnboarding();
+            if (mounted) {
+              Navigator.of(context).pop();
+            }
+          },
+          icon: const Icon(Icons.help_outline),
+          label: const Text('チュートリアルを再表示'),
         ),
       ],
     );

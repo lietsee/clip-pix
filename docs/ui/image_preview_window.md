@@ -1,6 +1,6 @@
 # ImagePreviewWindow 詳細設計
 
-**最終更新**: 2025-12-03
+**最終更新**: 2025-12-06
 
 ## 1. 概要
 ImageCard から起動される単独ウィンドウ。対象画像を等倍またはウィンドウ幅で表示し、最前面表示の切替と閉じる操作のみを提供する。
@@ -68,7 +68,13 @@ ImageCard から起動される単独ウィンドウ。対象画像を等倍ま�
 - **TextPreviewWindow** (`lib/ui/text_preview_window.dart`)
 - **TextPreviewProcessManager**: テキストプレビュープロセス管理
 
-### 8.3 起動パターン
+### 8.3 PDFプレビュー (2025-12-06追加)
+PDFファイル（`.pdf`）用のプレビューは以下のコンポーネントで提供：
+- **PdfPreviewWindow** (`lib/ui/widgets/pdf_preview_window.dart`)
+- **PdfPreviewProcessManager**: PDFプレビュープロセス管理
+- **詳細**: `docs/ui/pdf_card.md`
+
+### 8.4 起動パターン
 ```
 ImageCard.onOpenPreview
   → ImagePreviewProcessManager.launchPreview(imageItem)
@@ -76,7 +82,7 @@ ImageCard.onOpenPreview
   → ImagePreviewWindow (別プロセス)
 ```
 
-### 8.4 親プロセス監視による自動終了
+### 8.5 親プロセス監視による自動終了
 プレビューウィンドウは別プロセスで起動されるため、メインアプリ終了時に孤児プロセスとなる問題がある。これを解決するため、親プロセスの生存監視を行う。
 
 **仕組み:**

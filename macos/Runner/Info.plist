@@ -26,9 +26,9 @@
 	<string>$(PRODUCT_COPYRIGHT)</string>
 	<key>NSMainNibFile</key>
 	<string>MainMenu</string>
-	<key>NSPrincipalClass</key>
-	<string>NSApplication</string>
 	<key>NSPasteboardUsageDescription</key>
 	<string>ClipPixはコピーした画像やテキストを自動的に保存するためにクリップボードへのアクセスが必要です。</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
 </dict>
 </plist>

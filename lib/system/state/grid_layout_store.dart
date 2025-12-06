@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 
 import '../../data/models/content_item.dart';
+import '../debug_log.dart';
 import '../grid_layout_layout_engine.dart' as layout;
 
 /// 永続層に対してカードレイアウトを読み書きするためのゲートウェイ。
@@ -678,7 +679,7 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     Offset? offset,
     int? preferredColumnStart,
   }) async {
-    print(
+    debugLog(
         '[GridLayoutStore] updateCard ENTRY: id=${id.split('/').last}, offset=$offset');
     final current = _viewStates[id];
     if (current == null) {
@@ -735,12 +736,12 @@ class GridLayoutStore extends ChangeNotifier implements GridLayoutSurfaceStore {
     );
 
     if (_viewStateEquals(current, nextState)) {
-      print('[GridLayoutStore] updateCard_skip: id=${id.split('/').last}, '
+      debugLog('[GridLayoutStore] updateCard_skip: id=${id.split('/').last}, '
           'no change detected');
       return;
     }
 
-    print('[GridLayoutStore] updateCard_save: id=${id.split('/').last}, '
+    debugLog('[GridLayoutStore] updateCard_save: id=${id.split('/').last}, '
         'offsetDx=${nextState.offsetDx.toStringAsFixed(2)}, '
         'offsetDy=${nextState.offsetDy.toStringAsFixed(2)}, '
         'scale=${nextState.scale.toStringAsFixed(2)}');

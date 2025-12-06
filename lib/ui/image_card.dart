@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import '../data/models/image_item.dart';
+import '../system/debug_log.dart';
 import '../system/state/grid_layout_store.dart';
 import 'widgets/memo_edit_dialog.dart';
 import 'widgets/memo_tooltip_overlay.dart';
@@ -131,7 +132,6 @@ class _ImageCardState extends State<ImageCard>
   int _currentSpan = 1;
   Size? _resizeStartSize;
   Offset? _resizeStartGlobalPosition;
-  int _resizeStartSpan = 1;
   Size? _previewSize;
   ResizeCorner? _resizeCorner;
   Offset? _anchorPosition; // ドラッグ中の固定点（グローバル座標）
@@ -248,7 +248,7 @@ class _ImageCardState extends State<ImageCard>
 
   @override
   void dispose() {
-    print('[ImageCard] dispose: ${widget.item.id.split('/').last}, '
+    debugLog('[ImageCard] dispose: ${widget.item.id.split('/').last}, '
         'isResizing=$_isResizing, overlayService=${_overlayService != null}');
     _cancelMemoTooltip();
     _memoTooltipService?.dispose();
@@ -318,7 +318,7 @@ class _ImageCardState extends State<ImageCard>
   @override
   Widget build(BuildContext context) {
     // [DIAGNOSTIC] Log every ImageCard build to track actual rebuilds
-    print('[ImageCard] build_called: '
+    debugLog('[ImageCard] build_called: '
         'item=${widget.item.id.split('/').last}');
 
     return Focus(
@@ -335,7 +335,7 @@ class _ImageCardState extends State<ImageCard>
         child: Listener(
           behavior: HitTestBehavior.translucent,
           onPointerDown: (e) {
-            print('[ImageCard] onPointerDown: ${widget.item.id.split('/').last}');
+            debugLog('[ImageCard] onPointerDown: ${widget.item.id.split('/').last}');
             _handlePointerDown(e);
           },
           onPointerUp: _handlePointerUp,
@@ -343,13 +343,13 @@ class _ImageCardState extends State<ImageCard>
           onPointerSignal: _handlePointerSignal,
           child: MouseRegion(
             onEnter: (_) {
-              print('[ImageCard] onEnter: ${widget.item.id.split('/').last}');
+              debugLog('[ImageCard] onEnter: ${widget.item.id.split('/').last}');
               _setControlsVisible(true);
               _scheduleMemoTooltip();
               widget.onHoverChanged?.call(true);
             },
             onExit: (_) {
-              print('[ImageCard] onExit: ${widget.item.id.split('/').last}');
+              debugLog('[ImageCard] onExit: ${widget.item.id.split('/').last}');
               _setControlsVisible(false);
               _cancelMemoTooltip();
               widget.onHoverChanged?.call(false);
@@ -800,7 +800,6 @@ class _ImageCardState extends State<ImageCard>
       _isResizing = true;
       _resizeStartSize = currentSize;
       _resizeStartGlobalPosition = details.globalPosition;
-      _resizeStartSpan = _currentSpan;
       _resizeCorner = corner;
       _anchorPosition = anchor;
     });
@@ -954,10 +953,10 @@ class _ImageCardState extends State<ImageCard>
   }
 
   void _handlePointerDown(PointerDownEvent event) {
-    print('[ImageCard] _handlePointerDown ENTRY: kind=${event.kind}, buttons=${event.buttons}');
+    debugLog('[ImageCard] _handlePointerDown ENTRY: kind=${event.kind}, buttons=${event.buttons}');
     if (event.kind == PointerDeviceKind.mouse) {
       _isRightButtonPressed = event.buttons & kSecondaryMouseButton != 0;
-      print('[ImageCard] pointerDown: id=${widget.item.id.split('/').last}, '
+      debugLog('[ImageCard] pointerDown: id=${widget.item.id.split('/').last}, '
           'rightButton=$_isRightButtonPressed, buttons=${event.buttons}');
       // 右クリックでパン操作を開始
       if (_isRightButtonPressed) {
@@ -967,7 +966,7 @@ class _ImageCardState extends State<ImageCard>
           _isPanning = true;
           _panStartLocal = local;
           _panStartOffset = _imageOffset;
-          print('[ImageCard] pan_start: id=${widget.item.id.split('/').last}, '
+          debugLog('[ImageCard] pan_start: id=${widget.item.id.split('/').last}, '
               'scale=$_currentScale, startOffset=$_panStartOffset');
         }
       }
@@ -975,9 +974,9 @@ class _ImageCardState extends State<ImageCard>
   }
 
   void _handlePointerUp(PointerUpEvent event) {
-    print('[ImageCard] _handlePointerUp ENTRY: kind=${event.kind}');
+    debugLog('[ImageCard] _handlePointerUp ENTRY: kind=${event.kind}');
     if (event.kind == PointerDeviceKind.mouse) {
-      print('[ImageCard] pointerUp: id=${widget.item.id.split('/').last}, '
+      debugLog('[ImageCard] pointerUp: id=${widget.item.id.split('/').last}, '
           'isPanning=$_isPanning');
       _isRightButtonPressed = false;
       if (_isPanning) {
@@ -985,7 +984,7 @@ class _ImageCardState extends State<ImageCard>
         _panStartLocal = null;
         _panStartOffset = null;
         // パン終了時にオフセットを永続化
-        print('[ImageCard] pan_end: id=${widget.item.id.split('/').last}, '
+        debugLog('[ImageCard] pan_end: id=${widget.item.id.split('/').last}, '
             'offset=$_imageOffset, scale=$_currentScale');
         widget.onPan(widget.item.id, _imageOffset);
       }

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/models/content_item.dart';
+import '../../system/debug_log.dart';
 import '../../system/grid_layout_layout_engine.dart';
 import '../../system/state/grid_layout_store.dart';
 import '../../system/state/image_library_state.dart';
@@ -170,12 +171,12 @@ class _MinimapWidgetState extends State<_MinimapWidget> {
         final libraryState = context.watch<ImageLibraryState>();
 
         if (!scrollController.hasClients) {
-          print('[Minimap] hasClients=false, scheduling retry');
+          debugLog('[Minimap] hasClients=false, scheduling retry');
           // 次フレームで再チェック
           // グリッドがビルドされて ScrollController にクライアントがアタッチされるのを待つ
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
-              print('[Minimap] retry: hasClients=${scrollController.hasClients}');
+              debugLog('[Minimap] retry: hasClients=${scrollController.hasClients}');
               setState(() {}); // 再ビルドをトリガー
             }
           });
@@ -184,7 +185,7 @@ class _MinimapWidgetState extends State<_MinimapWidget> {
 
         final snapshot = layoutStore.latestSnapshot;
         if (snapshot == null || snapshot.entries.isEmpty) {
-          print('[Minimap] snapshot empty: isNull=${snapshot == null}, entriesCount=${snapshot?.entries.length ?? 0}');
+          debugLog('[Minimap] snapshot empty: isNull=${snapshot == null}, entriesCount=${snapshot?.entries.length ?? 0}');
           return const SizedBox.shrink();
         }
         // [DEBUG] ミニマップ用スナップショット順序確認（初回のみ）

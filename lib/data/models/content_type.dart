@@ -7,6 +7,9 @@ enum ContentType {
 
   /// テキストコンテンツ
   text,
+
+  /// PDFコンテンツ
+  pdf,
 }
 
 /// ContentTypeを文字列に変換
@@ -16,6 +19,8 @@ String contentTypeToString(ContentType type) {
       return 'image';
     case ContentType.text:
       return 'text';
+    case ContentType.pdf:
+      return 'pdf';
   }
 }
 
@@ -26,6 +31,8 @@ ContentType contentTypeFromString(String str) {
       return ContentType.image;
     case 'text':
       return ContentType.text;
+    case 'pdf':
+      return ContentType.pdf;
     default:
       return ContentType.image; // デフォルトは画像
   }

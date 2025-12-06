@@ -1,10 +1,10 @@
 # ClipPix 全体仕様書
 
-**最終更新**: 2025-11-27
+**最終更新**: 2025-12-06
 
 ## 1. 概要
 
-Windows 向け Flutter デスクトップアプリ（macOS対応計画中）。
+Windows / macOS 向け Flutter デスクトップアプリ。
 クリップボード経由で画像・テキストを自動保存し、出典情報をJSONに記録する。
 フォルダ内コンテンツは動的グリッドで表示・リサイズ・ズーム・パン可能。
 
@@ -13,7 +13,8 @@ Windows 向け Flutter デスクトップアプリ（macOS対応計画中）。
 - Pinterest スタイルのマソンリーグリッド表示
 - カードのリサイズ、ズーム、パン操作
 - 一括削除モード
-- プレビューウィンドウ（画像/テキスト）
+- プレビューウィンドウ（画像/テキスト/PDF）
+- PDFファイルのサムネイル表示・プレビュー
 - サブフォルダタブ切り替え
 
 ## 2. 構成図
@@ -98,6 +99,7 @@ URL画像ダウンロード:
 |--------|--------|-------------------|------|
 | IMAGE | .jpg, .jpeg, .png | CF_DIBV5, CF_DIB, PNG | 画像ファイル |
 | TEXT | .txt | CF_UNICODETEXT | テキストファイル（非URL） |
+| PDF | .pdf | - | PDFファイル（手動配置） |
 | URL | - | CF_UNICODETEXT | URL経由での画像ダウンロード |
 
 ## 7. 機能実装状況
@@ -148,11 +150,33 @@ URL画像ダウンロード:
 - カードごとのズーム位置（パンオフセット）を永続化
 - **詳細**: `docs/system/state_management.md#section-10.7`
 
-### 7.10 macOS対応 📝 計画中
-- クロスプラットフォーム抽象化レイヤー設計済み
+### 7.10 macOS対応 ✅ 完了 (2025-12-06)
+- クロスプラットフォーム抽象化レイヤー実装済み
+- クリップボード監視（Objective-C経由）
+- セキュリティスコープブックマーク対応
+- 親プロセス監視（`ps -p` ベース）
 - **詳細**: `docs/system/macos_cross_platform_migration.md`
 
+### 7.11 PDFサポート ✅ 完了 (2025-12-06)
+- PDFファイルのグリッド表示
+- サムネイル自動生成・キャッシュ（`pdfx`）
+- 別ウィンドウプレビュー（ページ送り対応）
+- **コンポーネント**:
+  - `PdfCard`: グリッドカード
+  - `PdfPreviewWindow`: プレビューウィンドウ
+  - `PdfThumbnailCacheService`: サムネイルキャッシュ
+  - `PdfPreviewProcessManager`: プロセス管理
+
 ## 8. 最近の重要な修正
+
+### 2025-12-06
+- **Zone mismatch修正**
+  - `WidgetsFlutterBinding.ensureInitialized()` が `runZonedGuarded` の外で呼ばれていた問題を修正
+  - メインアプリおよび各プレビューモード（画像/テキスト/PDF）で `runZonedGuarded` 内に移動
+
+- **PathAccessException修正** (main_screen.dart)
+  - macOSサンドボックス環境でセキュリティブックマーク解決前にディレクトリアクセスしてエラーになる問題を修正
+  - `_buildTabs` の `listSync()` を try-catch でラップ
 
 ### 2025-11-25
 - **パンオフセット永続化バグ修正** (commit f716f23)
@@ -204,6 +228,8 @@ docs/
 │   ├── main_screen.md         # メイン画面
 │   ├── grid_view.md           # グリッドビュー
 │   ├── image_card.md          # 画像カード
+│   ├── text_card.md           # テキストカード
+│   ├── pdf_card.md            # PDFカード
 │   ├── image_preview_window.md # プレビューウィンドウ
 │   └── grid_settings_dialog.md # 設定ダイアログ
 ├── data/
@@ -221,6 +247,7 @@ docs/
 
 | 日付 | 内容 |
 |------|------|
+| 2025-12-06 | macOS対応完了、PDFサポート追加、Zone mismatch/PathAccessException修正 |
 | 2025-11-27 | 全面改訂: TEXT機能、削除モード、プレビュー永続化、macOS計画追加 |
 | 2025-11-02 | ミニマップ更新、グリッド並び替え、テキストコピーバグ修正 |
 | 2025-10-28 | URL画像保存、ウィンドウ位置永続化、グリッド設定UI追加 |

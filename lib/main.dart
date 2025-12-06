@@ -20,6 +20,7 @@ import 'package:window_manager/window_manager.dart';
 import 'data/file_info_manager.dart';
 import 'data/grid_card_preferences_repository.dart';
 import 'data/grid_layout_settings_repository.dart';
+import 'data/onboarding_repository.dart';
 import 'data/grid_order_repository.dart';
 import 'data/image_repository.dart';
 import 'data/metadata_writer.dart';
@@ -31,11 +32,15 @@ import 'data/models/image_item.dart';
 import 'data/models/image_source_type.dart';
 import 'data/models/image_preview_state.dart';
 import 'data/models/open_preview_item.dart';
+import 'data/models/pdf_content_item.dart';
 import 'data/models/text_content_item.dart';
 import 'data/models/text_preview_state.dart';
+import 'data/models/pdf_preview_state.dart';
 import 'data/image_preview_state_repository.dart';
 import 'data/open_previews_repository.dart';
 import 'data/text_preview_state_repository.dart';
+import 'data/pdf_preview_state_repository.dart';
+import 'system/pdf_thumbnail_cache_service.dart';
 import 'system/app_lifecycle_service.dart';
 import 'system/audio_service.dart';
 import 'system/clipboard_copy_service.dart';
@@ -61,7 +66,9 @@ import 'package:path/path.dart' as p;
 import 'package:win32/win32.dart' as win32;
 import 'ui/main_screen.dart';
 import 'ui/image_preview_window.dart';
+import 'ui/onboarding/onboarding_screen.dart';
 import 'ui/widgets/text_preview_window.dart';
+import 'ui/widgets/pdf_preview_window.dart';
 import 'system/window_bounds_service.dart';
 
 /// DEBUG: カード順序番号表示フラグ
@@ -73,11 +80,6 @@ bool debugShowCardIndex = false;
 bool isPortableMode = false;
 
 Future<void> main(List<String> args) async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  // DEBUG: ヒットテスト可視化（タブ切り替え後の操作不能バグ調査用）
-  debugPaintPointersEnabled = false;
-
   // ポータブルモードフラグのパース（最初に行う）
   isPortableMode = args.contains('--portable');
   if (isPortableMode) {
@@ -91,6 +93,7 @@ Future<void> main(List<String> args) async {
     parentPid = int.tryParse(args[parentPidIndex + 1]);
   }
 
+  // プレビューモード分岐（各モードは自身のrunZonedGuarded内でensureInitializedを呼ぶ）
   final previewIndex = args.indexOf('--preview');
   if (previewIndex != -1 && previewIndex + 1 < args.length) {
     await _launchPreviewMode(args[previewIndex + 1], parentPid);
@@ -103,31 +106,46 @@ Future<void> main(List<String> args) async {
     return;
   }
 
+  final previewPdfIndex = args.indexOf('--preview-pdf');
+  if (previewPdfIndex != -1 && previewPdfIndex + 1 < args.length) {
+    await _launchPdfPreviewMode(args[previewPdfIndex + 1], parentPid);
+    return;
+  }
+
   debugPrint('main start; Platform.isWindows=${Platform.isWindows}');
 
-  // Initialize Hive using base directory
-  final baseDir = await _getHiveBaseDir();
-  final hiveDir = Directory(baseDir);
-  await hiveDir.create(recursive: true);
-  await Hive.initFlutter(hiveDir.path);
-  debugPrint('[Hive] Initialized at: ${hiveDir.path}');
-
-  // Configure logging after base directory is determined
-  final logDir = await _getLogDir();
-  _configureLogging(logDir: logDir);
-  _registerHiveAdapters();
-  final boxes = await _openCoreBoxes();
-
+  // メインアプリ起動: runZonedGuarded内でensureInitializedとrunAppを同一ゾーンで呼ぶ
   runZonedGuarded(
-    () => runApp(
-      ClipPixApp(
-        appStateBox: boxes.appStateBox,
-        gridCardPrefBox: boxes.gridCardPrefBox,
-        gridLayoutBox: boxes.gridLayoutBox,
-        gridOrderBox: boxes.gridOrderBox,
-        openPreviewsBox: boxes.openPreviewsBox,
-      ),
-    ),
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
+
+      // DEBUG: ヒットテスト可視化（タブ切り替え後の操作不能バグ調査用）
+      debugPaintPointersEnabled = false;
+
+      // Initialize Hive using base directory
+      final baseDir = await _getHiveBaseDir();
+      final hiveDir = Directory(baseDir);
+      await hiveDir.create(recursive: true);
+      await Hive.initFlutter(hiveDir.path);
+      debugPrint('[Hive] Initialized at: ${hiveDir.path}');
+
+      // Configure logging after base directory is determined
+      final logDir = await _getLogDir();
+      _configureLogging(logDir: logDir);
+      _registerHiveAdapters();
+      final boxes = await _openCoreBoxes();
+
+      runApp(
+        ClipPixApp(
+          appStateBox: boxes.appStateBox,
+          gridCardPrefBox: boxes.gridCardPrefBox,
+          gridLayoutBox: boxes.gridLayoutBox,
+          gridOrderBox: boxes.gridOrderBox,
+          openPreviewsBox: boxes.openPreviewsBox,
+          dataBasePath: baseDir,
+        ),
+      );
+    },
     (error, stackTrace) =>
         Logger('ClipPixApp').severe('Uncaught zone error', error, stackTrace),
   );
@@ -206,6 +224,14 @@ void _registerHiveAdapters() {
   // 新規追加: ImagePreviewState (typeId: 10)
   if (!Hive.isAdapterRegistered(10)) {
     Hive.registerAdapter(ImagePreviewStateAdapter());
+  }
+  // 新規追加: PdfContentItem (typeId: 11)
+  if (!Hive.isAdapterRegistered(11)) {
+    Hive.registerAdapter(PdfContentItemAdapter());
+  }
+  // 新規追加: PdfPreviewState (typeId: 12)
+  if (!Hive.isAdapterRegistered(12)) {
+    Hive.registerAdapter(PdfPreviewStateAdapter());
   }
 }
 
@@ -316,9 +342,8 @@ bool _isParentProcessAlive(int pid) {
 
 Future<void> _launchPreviewMode(String payload, int? parentPid) async {
   // 親プロセス監視タイマー（親プロセス終了時に自動終了）
-  Timer? parentMonitorTimer;
   if (parentPid != null) {
-    parentMonitorTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!_isParentProcessAlive(parentPid)) {
         debugPrint('[ImagePreviewMode] Parent process $parentPid not found, exiting');
         timer.cancel();
@@ -330,6 +355,8 @@ Future<void> _launchPreviewMode(String payload, int? parentPid) async {
 
   await runZonedGuarded(
     () async {
+      WidgetsFlutterBinding.ensureInitialized();
+
       // Configure logging with proper directory
       final logDir = await _getLogDir();
       _configureLogging(logDir: logDir);
@@ -547,9 +574,8 @@ class _ImagePreviewApp extends StatelessWidget {
 
 Future<void> _launchTextPreviewMode(String payload, int? parentPid) async {
   // 親プロセス監視タイマー（親プロセス終了時に自動終了）
-  Timer? parentMonitorTimer;
   if (parentPid != null) {
-    parentMonitorTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!_isParentProcessAlive(parentPid)) {
         debugPrint('[TextPreviewMode] Parent process $parentPid not found, exiting');
         timer.cancel();
@@ -561,6 +587,8 @@ Future<void> _launchTextPreviewMode(String payload, int? parentPid) async {
 
   await runZonedGuarded(
     () async {
+      WidgetsFlutterBinding.ensureInitialized();
+
       // Configure logging with proper directory
       final logDir = await _getLogDir();
       _configureLogging(logDir: logDir);
@@ -772,6 +800,241 @@ class _TextPreviewApp extends StatelessWidget {
   }
 }
 
+Future<void> _launchPdfPreviewMode(String payload, int? parentPid) async {
+  // 親プロセス監視タイマー（親プロセス終了時に自動終了）
+  if (parentPid != null) {
+    Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!_isParentProcessAlive(parentPid)) {
+        debugPrint('[PdfPreviewMode] Parent process $parentPid not found, exiting');
+        timer.cancel();
+        exit(0);
+      }
+    });
+    debugPrint('[PdfPreviewMode] Started parent process monitor for PID: $parentPid');
+  }
+
+  await runZonedGuarded(
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
+
+      // Configure logging with proper directory
+      final logDir = await _getLogDir();
+      _configureLogging(logDir: logDir);
+      debugPrint(
+          '[PdfPreviewMode] Starting with payload length: ${payload.length}');
+
+      Map<String, dynamic> data;
+      try {
+        data = jsonDecode(payload) as Map<String, dynamic>;
+        debugPrint('[PdfPreviewMode] Payload parsed successfully');
+      } catch (error) {
+        Logger('PdfPreviewWindow').severe('Invalid preview payload', error);
+        debugPrint('[PdfPreviewMode] ERROR: Failed to parse payload');
+        return;
+      }
+
+      final itemMap = (data['item'] as Map<String, dynamic>?);
+      if (itemMap == null) {
+        Logger('PdfPreviewWindow').warning('Preview payload missing item');
+        debugPrint('[PdfPreviewMode] ERROR: Payload missing item');
+        return;
+      }
+
+      final savedAtString = itemMap['savedAt'] as String?;
+      DateTime? savedAt;
+      if (savedAtString != null) {
+        savedAt = DateTime.tryParse(savedAtString)?.toUtc();
+      }
+
+      final item = PdfContentItem(
+        id: itemMap['id'] as String,
+        filePath: itemMap['filePath'] as String,
+        sourceType:
+            ImageSourceType.values[(itemMap['sourceType'] as int?) ?? 0],
+        savedAt: savedAt,
+        source: itemMap['source'] as String?,
+        memo: itemMap['memo'] as String? ?? '',
+        favorite: itemMap['favorite'] as int? ?? 0,
+        pageCount: itemMap['pageCount'] as int? ?? 1,
+      );
+
+      debugPrint(
+          '[PdfPreviewMode] Item created: id=${item.id}, hashCode=${item.id.hashCode}, pageCount=${item.pageCount}');
+
+      final initialTop = data['alwaysOnTop'] as bool? ?? false;
+      final initialPage = data['currentPage'] as int? ?? 1;
+
+      // カスケード配置用オフセット
+      final cascadeOffsetX = (data['cascadeOffsetX'] as num?)?.toDouble() ?? 0;
+      final cascadeOffsetY = (data['cascadeOffsetY'] as num?)?.toDouble() ?? 0;
+
+      // Initialize window_manager for frameless window
+      debugPrint('[PdfPreviewMode] Initializing window manager...');
+      await windowManager.ensureInitialized();
+      debugPrint('[PdfPreviewMode] Window manager initialized');
+
+      // Initialize Hive with SEPARATE path for this preview process
+      PdfPreviewStateRepository? repository;
+      Rect? restoredBounds;
+      int restoredPage = initialPage;
+
+      // Generate unique Hive directory name based on item ID
+      String getHiveDirectoryName(String itemId) {
+        final bytes = utf8.encode(itemId);
+        final digest = md5.convert(bytes);
+        return 'pdf_preview_${digest.toString().substring(0, 8)}';
+      }
+
+      try {
+        final baseHiveDir = await _getHiveBaseDir();
+        final hiveDir = p.join(baseHiveDir, getHiveDirectoryName(item.id));
+        debugPrint(
+            '[PdfPreviewMode] Initializing Hive with directory: $hiveDir');
+        await Directory(hiveDir).create(recursive: true);
+        await Hive.initFlutter(hiveDir); // Unique subdirectory per item
+        _registerHiveAdapters();
+        await Hive.openBox<PdfPreviewState>('pdf_preview_state');
+        debugPrint('[PdfPreviewMode] Hive initialized successfully');
+
+        // Load saved window bounds
+        repository = PdfPreviewStateRepository();
+        final validator = ScreenBoundsValidator();
+        final savedState = repository.get(item.id);
+
+        if (savedState != null &&
+            savedState.x != null &&
+            savedState.y != null &&
+            savedState.width != null &&
+            savedState.height != null) {
+          final bounds = Rect.fromLTWH(
+            savedState.x!,
+            savedState.y!,
+            savedState.width!,
+            savedState.height!,
+          );
+          restoredBounds = await validator.adjustIfOffScreen(bounds);
+          restoredPage = savedState.currentPage;
+          debugPrint('[PdfPreviewMode] Loaded saved bounds: $restoredBounds, page: $restoredPage');
+        }
+      } catch (error, stackTrace) {
+        Logger('PdfPreviewWindow').warning(
+          'Failed to initialize Hive for PDF preview, using default window bounds',
+          error,
+          stackTrace,
+        );
+        debugPrint(
+            '[PdfPreviewMode] ERROR: Hive initialization failed: $error');
+        // Continue without persistence - repository remains null
+      }
+
+      // Window options with saved or default bounds
+      final windowSize = restoredBounds?.size ?? const Size(900, 700);
+      final windowOptions = WindowOptions(
+        size: windowSize,
+        minimumSize: const Size(400, 300),
+        center: false, // 位置は手動で設定する（カスケード対応）
+        backgroundColor: Colors.transparent,
+        skipTaskbar: false,
+        titleBarStyle: TitleBarStyle.hidden,
+      );
+
+      debugPrint('[PdfPreviewMode] Window options created');
+
+      await windowManager.waitUntilReadyToShow(windowOptions, () async {
+        // Set unique window title for window activation (FindWindow)
+        final windowTitle = 'clip_pix_pdf_${item.id.hashCode}';
+        debugPrint('[PdfPreviewMode] Setting window title: $windowTitle');
+        await windowManager.setTitle(windowTitle);
+        debugPrint('[PdfPreviewMode] Window title set successfully');
+
+        await windowManager.show();
+        debugPrint('[PdfPreviewMode] Window shown');
+
+        // 位置を設定（保存済み位置があれば復元、なければ中央+カスケードオフセット）
+        if (restoredBounds != null) {
+          await windowManager.setPosition(
+            Offset(restoredBounds.left, restoredBounds.top),
+          );
+          debugPrint('[PdfPreviewMode] Position restored');
+        } else {
+          // 画面中央を基準にカスケードオフセットを適用
+          // screen_retriever でプライマリ画面サイズを取得
+          final displays = await screenRetriever.getAllDisplays();
+          final primaryDisplay = displays.firstWhere(
+            (d) => d.visiblePosition?.dx == 0 && d.visiblePosition?.dy == 0,
+            orElse: () => displays.first,
+          );
+          final screenWidth = primaryDisplay.size.width;
+          final screenHeight = primaryDisplay.size.height;
+          final centerX = (screenWidth - windowSize.width) / 2 + cascadeOffsetX;
+          final centerY = (screenHeight - windowSize.height) / 2 + cascadeOffsetY;
+          await windowManager.setPosition(Offset(centerX, centerY));
+          debugPrint('[PdfPreviewMode] Position set with cascade offset: ($centerX, $centerY)');
+        }
+
+        await windowManager.focus();
+        debugPrint('[PdfPreviewMode] Window focused');
+
+        // Run app AFTER window is fully initialized
+        // This keeps the event loop alive and prevents early process exit
+        runApp(
+          _PdfPreviewApp(
+            item: item,
+            initialAlwaysOnTop: initialTop,
+            initialPage: restoredPage,
+            repository: repository,
+          ),
+        );
+
+        debugPrint('[PdfPreviewMode] runApp completed inside callback');
+      });
+
+      debugPrint('[PdfPreviewMode] waitUntilReadyToShow callback scheduled');
+      // Event loop is now maintained by runApp, process stays alive
+    },
+    (error, stackTrace) {
+      debugPrint('[PdfPreviewMode] FATAL ERROR: $error');
+      debugPrint('[PdfPreviewMode] Stack trace:\n$stackTrace');
+      Logger('PdfPreviewWindow').severe(
+        'Unhandled exception in PDF preview mode',
+        error,
+        stackTrace,
+      );
+      exit(1);
+    },
+  );
+}
+
+class _PdfPreviewApp extends StatelessWidget {
+  const _PdfPreviewApp({
+    required this.item,
+    required this.initialAlwaysOnTop,
+    required this.initialPage,
+    this.repository,
+  });
+
+  final PdfContentItem item;
+  final bool initialAlwaysOnTop;
+  final int initialPage;
+  final PdfPreviewStateRepository? repository;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(useMaterial3: true),
+      home: PdfPreviewWindow(
+        item: item,
+        initialAlwaysOnTop: initialAlwaysOnTop,
+        initialPage: initialPage,
+        repository: repository,
+        onClose: () => exit(0),
+        onToggleAlwaysOnTop: (_) {},
+      ),
+    );
+  }
+}
+
 class ClipPixApp extends StatelessWidget {
   const ClipPixApp({
     super.key,
@@ -780,6 +1043,7 @@ class ClipPixApp extends StatelessWidget {
     required this.gridLayoutBox,
     required this.gridOrderBox,
     required this.openPreviewsBox,
+    required this.dataBasePath,
   });
 
   final Box<dynamic> appStateBox;
@@ -787,12 +1051,17 @@ class ClipPixApp extends StatelessWidget {
   final Box<dynamic> gridLayoutBox;
   final Box<dynamic> gridOrderBox;
   final Box<OpenPreviewItem> openPreviewsBox;
+  final String dataBasePath;
 
   @override
   Widget build(BuildContext context) {
     debugPrint('[ClipPixApp] building; isWindows=${Platform.isWindows}');
     final openPreviewsRepo = OpenPreviewsRepository();
+    final onboardingRepo = OnboardingRepository(appStateBox);
     final List<SingleChildWidget> providersList = <SingleChildWidget>[
+      ChangeNotifierProvider<OnboardingRepository>.value(
+        value: onboardingRepo,
+      ),
       ...AppStateProvider.providers(
         appStateBox: appStateBox,
         openPreviewsRepo: openPreviewsRepo,
@@ -812,6 +1081,11 @@ class ClipPixApp extends StatelessWidget {
       ChangeNotifierProvider<GridLayoutMutationController>(
         create: (_) => GridLayoutMutationController(
           debugLoggingEnabled: kDebugMode || kProfileMode,
+        ),
+      ),
+      ChangeNotifierProvider<PdfThumbnailCacheService>(
+        create: (_) => PdfThumbnailCacheService(
+          cacheDirectory: p.join(dataBasePath, 'pdf_thumbnails'),
         ),
       ),
       ChangeNotifierProxyProvider<GridCardPreferencesRepository,
@@ -1079,7 +1353,16 @@ class ClipPixApp extends StatelessWidget {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
           useMaterial3: true,
         ),
-        home: const MainScreen(),
+        home: Consumer<OnboardingRepository>(
+          builder: (context, repo, _) {
+            if (!repo.hasCompletedOnboarding) {
+              return OnboardingScreen(
+                onComplete: () => repo.setOnboardingCompleted(true),
+              );
+            }
+            return const MainScreen();
+          },
+        ),
       ),
     );
   }

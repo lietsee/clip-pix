@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
+import '../../system/debug_log.dart';
 import '../../system/grid_layout_layout_engine.dart' as layout;
 import '../../system/state/grid_geometry_queue.dart';
 import '../../system/state/grid_layout_store.dart';
@@ -84,13 +85,13 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
   void didUpdateWidget(covariant GridLayoutSurface oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.store != widget.store) {
-      print('[GridLayoutSurface] didUpdateWidget: store changed! '
+      debugLog('[GridLayoutSurface] didUpdateWidget: store changed! '
           'Resetting listeners and _lastReportedGeometry');
       oldWidget.store.removeListener(_handleStoreChanged);
       widget.store.addListener(_handleStoreChanged);
       _lastReportedGeometry = null;
     } else {
-      print('[GridLayoutSurface] didUpdateWidget: store unchanged');
+      debugLog('[GridLayoutSurface] didUpdateWidget: store unchanged');
     }
   }
 
@@ -110,7 +111,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        print('[GridLayoutSurface] build: '
+        debugLog('[GridLayoutSurface] build: '
             'mutationInProgress=$_mutationInProgress, '
             'gridHiddenForReset=$_gridHiddenForReset, '
             'hasStagingBuffer=${_stagingGeometry != null}, '
@@ -162,7 +163,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
                 _frontSnapshot = currentStoreSnapshot;
                 _frontStates = _cloneStates(_store.viewStates);
                 _frontGeometry = currentStoreSnapshot.geometry;
-                print('[GridLayoutSurface] forced_sync_applied: '
+                debugLog('[GridLayoutSurface] forced_sync_applied: '
                     'snapshotId=${currentStoreSnapshot.id}');
               });
             }
@@ -170,7 +171,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
         }
 
         if (_gridHiddenForReset) {
-          print('[GridLayoutSurface] RETURNING SizedBox.shrink due to _gridHiddenForReset=true');
+          debugLog('[GridLayoutSurface] RETURNING SizedBox.shrink due to _gridHiddenForReset=true');
           return const SizedBox.shrink();
         }
 
@@ -205,7 +206,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
           );
         }
 
-        print('[GridLayoutSurface] returning Stack: '
+        debugLog('[GridLayoutSurface] returning Stack: '
             'childrenCount=${stackChildren.length}, '
             'hasStagingChild=${stackChildren.length > 1}');
 
@@ -250,7 +251,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
     }
     final latestSnapshot = _store.latestSnapshot;
 
-    print('[GridLayoutSurface] store_changed: '
+    debugLog('[GridLayoutSurface] store_changed: '
         'newSnapshot=${latestSnapshot?.id}, '
         'viewStateCount=${_store.viewStates.length}');
 
@@ -264,7 +265,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
       if (latestSnapshot != null) {
         _frontGeometry = latestSnapshot.geometry;
       }
-      print('[GridLayoutSurface] front_buffer_updated: '
+      debugLog('[GridLayoutSurface] front_buffer_updated: '
           'snapshotId=${latestSnapshot?.id}, statesCount=${_frontStates?.length ?? 0}');
     });
   }
@@ -354,7 +355,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
             _scheduleMutationEnd(notify).whenComplete(() {
               if (mounted && !job.ticket.isCancelled) {
                 try {
-                  print('[GridLayoutSurface] swapping staging to front: '
+                  debugLog('[GridLayoutSurface] swapping staging to front: '
                       'stagingGeometry=$_stagingGeometry, '
                       'stagingStatesCount=${_stagingStates?.length ?? 0}, '
                       'stagingSnapshotId=${_stagingSnapshot?.id}');
@@ -368,7 +369,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
                       _stagingStates = null;
                       _stagingSnapshot = null;
                       _gridHiddenForReset = false;
-                      print('[GridLayoutSurface] front_snapshot_swapped: '
+                      debugLog('[GridLayoutSurface] front_snapshot_swapped: '
                           'id=${_frontSnapshot?.id}, '
                           'frontStatesCount=${_frontStates?.length ?? 0}, '
                           '_gridHiddenForReset=$_gridHiddenForReset');
@@ -423,7 +424,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
       final callback = widget.onMutateEnd;
       _mutationInProgress = false;
 
-      print('[GridLayoutSurface] finish: '
+      debugLog('[GridLayoutSurface] finish: '
           'hideGrid=$hideGrid, _gridHiddenForReset=$_gridHiddenForReset, mounted=$mounted');
 
       if (!mounted) {
@@ -437,7 +438,7 @@ class _GridLayoutSurfaceState extends State<GridLayoutSurface> {
       _debugLog('mutate_end hide=$hideGrid');
       final shouldRestoreGrid = hideGrid && _gridHiddenForReset;
       if (shouldRestoreGrid) {
-        print('[GridLayoutSurface] finish: restoring grid, setting _gridHiddenForReset=false');
+        debugLog('[GridLayoutSurface] finish: restoring grid, setting _gridHiddenForReset=false');
         try {
           setState(() {
             _gridHiddenForReset = false;
