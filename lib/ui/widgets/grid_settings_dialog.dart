@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/grid_layout_settings_repository.dart';
+import '../../data/guide_repository.dart';
 import '../../data/models/grid_layout_settings.dart';
 import '../../data/onboarding_repository.dart';
 import '../../system/audio_service.dart';
@@ -359,6 +360,17 @@ class _GridSettingsDialogState extends State<GridSettingsDialog> {
           },
           icon: const Icon(Icons.help_outline),
           label: const Text('チュートリアルを再表示'),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: () async {
+            await context.read<GuideRepository>().resetGuide();
+            if (mounted) {
+              Navigator.of(context).pop();
+            }
+          },
+          icon: const Icon(Icons.tour_outlined),
+          label: const Text('操作ガイドを再表示'),
         ),
       ],
     );

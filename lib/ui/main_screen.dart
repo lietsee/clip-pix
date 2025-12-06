@@ -4,9 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:showcaseview/showcaseview.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../data/file_info_manager.dart';
+import '../data/guide_repository.dart';
+import 'guide/guide_steps.dart';
 import '../data/grid_card_preferences_repository.dart';
 import '../system/debug_log.dart';
 import '../data/grid_layout_settings_repository.dart';
@@ -39,7 +42,13 @@ import 'widgets/grid_minimap_overlay.dart';
 import 'widgets/grid_settings_dialog.dart';
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+  const MainScreen({
+    super.key,
+    this.showGuide = false,
+  });
+
+  /// Whether to show the interactive guide on first appearance
+  final bool showGuide;
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -69,6 +78,10 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   // GridViewModule key for scrollToAndHighlight access
   final GlobalKey<GridViewModuleState> _gridViewKey = GlobalKey<GridViewModuleState>();
 
+  // Guide state
+  bool _guideStarted = false;
+  final GlobalKey<ShowCaseWidgetState> _showcaseKey = GlobalKey<ShowCaseWidgetState>();
+
   @override
   void initState() {
     super.initState();
@@ -77,6 +90,46 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     _subfolderScrollController = ScrollController();
     _gridSubfolderScrollController = ScrollController();
     _keyboardFocusNode = FocusNode();
+
+    // Start guide after first frame if requested
+    if (widget.showGuide) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _startGuideIfNeeded();
+      });
+    }
+  }
+
+  void _startGuideIfNeeded() {
+    debugPrint('[MainScreen] _startGuideIfNeeded: _guideStarted=$_guideStarted, showGuide=${widget.showGuide}');
+    if (_guideStarted || !widget.showGuide) return;
+    _guideStarted = true;
+
+    debugPrint('[MainScreen] Starting showcase...');
+    // Delay slightly to ensure all widgets are rendered
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (!mounted) return;
+      _showcaseKey.currentState?.startShowCase(GuideKeys.getGuideKeyList());
+    });
+  }
+
+  void _onGuideComplete() {
+    debugPrint('[MainScreen] Guide completed');
+    // Mark guide as completed in repository (session only, not persisted)
+    context.read<GuideRepository>().markSessionCompleted();
+  }
+
+  @override
+  void didUpdateWidget(covariant MainScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // showGuide が false → true に変わった場合、ガイドを開始
+    if (!oldWidget.showGuide && widget.showGuide) {
+      debugPrint('[MainScreen] showGuide changed: false → true, starting guide');
+      _guideStarted = false; // リセット
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _startGuideIfNeeded();
+      });
+    }
   }
 
   @override
@@ -248,19 +301,27 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
       });
     }
 
-    return Focus(
-      focusNode: _keyboardFocusNode,
-      autofocus: true,
-      onKeyEvent: (node, event) {
-        if (event is KeyDownEvent &&
-            event.logicalKey == LogicalKeyboardKey.keyM &&
-            HardwareKeyboard.instance.isControlPressed) {
-          _toggleMinimapAlwaysVisible(context);
-          return KeyEventResult.handled;
+    return ShowCaseWidget(
+      key: _showcaseKey,
+      onComplete: (index, key) {
+        // Called when all showcases are complete
+        if (index == firstGuideSteps.length - 1) {
+          _onGuideComplete();
         }
-        return KeyEventResult.ignored;
       },
-      child: Scaffold(
+      builder: (context) => Focus(
+        focusNode: _keyboardFocusNode,
+        autofocus: true,
+        onKeyEvent: (node, event) {
+          if (event is KeyDownEvent &&
+              event.logicalKey == LogicalKeyboardKey.keyM &&
+              HardwareKeyboard.instance.isControlPressed) {
+            _toggleMinimapAlwaysVisible(context);
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: Scaffold(
         appBar: AppBar(
           backgroundColor: appBarBgColor,
           foregroundColor: appBarFgColor,
@@ -268,49 +329,64 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           title: _Breadcrumb(selectedState: selectedState),
           actions: [
             // Minimap toggle button
-            IconButton(
-              icon: Icon(
-                selectedState.isMinimapAlwaysVisible
-                    ? Icons.map
-                    : Icons.map_outlined,
+            Showcase(
+              key: GuideKeys.getKey('minimap_btn'),
+              title: firstGuideSteps[3].title,
+              description: firstGuideSteps[3].description,
+              child: IconButton(
+                icon: Icon(
+                  selectedState.isMinimapAlwaysVisible
+                      ? Icons.map
+                      : Icons.map_outlined,
+                ),
+                tooltip: selectedState.isMinimapAlwaysVisible
+                    ? 'マップ表示をオフ (Ctrl+M)'
+                    : 'マップ表示をオン (Ctrl+M)',
+                color: selectedState.isMinimapAlwaysVisible
+                    ? appBarFgColor
+                    : appBarFgColor.withOpacity(0.6),
+                onPressed: libraryInfo.hasImages
+                    ? () => _toggleMinimapAlwaysVisible(context)
+                    : null,
               ),
-              tooltip: selectedState.isMinimapAlwaysVisible
-                  ? 'マップ表示をオフ (Ctrl+M)'
-                  : 'マップ表示をオン (Ctrl+M)',
-              color: selectedState.isMinimapAlwaysVisible
-                  ? appBarFgColor
-                  : appBarFgColor.withOpacity(0.6),
-              onPressed: libraryInfo.hasImages
-                  ? () => _toggleMinimapAlwaysVisible(context)
-                  : null,
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-              child: Tooltip(
-                message: clipboardMonitor.isRunning
-                    ? 'クリップボード監視を停止'
-                    : 'クリップボード監視を開始',
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.content_paste, size: 20),
-                    const SizedBox(width: 4),
-                    Switch(
-                      value: clipboardMonitor.isRunning,
-                      onChanged: (value) {
-                        _toggleClipboardMonitor(context, value);
-                      },
-                    ),
-                  ],
+            Showcase(
+              key: GuideKeys.getKey('clipboard_toggle'),
+              title: firstGuideSteps[1].title,
+              description: firstGuideSteps[1].description,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                child: Tooltip(
+                  message: clipboardMonitor.isRunning
+                      ? 'クリップボード監視を停止'
+                      : 'クリップボード監視を開始',
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.content_paste, size: 20),
+                      const SizedBox(width: 4),
+                      Switch(
+                        value: clipboardMonitor.isRunning,
+                        onChanged: (value) {
+                          _toggleClipboardMonitor(context, value);
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-            IconButton(
-              icon: const Icon(Icons.note_add),
-              tooltip: '新規テキスト作成',
-              onPressed: libraryInfo.activeDirectory == null
-                  ? null
-                  : () => _createNewText(context),
+            Showcase(
+              key: GuideKeys.getKey('new_text_btn'),
+              title: firstGuideSteps[2].title,
+              description: firstGuideSteps[2].description,
+              child: IconButton(
+                icon: const Icon(Icons.note_add),
+                tooltip: '新規テキスト作成',
+                onPressed: libraryInfo.activeDirectory == null
+                    ? null
+                    : () => _createNewText(context),
+              ),
             ),
             IconButton(
               icon: const Icon(Icons.refresh),
@@ -325,10 +401,15 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
                       await context.read<GridLayoutStore>().forceFullResync();
                     },
             ),
-            IconButton(
-              icon: const Icon(Icons.folder_open),
-              tooltip: 'フォルダを選択',
-              onPressed: () => _requestFolderSelection(context),
+            Showcase(
+              key: GuideKeys.getKey('folder_btn'),
+              title: firstGuideSteps[0].title,
+              description: firstGuideSteps[0].description,
+              child: IconButton(
+                icon: const Icon(Icons.folder_open),
+                tooltip: 'フォルダを選択',
+                onPressed: () => _requestFolderSelection(context),
+              ),
             ),
             // 一括削除ボタン
             if (deletionMode.isActive) ...[
@@ -362,15 +443,20 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
                         context.read<DeletionModeNotifier>().enterDeletionMode()
                     : null,
               ),
-            IconButton(
-              icon: const Icon(Icons.settings),
-              tooltip: 'アプリ設定',
-              onPressed: () {
-                showDialog<void>(
-                  context: context,
-                  builder: (_) => const GridSettingsDialog(),
-                );
-              },
+            Showcase(
+              key: GuideKeys.getKey('settings_btn'),
+              title: firstGuideSteps[4].title,
+              description: firstGuideSteps[4].description,
+              child: IconButton(
+                icon: const Icon(Icons.settings),
+                tooltip: 'アプリ設定',
+                onPressed: () {
+                  showDialog<void>(
+                    context: context,
+                    builder: (_) => const GridSettingsDialog(),
+                  );
+                },
+              ),
             ),
           ],
         ),
@@ -378,6 +464,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
         bottomNavigationBar: watcherStatus.lastError != null
             ? _ErrorBanner(message: watcherStatus.lastError!)
             : null,
+        ),
       ),
     );
   }
@@ -443,45 +530,50 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
             },
           ),
         Expanded(
-          child: NotificationListener<ScrollNotification>(
-            onNotification: (notification) {
-              if (_isRestoringRootScroll) {
-                debugPrint(
-                  '[ScrollDebug] notification ignored while restoring: '
-                  'type=${notification.runtimeType} '
-                  'pixels=${notification.metrics.pixels.toStringAsFixed(1)}',
-                );
-                return false;
-              }
-              if (notification.metrics.axis == Axis.vertical &&
-                  folderState.viewMode == FolderViewMode.root) {
-                final rootPath = folderState.current?.path;
-                if (rootPath != null) {
-                  _cancelPendingRootRestore(rootPath);
+          child: Showcase(
+            key: GuideKeys.getKey('grid_area'),
+            title: firstGuideSteps[5].title,
+            description: firstGuideSteps[5].description,
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (notification) {
+                if (_isRestoringRootScroll) {
+                  debugPrint(
+                    '[ScrollDebug] notification ignored while restoring: '
+                    'type=${notification.runtimeType} '
+                    'pixels=${notification.metrics.pixels.toStringAsFixed(1)}',
+                  );
+                  return false;
                 }
-                debugPrint(
-                  '[ScrollDebug] notification received: '
-                  'type=${notification.runtimeType} '
-                  'pixels=${notification.metrics.pixels.toStringAsFixed(1)} '
-                  'max=${notification.metrics.maxScrollExtent.toStringAsFixed(1)} '
-                  'min=${notification.metrics.minScrollExtent.toStringAsFixed(1)}',
-                );
-                _scheduleControllerSnapshot();
-                context
-                    .read<SelectedFolderNotifier>()
-                    .updateRootScroll(notification.metrics.pixels);
-              }
-              return false;
-            },
-            child: GridViewModule(
-              key: _gridViewKey,
-              state: libraryState,
-              controller: folderState.viewMode == FolderViewMode.root
-                  ? _rootScrollController
-                  : _gridSubfolderScrollController,
-              onHoverChanged: (cardId) {
-                _minimapService?.updateHoveredCard(cardId);
+                if (notification.metrics.axis == Axis.vertical &&
+                    folderState.viewMode == FolderViewMode.root) {
+                  final rootPath = folderState.current?.path;
+                  if (rootPath != null) {
+                    _cancelPendingRootRestore(rootPath);
+                  }
+                  debugPrint(
+                    '[ScrollDebug] notification received: '
+                    'type=${notification.runtimeType} '
+                    'pixels=${notification.metrics.pixels.toStringAsFixed(1)} '
+                    'max=${notification.metrics.maxScrollExtent.toStringAsFixed(1)} '
+                    'min=${notification.metrics.minScrollExtent.toStringAsFixed(1)}',
+                  );
+                  _scheduleControllerSnapshot();
+                  context
+                      .read<SelectedFolderNotifier>()
+                      .updateRootScroll(notification.metrics.pixels);
+                }
+                return false;
               },
+              child: GridViewModule(
+                key: _gridViewKey,
+                state: libraryState,
+                controller: folderState.viewMode == FolderViewMode.root
+                    ? _rootScrollController
+                    : _gridSubfolderScrollController,
+                onHoverChanged: (cardId) {
+                  _minimapService?.updateHoveredCard(cardId);
+                },
+              ),
             ),
           ),
         ),

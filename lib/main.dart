@@ -20,6 +20,7 @@ import 'package:window_manager/window_manager.dart';
 import 'data/file_info_manager.dart';
 import 'data/grid_card_preferences_repository.dart';
 import 'data/grid_layout_settings_repository.dart';
+import 'data/guide_repository.dart';
 import 'data/onboarding_repository.dart';
 import 'data/grid_order_repository.dart';
 import 'data/image_repository.dart';
@@ -1058,9 +1059,13 @@ class ClipPixApp extends StatelessWidget {
     debugPrint('[ClipPixApp] building; isWindows=${Platform.isWindows}');
     final openPreviewsRepo = OpenPreviewsRepository();
     final onboardingRepo = OnboardingRepository(appStateBox);
+    final guideRepo = GuideRepository(appStateBox);
     final List<SingleChildWidget> providersList = <SingleChildWidget>[
       ChangeNotifierProvider<OnboardingRepository>.value(
         value: onboardingRepo,
+      ),
+      ChangeNotifierProvider<GuideRepository>.value(
+        value: guideRepo,
       ),
       ...AppStateProvider.providers(
         appStateBox: appStateBox,
@@ -1353,14 +1358,16 @@ class ClipPixApp extends StatelessWidget {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
           useMaterial3: true,
         ),
-        home: Consumer<OnboardingRepository>(
-          builder: (context, repo, _) {
-            if (!repo.hasCompletedOnboarding) {
+        home: Consumer2<OnboardingRepository, GuideRepository>(
+          builder: (context, onboardingRepo, guideRepo, _) {
+            if (!onboardingRepo.hasCompletedOnboarding) {
               return OnboardingScreen(
-                onComplete: () => repo.markSessionCompleted(),
+                onComplete: () => onboardingRepo.markSessionCompleted(),
               );
             }
-            return const MainScreen();
+            return MainScreen(
+              showGuide: !guideRepo.hasCompletedFirstGuide,
+            );
           },
         ),
       ),
