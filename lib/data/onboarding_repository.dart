@@ -11,9 +11,20 @@ class OnboardingRepository extends ChangeNotifier {
 
   static const _key = 'onboarding_completed';
 
+  /// セッション中の完了フラグ（永続化されない）
+  bool _sessionCompleted = false;
+
   /// オンボーディングが完了済みかどうか
+  /// 永続化フラグまたはセッションフラグがtrueなら完了とみなす
   bool get hasCompletedOnboarding {
-    return _box.get(_key, defaultValue: false) as bool;
+    return _sessionCompleted || (_box.get(_key, defaultValue: false) as bool);
+  }
+
+  /// セッション完了をマーク（永続化しない）
+  /// 「次回から表示しない」にチェックしなかった場合に使用
+  void markSessionCompleted() {
+    _sessionCompleted = true;
+    notifyListeners();
   }
 
   /// オンボーディング完了状態を設定
@@ -24,6 +35,7 @@ class OnboardingRepository extends ChangeNotifier {
 
   /// オンボーディングをリセット（設定画面から再表示する場合）
   Future<void> resetOnboarding() async {
+    _sessionCompleted = false;
     await _box.put(_key, false);
     notifyListeners();
   }

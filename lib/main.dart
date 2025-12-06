@@ -1357,7 +1357,7 @@ class ClipPixApp extends StatelessWidget {
           builder: (context, repo, _) {
             if (!repo.hasCompletedOnboarding) {
               return OnboardingScreen(
-                onComplete: () => repo.setOnboardingCompleted(true),
+                onComplete: () => repo.markSessionCompleted(),
               );
             }
             return const MainScreen();
