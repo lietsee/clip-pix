@@ -295,7 +295,13 @@ class ClipboardMonitor extends ChangeNotifier implements ClipboardMonitorGuard {
       return;
     }
 
+    if (_sessionHashes.contains(hash)) {
+      _logger.fine('Clipboard text ignored due to session duplicate');
+      return;
+    }
+
     _recentHashes[hash] = DateTime.now();
+    _sessionHashes.add(hash);
     _enqueueEvent(
       _ClipboardEvent.text(
         timestamp: DateTime.now(),
