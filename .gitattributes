@@ -1,0 +1,2 @@
+# Windows specific files - force CRLF line endings
+windows/** text=auto eol=crlf
