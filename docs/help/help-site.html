@@ -1,0 +1,1495 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClipPix ヘルプ</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", "Segoe UI", sans-serif;
+      color: #333;
+      background: #fff;
+      line-height: 1.7;
+      font-size: 15px;
+    }
+
+    .help-container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 16px;
+    }
+
+    /* Header */
+    .help-header {
+      background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+      color: #fff;
+      padding: 32px 24px;
+      text-align: center;
+      margin-bottom: 0;
+    }
+
+    .help-header h1 {
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .help-header p {
+      font-size: 14px;
+      opacity: 0.9;
+    }
+
+    /* Tab Navigation */
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      background: #f5f5f5;
+      padding: 12px 12px 0;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .tab-btn {
+      padding: 10px 16px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-size: 14px;
+      color: #666;
+      border-radius: 8px 8px 0 0;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+
+    .tab-btn:hover {
+      background: #e8e8e8;
+      color: #333;
+    }
+
+    .tab-btn.active {
+      background: #fff;
+      color: #2196F3;
+      font-weight: 600;
+      box-shadow: 0 -2px 0 #2196F3 inset;
+    }
+
+    /* Main Content */
+    main {
+      padding: 24px;
+      background: #fff;
+    }
+
+    .section {
+      display: none;
+    }
+
+    .section.active {
+      display: block;
+    }
+
+    /* Typography */
+    h2 {
+      font-size: 24px;
+      font-weight: 600;
+      color: #1976D2;
+      margin: 32px 0 16px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #e3f2fd;
+    }
+
+    .section > h2:first-child {
+      margin-top: 0;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+      margin: 24px 0 12px;
+    }
+
+    h4 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #555;
+      margin: 16px 0 8px;
+    }
+
+    p {
+      margin: 12px 0;
+    }
+
+    /* Lists */
+    ul, ol {
+      margin: 12px 0;
+      padding-left: 24px;
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border: 1px solid #e0e0e0;
+    }
+
+    th {
+      background: #f5f5f5;
+      font-weight: 600;
+      color: #333;
+    }
+
+    tr:nth-child(even) {
+      background: #fafafa;
+    }
+
+    /* Code */
+    code {
+      font-family: "Consolas", "Source Code Pro", "Monaco", monospace;
+      background: #f5f5f5;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 13px;
+      color: #d32f2f;
+    }
+
+    pre {
+      background: #f5f5f5;
+      padding: 16px;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin: 16px 0;
+      font-family: "Consolas", "Source Code Pro", "Monaco", monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      border: 1px solid #e0e0e0;
+    }
+
+    pre code {
+      background: none;
+      padding: 0;
+      color: #333;
+    }
+
+    /* ASCII Art */
+    .ascii-art {
+      font-size: 12px;
+      line-height: 1.3;
+      background: #263238;
+      color: #aed581;
+      padding: 16px;
+      border-radius: 8px;
+    }
+
+    /* Blockquote */
+    blockquote {
+      background: #e3f2fd;
+      border-left: 4px solid #2196F3;
+      padding: 12px 16px;
+      margin: 16px 0;
+      border-radius: 0 8px 8px 0;
+      color: #1565c0;
+    }
+
+    blockquote p {
+      margin: 0;
+    }
+
+    /* Strong */
+    strong {
+      font-weight: 600;
+      color: #1976D2;
+    }
+
+    /* Divider */
+    hr {
+      border: none;
+      border-top: 1px solid #e0e0e0;
+      margin: 32px 0;
+    }
+
+    /* Feature List */
+    .feature-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px;
+      margin: 20px 0;
+    }
+
+    .feature-item {
+      background: #f8f9fa;
+      padding: 16px;
+      border-radius: 8px;
+      border-left: 4px solid #2196F3;
+    }
+
+    .feature-item strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    /* Intro Section */
+    .intro-hero {
+      text-align: center;
+      padding: 24px;
+      background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+      border-radius: 12px;
+      margin-bottom: 24px;
+    }
+
+    .intro-hero h2 {
+      border: none;
+      margin: 0 0 12px;
+      color: #1565c0;
+    }
+
+    /* OS Badge */
+    .os-badge {
+      display: inline-block;
+      background: #e8f5e9;
+      color: #2e7d32;
+      padding: 4px 12px;
+      border-radius: 16px;
+      font-size: 13px;
+      margin: 4px;
+    }
+
+    /* Keyboard shortcuts */
+    kbd {
+      display: inline-block;
+      background: linear-gradient(180deg, #fafafa 0%, #e0e0e0 100%);
+      border: 1px solid #bdbdbd;
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-family: "Consolas", "Source Code Pro", monospace;
+      font-size: 12px;
+      box-shadow: 0 2px 0 #999;
+      color: #333;
+    }
+
+    /* Favorite levels */
+    .fav-level {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      vertical-align: middle;
+      margin-right: 4px;
+    }
+    .fav-level.green { background: #4caf50; }
+    .fav-level.orange { background: #ff9800; }
+    .fav-level.pink { background: #e91e63; }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .tabs {
+        flex-direction: column;
+        padding: 8px;
+        gap: 2px;
+      }
+
+      .tab-btn {
+        border-radius: 4px;
+        text-align: left;
+      }
+
+      .tab-btn.active {
+        box-shadow: -3px 0 0 #2196F3 inset;
+      }
+
+      main {
+        padding: 16px;
+      }
+
+      h2 {
+        font-size: 20px;
+      }
+
+      table {
+        font-size: 13px;
+      }
+
+      th, td {
+        padding: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="help-header">
+    <h1>ClipPix ヘルプ</h1>
+    <p>クリップボード画像管理アプリの操作ガイド</p>
+  </header>
+
+  <div class="help-container">
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="intro">トップ</button>
+      <button class="tab-btn" data-tab="getting-started">クイックスタート</button>
+      <button class="tab-btn" data-tab="card-operations">カードの操作</button>
+      <button class="tab-btn" data-tab="clipboard-monitor">クリップボード監視</button>
+      <button class="tab-btn" data-tab="file-management">ファイル管理</button>
+      <button class="tab-btn" data-tab="settings">設定</button>
+      <button class="tab-btn" data-tab="faq">FAQ</button>
+    </nav>
+
+    <main>
+      <!-- ==================== トップ ==================== -->
+      <section id="intro" class="section active">
+        <div class="intro-hero">
+          <h2>ClipPixとは</h2>
+          <p>クリップボードにコピーした画像やテキストを自動的に保存し、<br>Pinterest風のグリッド表示で管理できるデスクトップアプリケーションです。</p>
+        </div>
+
+        <h3>主な機能</h3>
+        <div class="feature-list">
+          <div class="feature-item">
+            <strong>クリップボード監視</strong>
+            画像やテキストをコピーするだけで自動保存
+          </div>
+          <div class="feature-item">
+            <strong>URL画像ダウンロード</strong>
+            画像URLをコピーすると自動でダウンロード
+          </div>
+          <div class="feature-item">
+            <strong>グリッド表示</strong>
+            カードを自由にリサイズ・並び替え
+          </div>
+          <div class="feature-item">
+            <strong>プレビュー</strong>
+            ダブルクリックで拡大表示
+          </div>
+          <div class="feature-item">
+            <strong>お気に入り・メモ</strong>
+            画像に3段階のお気に入りとメモを追加
+          </div>
+        </div>
+
+        <h3>対応OS</h3>
+        <p>
+          <span class="os-badge">Windows 10/11</span>
+          <span class="os-badge">macOS 12以降</span>
+        </p>
+
+        <hr>
+
+        <h2>ヘルプ目次</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>ページ</th>
+              <th>内容</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>クイックスタート</strong></td>
+              <td>最初の設定と基本的な使い方</td>
+            </tr>
+            <tr>
+              <td><strong>カードの操作方法</strong></td>
+              <td>リサイズ、ズーム、並び替え、ショートカットキー</td>
+            </tr>
+            <tr>
+              <td><strong>クリップボード監視</strong></td>
+              <td>自動保存の仕組みと対応形式</td>
+            </tr>
+            <tr>
+              <td><strong>ファイルの取り扱い</strong></td>
+              <td>フォルダ構造、サブフォルダ、削除</td>
+            </tr>
+            <tr>
+              <td><strong>設定</strong></td>
+              <td>設定ダイアログの全項目解説</td>
+            </tr>
+            <tr>
+              <td><strong>よくある質問</strong></td>
+              <td>トラブルシューティング</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- ==================== クイックスタート ==================== -->
+      <section id="getting-started" class="section">
+        <h2>クイックスタート</h2>
+        <p>ClipPixを使い始めるための基本的な手順を説明します。</p>
+
+        <hr>
+
+        <h3>1. 保存先フォルダを選択する</h3>
+        <p>アプリを起動すると、まずフォルダ選択画面が表示されます。</p>
+        <ol>
+          <li><strong>「フォルダを選択」ボタン</strong>をクリック</li>
+          <li>クリップボードから保存した画像を格納するフォルダを選択</li>
+          <li>選択したフォルダがアプリに表示されます</li>
+        </ol>
+        <blockquote>
+          <strong>macOSの場合</strong>: 初回はフォルダへのアクセス許可を求められます。許可すると、次回起動時も同じフォルダに自動的にアクセスできます。
+        </blockquote>
+
+        <hr>
+
+        <h3>2. クリップボード監視をONにする</h3>
+        <p>画面上部のツールバーにある<strong>クリップボード監視スイッチ</strong>をONにします。</p>
+        <ul>
+          <li><strong>ON（緑）</strong>: クリップボードを監視中。画像やテキストをコピーすると自動保存されます</li>
+          <li><strong>OFF（灰色）</strong>: 監視停止中。手動での保存が必要です</li>
+        </ul>
+
+        <hr>
+
+        <h3>3. 最初の画像を保存する</h3>
+        <p>クリップボード監視がONの状態で、以下のいずれかを試してください：</p>
+
+        <h4>画像をコピーする場合</h4>
+        <ol>
+          <li>ブラウザやアプリで画像を右クリック</li>
+          <li>「画像をコピー」を選択</li>
+          <li>ClipPixに自動的に保存されます</li>
+        </ol>
+
+        <h4>URLから画像をダウンロードする場合</h4>
+        <ol>
+          <li>画像のURLをコピー（例: <code>https://example.com/image.png</code>）</li>
+          <li>ClipPixが自動的に画像をダウンロードして保存します</li>
+        </ol>
+
+        <h4>テキストを保存する場合</h4>
+        <ol>
+          <li>任意のテキストを選択してコピー</li>
+          <li>テキストカードとして保存されます</li>
+        </ol>
+
+        <hr>
+
+        <h3>4. グリッド表示の見方</h3>
+        <p>保存されたコンテンツは<strong>Pinterest風のグリッド</strong>で表示されます。</p>
+
+        <h4>画面構成</h4>
+        <pre class="ascii-art">┌─────────────────────────────────────────────┐
+│ [ツールバー] フォルダ選択 | 監視ON/OFF | 設定 │
+├─────────────────────────────────────────────┤
+│ [タブバー] ルート | サブフォルダ1 | ... | ＋  │
+├─────────────────────────────────────────────┤
+│ [履歴ストリップ] 最近保存した画像            │
+├─────────────────────────────────────────────┤
+│                                             │
+│     ┌───┐ ┌─────┐ ┌───┐                    │
+│     │   │ │     │ │   │  ← グリッド表示    │
+│     │   │ │     │ │   │                    │
+│     └───┘ │     │ └───┘                    │
+│           └─────┘                           │
+│     ┌─────────┐ ┌───┐                      │
+│     │         │ │   │                      │
+│     └─────────┘ └───┘                      │
+│                                             │
+└─────────────────────────────────────────────┘</pre>
+
+        <h4>各要素の説明</h4>
+        <table>
+          <thead>
+            <tr>
+              <th>要素</th>
+              <th>説明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>ツールバー</strong></td>
+              <td>フォルダ選択、監視ON/OFF、設定などの操作ボタン</td>
+            </tr>
+            <tr>
+              <td><strong>タブバー</strong></td>
+              <td>ルートフォルダとサブフォルダの切り替え</td>
+            </tr>
+            <tr>
+              <td><strong>履歴ストリップ</strong></td>
+              <td>最近保存した画像。クリックで該当カードにジャンプ</td>
+            </tr>
+            <tr>
+              <td><strong>グリッド</strong></td>
+              <td>保存されたコンテンツのカード表示</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- ==================== カードの操作方法 ==================== -->
+      <section id="card-operations" class="section">
+        <h2>カードの操作方法</h2>
+        <p>ClipPixでは画像・テキスト・PDFがそれぞれカードとして表示されます。このページでは各カードの操作方法を説明します。</p>
+
+        <hr>
+
+        <h3>画像カード</h3>
+
+        <h4>基本操作</h4>
+        <table>
+          <thead>
+            <tr>
+              <th>操作</th>
+              <th>方法</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>選択</strong></td>
+              <td>カードをクリック</td>
+            </tr>
+            <tr>
+              <td><strong>プレビュー</strong></td>
+              <td>ダブルクリック または <kbd>Enter</kbd> キー</td>
+            </tr>
+            <tr>
+              <td><strong>コピー</strong></td>
+              <td><kbd>Ctrl</kbd>+<kbd>C</kbd>（選択中のカード）</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h4>リサイズ</h4>
+        <p>カードにマウスを乗せると、四隅に<strong>リサイズハンドル</strong>が表示されます。</p>
+        <ul>
+          <li><strong>ハンドルをドラッグ</strong>: カードのサイズを変更</li>
+          <li><strong>列幅にスナップ</strong>: 自動的に列幅の倍数に揃います</li>
+          <li><strong>サイズリセット</strong>: <kbd>Shift</kbd>+<kbd>Enter</kbd> で200×200にリセット</li>
+        </ul>
+
+        <h4>ズームとパン</h4>
+        <p>画像カード内で画像を拡大・縮小・移動できます。</p>
+        <table>
+          <thead>
+            <tr>
+              <th>操作</th>
+              <th>方法</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>ズームイン</strong></td>
+              <td><kbd>Ctrl</kbd>+<kbd>=</kbd> または <kbd>Ctrl</kbd>+<kbd>+</kbd></td>
+            </tr>
+            <tr>
+              <td><strong>ズームアウト</strong></td>
+              <td><kbd>Ctrl</kbd>+<kbd>-</kbd></td>
+            </tr>
+            <tr>
+              <td><strong>マウスホイールズーム</strong></td>
+              <td>右クリックを押しながらホイール回転</td>
+            </tr>
+            <tr>
+              <td><strong>パン（移動）</strong></td>
+              <td>右クリックを押しながらドラッグ</td>
+            </tr>
+          </tbody>
+        </table>
+        <blockquote>ズーム範囲: 0.5倍 ～ 15倍</blockquote>
+
+        <h4>並び替え</h4>
+        <p>カード下部中央の<strong>ドラッグハンドル</strong>（横線3本）をドラッグすると、カードの順序を変更できます。</p>
+        <ul>
+          <li>ドラッグ中は他のカードが自動的に移動</li>
+          <li>画面端に近づくと自動スクロール</li>
+        </ul>
+
+        <h4>お気に入り</h4>
+        <p>カード左下の<strong>ハートボタン</strong>でお気に入りレベルを設定できます。</p>
+        <table>
+          <thead>
+            <tr>
+              <th>レベル</th>
+              <th>色</th>
+              <th>意味</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>0</td>
+              <td>なし</td>
+              <td>未設定</td>
+            </tr>
+            <tr>
+              <td>1</td>
+              <td><span class="fav-level green"></span> 緑</td>
+              <td>低</td>
+            </tr>
+            <tr>
+              <td>2</td>
+              <td><span class="fav-level orange"></span> オレンジ</td>
+              <td>中</td>
+            </tr>
+            <tr>
+              <td>3</td>
+              <td><span class="fav-level pink"></span> ピンク</td>
+              <td>高</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>クリックするたびにレベルが上がり、3の次は0に戻ります。</p>
+
+        <h4>メモ</h4>
+        <p>カード左上の<strong>メモボタン</strong>（ホバーで表示）をクリックすると、メモを追加・編集できます。</p>
+        <ul>
+          <li>メモがあるカードにホバーすると、0.5秒後にツールチップでメモ内容が表示されます</li>
+        </ul>
+
+        <h4>削除</h4>
+        <p>カード右上の<strong>削除ボタン</strong>（ゴミ箱アイコン）をクリックすると、確認後にゴミ箱（<code>.trash</code>フォルダ）に移動します。</p>
+
+        <hr>
+
+        <h3>テキストカード</h3>
+        <p>テキストファイル（<code>.txt</code>）はテキストカードとして表示されます。</p>
+
+        <h4>基本操作</h4>
+        <table>
+          <thead>
+            <tr>
+              <th>操作</th>
+              <th>方法</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>プレビュー</strong></td>
+              <td>ダブルクリック または <kbd>Enter</kbd> キー</td>
+            </tr>
+            <tr>
+              <td><strong>コピー</strong></td>
+              <td><kbd>Ctrl</kbd>+<kbd>C</kbd>（テキスト内容をコピー）</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h4>インライン編集</h4>
+        <p>カード内のテキストをダブルクリックすると、その場で編集できます。</p>
+        <table>
+          <thead>
+            <tr>
+              <th>操作</th>
+              <th>キー</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>保存</strong></td>
+              <td><kbd>Ctrl</kbd>+<kbd>S</kbd></td>
+            </tr>
+            <tr>
+              <td><strong>キャンセル</strong></td>
+              <td><kbd>Escape</kbd></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h4>リサイズ</h4>
+        <p>画像カードと同様に、四隅のハンドルでリサイズできます。</p>
+
+        <hr>
+
+        <h3>PDFカード</h3>
+        <p>PDFファイルはサムネイル付きのカードとして表示されます。</p>
+
+        <h4>基本操作</h4>
+        <table>
+          <thead>
+            <tr>
+              <th>操作</th>
+              <th>方法</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>プレビュー</strong></td>
+              <td>ダブルクリック または <kbd>Enter</kbd> キー</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h4>プレビューウィンドウでの操作</h4>
+        <p>PDFプレビューウィンドウでは以下の操作が可能です：</p>
+        <table>
+          <thead>
+            <tr>
+              <th>操作</th>
+              <th>キー</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>前のページ</strong></td>
+              <td><kbd>←</kbd> (左矢印)</td>
+            </tr>
+            <tr>
+              <td><strong>次のページ</strong></td>
+              <td><kbd>→</kbd> (右矢印)</td>
+            </tr>
+            <tr>
+              <td><strong>最初のページ</strong></td>
+              <td><kbd>Home</kbd></td>
+            </tr>
+            <tr>
+              <td><strong>最後のページ</strong></td>
+              <td><kbd>End</kbd></td>
+            </tr>
+            <tr>
+              <td><strong>フルスクリーン</strong></td>
+              <td><kbd>F11</kbd></td>
+            </tr>
+            <tr>
+              <td><strong>閉じる</strong></td>
+              <td><kbd>Escape</kbd> または <kbd>Ctrl</kbd>+<kbd>W</kbd></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <hr>
+
+        <h3>プレビューウィンドウ</h3>
+        <p>ダブルクリックまたは <kbd>Enter</kbd> キーで開くプレビューウィンドウは、別ウィンドウとして表示されます。</p>
+
+        <h4>共通操作</h4>
+        <table>
+          <thead>
+            <tr>
+              <th>操作</th>
+              <th>キー</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>閉じる</strong></td>
+              <td><kbd>Escape</kbd> または <kbd>Ctrl</kbd>+<kbd>W</kbd></td>
+            </tr>
+            <tr>
+              <td><strong>常に最前面</strong></td>
+              <td>ウィンドウ右上のピンボタン</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h4>画像プレビュー</h4>
+        <ul>
+          <li>マウスホイールでズーム</li>
+          <li>ドラッグで画像移動</li>
+          <li><kbd>Ctrl</kbd>+<kbd>C</kbd> でクリップボードにコピー</li>
+        </ul>
+
+        <hr>
+
+        <h3>ショートカットキー一覧</h3>
+
+        <h4>グリッド画面</h4>
+        <table>
+          <thead>
+            <tr>
+              <th>キー</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><kbd>Ctrl</kbd>+<kbd>M</kbd></td>
+              <td>ミニマップ表示切替</td>
+            </tr>
+            <tr>
+              <td><kbd>Enter</kbd></td>
+              <td>選択カードをプレビュー</td>
+            </tr>
+            <tr>
+              <td><kbd>Shift</kbd>+<kbd>Enter</kbd></td>
+              <td>カードサイズをリセット</td>
+            </tr>
+            <tr>
+              <td><kbd>Ctrl</kbd>+<kbd>C</kbd></td>
+              <td>選択カードをコピー</td>
+            </tr>
+            <tr>
+              <td><kbd>Ctrl</kbd>+<kbd>=</kbd> / <kbd>Ctrl</kbd>+<kbd>+</kbd></td>
+              <td>ズームイン</td>
+            </tr>
+            <tr>
+              <td><kbd>Ctrl</kbd>+<kbd>-</kbd></td>
+              <td>ズームアウト</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h4>テキストカード編集中</h4>
+        <table>
+          <thead>
+            <tr>
+              <th>キー</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><kbd>Ctrl</kbd>+<kbd>S</kbd></td>
+              <td>保存</td>
+            </tr>
+            <tr>
+              <td><kbd>Escape</kbd></td>
+              <td>キャンセル</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h4>PDFプレビュー</h4>
+        <table>
+          <thead>
+            <tr>
+              <th>キー</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><kbd>←</kbd> / <kbd>→</kbd></td>
+              <td>ページ移動</td>
+            </tr>
+            <tr>
+              <td><kbd>Home</kbd> / <kbd>End</kbd></td>
+              <td>最初/最後のページ</td>
+            </tr>
+            <tr>
+              <td><kbd>F11</kbd></td>
+              <td>フルスクリーン</td>
+            </tr>
+            <tr>
+              <td><kbd>Escape</kbd> / <kbd>Ctrl</kbd>+<kbd>W</kbd></td>
+              <td>閉じる</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- ==================== クリップボード監視 ==================== -->
+      <section id="clipboard-monitor" class="section">
+        <h2>クリップボード監視</h2>
+        <p>ClipPixの中核機能である「クリップボード監視」について説明します。</p>
+
+        <hr>
+
+        <h3>自動保存の仕組み</h3>
+        <p>クリップボード監視をONにすると、システムのクリップボードを常時監視します。画像やテキストがコピーされると、自動的に選択フォルダに保存されます。</p>
+        <pre>[コピー操作] → [クリップボード] → [ClipPixが検知] → [ファイル保存] → [グリッドに表示]</pre>
+
+        <hr>
+
+        <h3>対応コンテンツ</h3>
+
+        <h4>画像</h4>
+        <p>以下の形式の画像をクリップボードから自動保存できます：</p>
+        <ul>
+          <li>PNG</li>
+          <li>JPEG / JPG</li>
+          <li>BMP</li>
+          <li>GIF</li>
+          <li>WebP</li>
+          <li>その他、システムがサポートする画像形式</li>
+        </ul>
+
+        <h4>テキスト</h4>
+        <p>プレーンテキストをコピーすると、テキストファイル（<code>.txt</code>）として保存されます。</p>
+        <ul>
+          <li>空白のみのテキストは保存されません</li>
+          <li>改行を含むテキストも保存可能</li>
+        </ul>
+
+        <h4>URL（画像の自動ダウンロード）</h4>
+        <p>画像のURLをコピーすると、自動的にダウンロードして保存します。</p>
+        <p><strong>対応URL例</strong>:</p>
+        <ul>
+          <li><code>https://example.com/image.png</code></li>
+          <li><code>https://example.com/photo.jpg</code></li>
+          <li><code>https://i.imgur.com/xxxxx.png</code></li>
+        </ul>
+        <p><strong>対応拡張子</strong>: <code>.png</code>, <code>.jpg</code>, <code>.jpeg</code>, <code>.gif</code>, <code>.webp</code>, <code>.bmp</code></p>
+        <blockquote>URLがテキストとして保存されるのではなく、実際の画像ファイルがダウンロードされます。</blockquote>
+
+        <hr>
+
+        <h3>ファイル命名規則</h3>
+        <p>自動保存されるファイルは以下の命名規則に従います：</p>
+        <table>
+          <thead>
+            <tr>
+              <th>種類</th>
+              <th>ファイル名パターン</th>
+              <th>例</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>画像</strong></td>
+              <td><code>clipboard_YYYY-MM-DDTHH-mm-ss-SSS.png</code></td>
+              <td><code>clipboard_2025-12-07T14-30-45-123.png</code></td>
+            </tr>
+            <tr>
+              <td><strong>テキスト</strong></td>
+              <td><code>text_YYYY-MM-DDTHH-mm-ss-SSS.txt</code></td>
+              <td><code>text_2025-12-07T14-30-45-123.txt</code></td>
+            </tr>
+            <tr>
+              <td><strong>URL画像</strong></td>
+              <td><code>url_YYYY-MM-DDTHH-mm-ss-SSS_[domain].png</code></td>
+              <td><code>url_2025-12-07T14-30-45-123_imgur.png</code></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <hr>
+
+        <h3>重複検出</h3>
+        <p>同じ内容を連続してコピーした場合、重複保存を防ぐ仕組みがあります。</p>
+        <ul>
+          <li><strong>2秒以内</strong>に同一内容がコピーされた場合はスキップ</li>
+          <li><strong>アプリからのコピー</strong>（画像カードのCtrl+Cなど）は自動的に無視</li>
+        </ul>
+
+        <hr>
+
+        <h3>監視のON/OFF</h3>
+
+        <h4>ONにする方法</h4>
+        <ol>
+          <li>ツールバーのクリップボードスイッチをクリック</li>
+          <li>スイッチが緑色になれば監視中</li>
+        </ol>
+
+        <h4>OFFにする方法</h4>
+        <ol>
+          <li>ツールバーのクリップボードスイッチをクリック</li>
+          <li>スイッチが灰色になれば停止中</li>
+        </ol>
+        <blockquote>監視OFFの間にコピーした内容は保存されません。</blockquote>
+
+        <hr>
+
+        <h3>プラットフォーム別の動作</h3>
+
+        <h4>Windows</h4>
+        <ul>
+          <li><strong>Hookモード</strong>: Windows Native Hookによる即座の検知（推奨）</li>
+          <li><strong>ポーリングモード</strong>: 500ms間隔でクリップボード確認（フォールバック）</li>
+        </ul>
+        <p>Hookモードが利用できない場合、自動的にポーリングモードに切り替わります。</p>
+
+        <h4>macOS</h4>
+        <ul>
+          <li><strong>ポーリングモード</strong>: 500ms間隔でクリップボード確認</li>
+          <li><strong>macOS 15.4以降</strong>: クリップボードアクセスの許可が必要になる場合があります</li>
+        </ul>
+
+        <hr>
+
+        <h3>トラブルシューティング</h3>
+
+        <h4>画像が保存されない</h4>
+        <ol>
+          <li>クリップボード監視がONになっているか確認</li>
+          <li>フォルダが正しく選択されているか確認</li>
+          <li>フォルダへの書き込み権限があるか確認</li>
+        </ol>
+
+        <h4>テキストが保存されない</h4>
+        <ol>
+          <li>空白のみのテキストは保存されません</li>
+          <li>非常に長いテキストは保存に時間がかかる場合があります</li>
+        </ol>
+
+        <h4>URLから画像がダウンロードされない</h4>
+        <ol>
+          <li>URLが画像の直接リンクか確認（ページURLではなく画像URL）</li>
+          <li>インターネット接続を確認</li>
+          <li>一部のサイトはダウンロードをブロックしている場合があります</li>
+        </ol>
+      </section>
+
+      <!-- ==================== ファイル管理 ==================== -->
+      <section id="file-management" class="section">
+        <h2>ファイルの取り扱い</h2>
+        <p>ClipPixでのファイル管理について説明します。</p>
+
+        <hr>
+
+        <h3>フォルダ構造</h3>
+        <p>ClipPixは選択したフォルダを以下のように使用します：</p>
+        <pre class="ascii-art">選択フォルダ/
+├── clipboard_2025-12-07T14-30-45-123.png      ← 画像ファイル
+├── clipboard_2025-12-07T14-30-45-123.json     ← メタデータ
+├── text_2025-12-07T14-35-00-456.txt           ← テキストファイル
+├── text_2025-12-07T14-35-00-456.json          ← メタデータ
+├── サブフォルダ1/                              ← サブフォルダ
+│   ├── image.png
+│   └── image.json
+├── サブフォルダ2/
+│   └── ...
+└── .trash/                                     ← ゴミ箱（削除ファイル）
+    ├── deleted_image.png
+    └── deleted_image.json</pre>
+
+        <hr>
+
+        <h3>サブフォルダの使い方</h3>
+
+        <h4>タブ切り替え</h4>
+        <p>画面上部のタブバーでルートフォルダとサブフォルダを切り替えられます。</p>
+        <ul>
+          <li><strong>ルート</strong>: 選択フォルダ直下のコンテンツを表示</li>
+          <li><strong>サブフォルダ名</strong>: そのサブフォルダ内のコンテンツを表示</li>
+        </ul>
+
+        <h4>新規フォルダ作成</h4>
+        <p>タブバー右端の <strong>＋ボタン</strong> をクリックすると、新規サブフォルダを作成できます。</p>
+        <ol>
+          <li>＋ボタンをクリック</li>
+          <li>フォルダ名を入力</li>
+          <li>OKをクリック</li>
+          <li>作成されたフォルダに自動的に移動</li>
+        </ol>
+        <blockquote>フォルダ名に <code>/</code> や <code>\</code> は使用できません。</blockquote>
+
+        <hr>
+
+        <h3>ゴミ箱（.trash）</h3>
+        <p>削除したファイルは完全に消去されず、<code>.trash</code> フォルダに移動します。</p>
+
+        <h4>削除方法</h4>
+        <ol>
+          <li>カード右上の<strong>削除ボタン</strong>（ゴミ箱アイコン）をクリック</li>
+          <li>確認ダイアログで「OK」をクリック</li>
+          <li>ファイルが <code>.trash</code> フォルダに移動</li>
+        </ol>
+
+        <h4>ゴミ箱の確認</h4>
+        <p>タブバーで <code>.trash</code> タブを選択すると、削除したファイルを確認できます。</p>
+
+        <h4>完全削除</h4>
+        <p><code>.trash</code> フォルダ内のファイルを削除すると、完全に消去されます。</p>
+        <blockquote>ゴミ箱はアプリ内で自動的に空になりません。手動で管理してください。</blockquote>
+
+        <hr>
+
+        <h3>一括削除モード</h3>
+        <p>複数のカードを同時に削除できます。</p>
+
+        <h4>使い方</h4>
+        <ol>
+          <li>ツールバーの<strong>削除モードボタン</strong>（ゴミ箱アイコン）をクリック</li>
+          <li>各カードにチェックボックスが表示される</li>
+          <li>削除したいカードをクリックして選択</li>
+          <li>ツールバーの<strong>削除ボタン</strong>をクリック</li>
+          <li>確認ダイアログで「OK」をクリック</li>
+          <li>選択したファイルがまとめてゴミ箱に移動</li>
+        </ol>
+
+        <h4>キャンセル</h4>
+        <p>削除モード中に<strong>キャンセルボタン</strong>をクリックすると、選択を解除して通常モードに戻ります。</p>
+
+        <hr>
+
+        <h3>メタデータJSON</h3>
+        <p>各ファイルには対応するJSONメタデータファイルが自動生成されます。</p>
+
+        <h4>ファイル名</h4>
+        <p>元のファイル名に <code>.json</code> を追加したものです。</p>
+        <ul>
+          <li><code>clipboard_2025-12-07T14-30-45-123.png</code> → <code>clipboard_2025-12-07T14-30-45-123.json</code></li>
+        </ul>
+
+        <h4>内容</h4>
+        <pre><code>{
+  "id": "unique-identifier",
+  "sourceType": "clipboard",
+  "width": 1920,
+  "height": 1080,
+  "size": 524288,
+  "createdAt": "2025-12-07T14:30:45.123Z",
+  "memo": "メモ内容",
+  "favorite": 2,
+  "scale": 1.5,
+  "offset": {"dx": 10, "dy": -5}
+}</code></pre>
+
+        <table>
+          <thead>
+            <tr>
+              <th>フィールド</th>
+              <th>説明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>id</code></td>
+              <td>ファイルの一意識別子</td>
+            </tr>
+            <tr>
+              <td><code>sourceType</code></td>
+              <td>保存元（<code>clipboard</code>, <code>web</code>, <code>local</code>）</td>
+            </tr>
+            <tr>
+              <td><code>width</code> / <code>height</code></td>
+              <td>画像サイズ（画像の場合）</td>
+            </tr>
+            <tr>
+              <td><code>size</code></td>
+              <td>ファイルサイズ（バイト）</td>
+            </tr>
+            <tr>
+              <td><code>createdAt</code></td>
+              <td>保存日時</td>
+            </tr>
+            <tr>
+              <td><code>memo</code></td>
+              <td>ユーザーが追加したメモ</td>
+            </tr>
+            <tr>
+              <td><code>favorite</code></td>
+              <td>お気に入りレベル（0-3）</td>
+            </tr>
+            <tr>
+              <td><code>scale</code></td>
+              <td>表示スケール</td>
+            </tr>
+            <tr>
+              <td><code>offset</code></td>
+              <td>パンオフセット</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h4>注意事項</h4>
+        <ul>
+          <li>メタデータファイルを直接編集することは推奨しません</li>
+          <li>メタデータファイルを削除すると、お気に入りやメモがリセットされます</li>
+          <li>画像ファイルだけ移動すると、メタデータとの紐付けが切れます</li>
+        </ul>
+
+        <hr>
+
+        <h3>手動でファイルを追加する</h3>
+        <p>ClipPixの監視フォルダにファイルを直接追加することもできます。</p>
+        <ol>
+          <li>エクスプローラー（Finder）で選択フォルダを開く
+            <ul>
+              <li>パンくずリスト（画面上部のパス表示）をクリック</li>
+            </ul>
+          </li>
+          <li>画像・テキスト・PDFファイルをフォルダにコピー</li>
+          <li>ClipPixが自動的に検知してグリッドに表示</li>
+        </ol>
+        <blockquote>手動追加したファイルにはメタデータが自動生成されます。</blockquote>
+      </section>
+
+      <!-- ==================== 設定 ==================== -->
+      <section id="settings" class="section">
+        <h2>設定</h2>
+        <p>ツールバーの<strong>歯車アイコン</strong>をクリックすると、設定ダイアログが開きます。</p>
+
+        <hr>
+
+        <h3>列数設定</h3>
+        <p>グリッドの列数を調整できます。</p>
+
+        <h4>最大列数</h4>
+        <p>グリッドに表示できる最大の列数を設定します。</p>
+        <ul>
+          <li><strong>範囲</strong>: 1 ～ 12列</li>
+          <li><strong>デフォルト</strong>: 6列</li>
+        </ul>
+        <p>ウィンドウ幅に応じて自動的に列数が調整されますが、この値を超えることはありません。</p>
+
+        <h4>デフォルト列数</h4>
+        <p>新規カードが作成される際のデフォルトの幅（列数）を設定します。</p>
+        <ul>
+          <li><strong>範囲</strong>: 1 ～ 最大列数</li>
+          <li><strong>デフォルト</strong>: 1列</li>
+        </ul>
+
+        <hr>
+
+        <h3>背景色</h3>
+        <p>グリッド背景の色を4種類から選択できます。</p>
+        <table>
+          <thead>
+            <tr>
+              <th>選択肢</th>
+              <th>説明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>白</strong></td>
+              <td>明るい背景（デフォルト）</td>
+            </tr>
+            <tr>
+              <td><strong>明るい灰</strong></td>
+              <td>少し暗めの背景</td>
+            </tr>
+            <tr>
+              <td><strong>暗い灰</strong></td>
+              <td>ダークモード向け</td>
+            </tr>
+            <tr>
+              <td><strong>黒</strong></td>
+              <td>完全な黒背景</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>背景色に応じて、文字色やアイコン色も自動的に調整されます。</p>
+
+        <hr>
+
+        <h3>カード一括サイズ調整</h3>
+        <p>すべてのカードを同じ幅に揃えることができます。</p>
+
+        <h4>列幅指定</h4>
+        <p>揃えたい列幅を指定します（1列 ～ 最大列数）。</p>
+
+        <h4>「全カードを揃える」ボタン</h4>
+        <p>クリックすると、すべてのカードが指定した列幅に統一されます。</p>
+        <blockquote>この操作はUndo/Redoで取り消せます。</blockquote>
+
+        <hr>
+
+        <h3>Undo / Redo</h3>
+        <p>カードサイズの変更を元に戻したり、やり直したりできます。</p>
+        <table>
+          <thead>
+            <tr>
+              <th>ボタン</th>
+              <th>説明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>サイズを戻す</strong></td>
+              <td>直前の状態に戻す（最大3段階）</td>
+            </tr>
+            <tr>
+              <td><strong>サイズをやり直す</strong></td>
+              <td>戻した操作をやり直す</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>対象となる操作：</p>
+        <ul>
+          <li>個別カードのリサイズ</li>
+          <li>一括サイズ調整</li>
+          <li>カードの並び替え</li>
+        </ul>
+
+        <hr>
+
+        <h3>ミニマップ</h3>
+        <p>グリッド全体を俯瞰できるミニマップを表示します。</p>
+
+        <h4>表示方法</h4>
+        <ul>
+          <li>設定ダイアログの「ミニマップを常時表示」をON</li>
+          <li>または <kbd>Ctrl</kbd>+<kbd>M</kbd> キー</li>
+        </ul>
+
+        <h4>機能</h4>
+        <ul>
+          <li>グリッド全体のサムネイル表示</li>
+          <li>現在のビューポート位置を黄色ボックスで表示</li>
+          <li>クリックで該当位置にジャンプ</li>
+          <li>ドラッグでスクロール位置を変更</li>
+        </ul>
+
+        <hr>
+
+        <h3>通知音</h3>
+        <p>画像保存時の効果音のON/OFFを切り替えます。</p>
+        <ul>
+          <li><strong>ON</strong>: 保存成功時に音が鳴る</li>
+          <li><strong>OFF</strong>: 音を鳴らさない</li>
+        </ul>
+
+        <hr>
+
+        <h3>ヘルプ</h3>
+
+        <h4>チュートリアルを再表示</h4>
+        <p>初回起動時に表示されるチュートリアルスライドを再表示します。</p>
+
+        <h4>操作ガイドを再表示</h4>
+        <p>アプリ内の操作ガイド（ハイライト表示）を再表示します。</p>
+
+        <hr>
+
+        <h3>設定の保存</h3>
+        <p>設定はアプリ終了時に自動的に保存され、次回起動時に復元されます。</p>
+        <p>設定ファイルの場所：</p>
+        <ul>
+          <li><strong>Windows</strong>: <code>%APPDATA%\clip_pix\</code></li>
+          <li><strong>macOS</strong>: <code>~/Library/Application Support/clip_pix/</code></li>
+        </ul>
+      </section>
+
+      <!-- ==================== FAQ ==================== -->
+      <section id="faq" class="section">
+        <h2>よくある質問（FAQ）</h2>
+
+        <hr>
+
+        <h3>画像が保存されない</h3>
+
+        <h4>クリップボード監視がOFFになっている</h4>
+        <p>ツールバーのクリップボードスイッチがON（緑色）になっているか確認してください。</p>
+
+        <h4>フォルダが選択されていない</h4>
+        <p>ツールバーの「フォルダを選択」ボタンから保存先フォルダを選択してください。</p>
+
+        <h4>フォルダへの書き込み権限がない</h4>
+        <p>選択したフォルダに書き込み権限があるか確認してください。別のフォルダを選択してみてください。</p>
+
+        <h4>macOSでフォルダアクセスが許可されていない</h4>
+        <p>macOSでは初回起動時にフォルダへのアクセス許可が必要です。フォルダを再選択してみてください。</p>
+
+        <hr>
+
+        <h3>カードが表示されない</h3>
+
+        <h4>アプリ起動直後</h4>
+        <p>macOSでは起動時にフォルダへのアクセス権限を復元する処理が行われます。数秒待つと表示されます。</p>
+
+        <h4>サブフォルダを選択している</h4>
+        <p>タブバーで「ルート」を選択して、ルートフォルダのコンテンツを表示してみてください。</p>
+
+        <h4>フォルダが空</h4>
+        <p>選択したフォルダに画像・テキスト・PDFファイルがあるか確認してください。</p>
+
+        <h4>再読み込みを試す</h4>
+        <p>ツールバーの<strong>更新ボタン</strong>（リロードアイコン）をクリックして再読み込みしてみてください。</p>
+
+        <hr>
+
+        <h3>macOSでフォルダにアクセスできない</h3>
+
+        <h4>初回起動時</h4>
+        <p>macOSではセキュリティ上の制限により、ユーザーがフォルダを明示的に選択する必要があります。</p>
+        <ol>
+          <li>「フォルダを選択」ボタンをクリック</li>
+          <li>アクセスしたいフォルダを選択</li>
+          <li>システムの許可ダイアログが表示されたら「許可」をクリック</li>
+        </ol>
+
+        <h4>アプリ再起動後</h4>
+        <p>通常はアプリが自動的にアクセス権限を復元しますが、以下の場合は再選択が必要です：</p>
+        <ul>
+          <li>フォルダを移動または削除した場合</li>
+          <li>システムの権限設定を変更した場合</li>
+          <li>macOSをアップデートした場合</li>
+        </ul>
+
+        <h4>権限のリセット</h4>
+        <p>システム環境設定 > プライバシーとセキュリティ > ファイルとフォルダで、ClipPixの権限を確認・変更できます。</p>
+
+        <hr>
+
+        <h3>設定をリセットしたい</h3>
+
+        <h4>設定ファイルの削除</h4>
+        <p>以下のフォルダを削除すると、設定が初期状態にリセットされます：</p>
+        <ul>
+          <li><strong>Windows</strong>: <code>%APPDATA%\clip_pix\</code></li>
+          <li><strong>macOS</strong>: <code>~/Library/Application Support/clip_pix/</code></li>
+        </ul>
+        <blockquote>注意: この操作でお気に入りやメモの情報はリセットされません（メタデータはフォルダ内のJSONファイルに保存されています）。</blockquote>
+
+        <hr>
+
+        <h3>URL画像がダウンロードされない</h3>
+
+        <h4>URLが画像の直接リンクではない</h4>
+        <p>ページのURL（例: <code>https://example.com/gallery/123</code>）ではなく、画像ファイルへの直接リンク（例: <code>https://example.com/images/photo.jpg</code>）をコピーしてください。</p>
+
+        <h4>対応していない形式</h4>
+        <p>対応拡張子: <code>.png</code>, <code>.jpg</code>, <code>.jpeg</code>, <code>.gif</code>, <code>.webp</code>, <code>.bmp</code></p>
+
+        <h4>サイトがダウンロードをブロックしている</h4>
+        <p>一部のサイトは外部からの画像ダウンロードをブロックしています。その場合は画像を直接コピー（右クリック→「画像をコピー」）してください。</p>
+
+        <hr>
+
+        <h3>プレビューウィンドウが開かない</h3>
+
+        <h4>ファイルが破損している</h4>
+        <p>画像ファイルが破損している場合、プレビューが開けないことがあります。別の画像ビューアで開けるか確認してください。</p>
+
+        <h4>メモリ不足</h4>
+        <p>非常に大きな画像の場合、メモリ不足でプレビューが開けないことがあります。</p>
+
+        <hr>
+
+        <h3>アプリが重い・遅い</h3>
+
+        <h4>カード数が多い</h4>
+        <p>数百枚以上のカードがある場合、表示が遅くなることがあります。サブフォルダを使ってコンテンツを整理してください。</p>
+
+        <h4>高解像度画像</h4>
+        <p>大量の高解像度画像がある場合、サムネイル生成に時間がかかることがあります。</p>
+
+        <h4>ミニマップを無効にする</h4>
+        <p>ミニマップを常時表示している場合、OFFにすると軽くなることがあります（<kbd>Ctrl</kbd>+<kbd>M</kbd>）。</p>
+
+        <hr>
+
+        <h3>その他の問題</h3>
+        <p>上記で解決しない場合は、以下をお試しください：</p>
+        <ol>
+          <li>アプリを再起動</li>
+          <li>フォルダを再選択</li>
+          <li>設定をリセット（上記参照）</li>
+          <li>アプリを再インストール</li>
+        </ol>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    // Tab switching functionality
+    document.addEventListener('DOMContentLoaded', function() {
+      const tabs = document.querySelectorAll('.tab-btn');
+      const sections = document.querySelectorAll('.section');
+
+      tabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+          const targetId = this.getAttribute('data-tab');
+
+          // Remove active class from all tabs and sections
+          tabs.forEach(t => t.classList.remove('active'));
+          sections.forEach(s => s.classList.remove('active'));
+
+          // Add active class to clicked tab and corresponding section
+          this.classList.add('active');
+          document.getElementById(targetId).classList.add('active');
+
+          // Scroll to top of content
+          document.querySelector('main').scrollTop = 0;
+        });
+      });
+    });
+  </script>
+</body>
+</html>
