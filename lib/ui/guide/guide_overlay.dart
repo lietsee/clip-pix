@@ -10,11 +10,11 @@ class GuideOverlay extends StatefulWidget {
   const GuideOverlay({
     super.key,
     required this.child,
-    this.highlightKey,
+    this.highlightKeys,
   });
 
   final Widget child;
-  final GlobalKey? highlightKey;
+  final List<GlobalKey>? highlightKeys;
 
   @override
   State<GuideOverlay> createState() => _GuideOverlayState();
@@ -27,21 +27,39 @@ class _GuideOverlayState extends State<GuideOverlay> {
   void didUpdateWidget(covariant GuideOverlay oldWidget) {
     super.didUpdateWidget(oldWidget);
     // ハイライトキーが変わったらリセット
-    if (oldWidget.highlightKey != widget.highlightKey) {
+    if (!_keysEqual(oldWidget.highlightKeys, widget.highlightKeys)) {
       _highlightReady = false;
       _scheduleHighlightCheck();
     }
   }
 
+  bool _keysEqual(List<GlobalKey>? a, List<GlobalKey>? b) {
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
   void _scheduleHighlightCheck() {
     SchedulerBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final key = widget.highlightKey;
-      if (key == null) return;
+      final keys = widget.highlightKeys;
+      if (keys == null || keys.isEmpty) return;
 
-      final renderBox = key.currentContext?.findRenderObject() as RenderBox?;
-      debugPrint('[GuideOverlay] _scheduleHighlightCheck: key=$key, context=${key.currentContext}, renderBox=$renderBox');
-      if (renderBox != null) {
+      // いずれかのキーでRenderBoxが取得できればOK
+      bool anyReady = false;
+      for (final key in keys) {
+        final renderBox = key.currentContext?.findRenderObject() as RenderBox?;
+        debugPrint('[GuideOverlay] _scheduleHighlightCheck: key=$key, context=${key.currentContext}, renderBox=$renderBox');
+        if (renderBox != null) {
+          anyReady = true;
+        }
+      }
+
+      if (anyReady) {
         setState(() {
           _highlightReady = true;
         });
@@ -57,7 +75,8 @@ class _GuideOverlayState extends State<GuideOverlay> {
     return Consumer<InteractiveGuideController>(
       builder: (context, guide, _) {
         // ガイドがアクティブになったらハイライトチェックをスケジュール
-        if (guide.isInteractivePhase && widget.highlightKey != null && !_highlightReady) {
+        final hasKeys = widget.highlightKeys != null && widget.highlightKeys!.isNotEmpty;
+        if (guide.isInteractivePhase && hasKeys && !_highlightReady) {
           _scheduleHighlightCheck();
         }
 
@@ -66,8 +85,8 @@ class _GuideOverlayState extends State<GuideOverlay> {
             widget.child,
             if (guide.isInteractivePhase) ...[
               // ハイライトキーがある場合は穴あきオーバーレイ、なければ通常オーバーレイ
-              if (widget.highlightKey != null)
-                _buildHighlightOverlay(context, widget.highlightKey!)
+              if (hasKeys)
+                _buildHighlightOverlay(context, widget.highlightKeys!)
               else
                 _buildBackgroundOverlay(context, guide),
               // ガイドカード
@@ -91,11 +110,27 @@ class _GuideOverlayState extends State<GuideOverlay> {
     );
   }
 
-  Widget _buildHighlightOverlay(BuildContext context, GlobalKey key) {
+  Widget _buildHighlightOverlay(BuildContext context, List<GlobalKey> keys) {
     // ハイライト対象のRenderBoxを取得
-    final renderBox = key.currentContext?.findRenderObject() as RenderBox?;
+    final rects = <Rect>[];
+    const padding = 8.0;
+
+    for (final key in keys) {
+      final renderBox = key.currentContext?.findRenderObject() as RenderBox?;
+      if (renderBox != null) {
+        final position = renderBox.localToGlobal(Offset.zero);
+        final size = renderBox.size;
+        rects.add(Rect.fromLTWH(
+          position.dx - padding,
+          position.dy - padding,
+          size.width + padding * 2,
+          size.height + padding * 2,
+        ));
+      }
+    }
+
     // RenderBoxが取得できない場合は背景オーバーレイにフォールバック
-    if (renderBox == null) {
+    if (rects.isEmpty) {
       return Positioned.fill(
         child: IgnorePointer(
           ignoring: true,
@@ -106,24 +141,12 @@ class _GuideOverlayState extends State<GuideOverlay> {
       );
     }
 
-    final position = renderBox.localToGlobal(Offset.zero);
-    final size = renderBox.size;
-
-    // ハイライト領域を少し広げる
-    const padding = 8.0;
-    final rect = Rect.fromLTWH(
-      position.dx - padding,
-      position.dy - padding,
-      size.width + padding * 2,
-      size.height + padding * 2,
-    );
-
     return Positioned.fill(
       child: IgnorePointer(
         ignoring: true,
         child: CustomPaint(
           painter: _HighlightPainter(
-            highlightRect: rect,
+            highlightRects: rects,
             overlayColor: Colors.black.withOpacity(0.5),
           ),
         ),
@@ -235,14 +258,14 @@ class _GuideOverlayState extends State<GuideOverlay> {
 }
 
 /// ハイライト用のカスタムペインター
-/// 指定した矩形以外を暗くする
+/// 指定した矩形以外を暗くする（複数矩形対応）
 class _HighlightPainter extends CustomPainter {
   _HighlightPainter({
-    required this.highlightRect,
+    required this.highlightRects,
     required this.overlayColor,
   });
 
-  final Rect highlightRect;
+  final List<Rect> highlightRects;
   final Color overlayColor;
 
   @override
@@ -250,25 +273,28 @@ class _HighlightPainter extends CustomPainter {
     final paint = Paint()..color = overlayColor;
 
     // 画面全体のパス
-    final fullPath = Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
+    var resultPath = Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
 
-    // ハイライト領域のパス（角丸）
-    final highlightPath = Path()
-      ..addRRect(RRect.fromRectAndRadius(highlightRect, const Radius.circular(8)));
+    // 各ハイライト領域を穴として開ける
+    for (final rect in highlightRects) {
+      final highlightPath = Path()
+        ..addRRect(RRect.fromRectAndRadius(rect, const Radius.circular(8)));
+      resultPath = Path.combine(
+        PathOperation.difference,
+        resultPath,
+        highlightPath,
+      );
+    }
 
-    // 差分を描画（ハイライト領域以外）
-    final combinedPath = Path.combine(
-      PathOperation.difference,
-      fullPath,
-      highlightPath,
-    );
-
-    canvas.drawPath(combinedPath, paint);
+    canvas.drawPath(resultPath, paint);
   }
 
   @override
   bool shouldRepaint(_HighlightPainter oldDelegate) {
-    return highlightRect != oldDelegate.highlightRect ||
-        overlayColor != oldDelegate.overlayColor;
+    if (highlightRects.length != oldDelegate.highlightRects.length) return true;
+    for (var i = 0; i < highlightRects.length; i++) {
+      if (highlightRects[i] != oldDelegate.highlightRects[i]) return true;
+    }
+    return overlayColor != oldDelegate.overlayColor;
   }
 }

@@ -159,12 +159,15 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   }
 
   /// インタラクティブガイド: フェーズに応じたハイライトキーを取得
-  GlobalKey? _getHighlightKeyForPhase(GuidePhase phase) {
+  List<GlobalKey>? _getHighlightKeysForPhase(GuidePhase phase) {
     switch (phase) {
       case GuidePhase.folderSelection:
-        return InteractiveGuideKeys.folderButton;
+        return [
+          InteractiveGuideKeys.folderButton,
+          InteractiveGuideKeys.centerFolderButton,
+        ];
       case GuidePhase.clipboardToggle:
-        return InteractiveGuideKeys.clipboardToggle;
+        return [InteractiveGuideKeys.clipboardToggle];
       default:
         return null;
     }
@@ -386,7 +389,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           return KeyEventResult.ignored;
         },
         child: GuideOverlay(
-          highlightKey: _getHighlightKeyForPhase(guideController.phase),
+          highlightKeys: _getHighlightKeysForPhase(guideController.phase),
           child: Scaffold(
         appBar: AppBar(
           backgroundColor: appBarBgColor,
@@ -1444,10 +1447,13 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: 16),
           const Text('クリップボード画像を保存するフォルダを選択してください'),
           const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: onSelectFolder,
-            icon: const Icon(Icons.folder_open),
-            label: const Text('フォルダを選択'),
+          Container(
+            key: InteractiveGuideKeys.centerFolderButton,
+            child: ElevatedButton.icon(
+              onPressed: onSelectFolder,
+              icon: const Icon(Icons.folder_open),
+              label: const Text('フォルダを選択'),
+            ),
           ),
         ],
       ),

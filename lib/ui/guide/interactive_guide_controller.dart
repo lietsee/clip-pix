@@ -44,7 +44,7 @@ const List<InteractiveGuideStep> interactiveGuideSteps = [
   InteractiveGuideStep(
     phase: GuidePhase.folderSelection,
     title: 'フォルダを選択',
-    description: '画像を保存するフォルダを選択してください。\n右上のフォルダボタンをクリック！',
+    description: '画像を保存するフォルダを選択してください。\n右上のフォルダボタンまたは中央のボタンをクリック！',
     actionLabel: 'フォルダ選択',
   ),
   InteractiveGuideStep(

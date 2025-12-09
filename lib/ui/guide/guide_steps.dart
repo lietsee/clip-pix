@@ -80,5 +80,6 @@ class InteractiveGuideKeys {
   InteractiveGuideKeys._();
 
   static final folderButton = GlobalKey(debugLabel: 'folderButton');
+  static final centerFolderButton = GlobalKey(debugLabel: 'centerFolderButton');
   static final clipboardToggle = GlobalKey(debugLabel: 'clipboardToggle');
 }
