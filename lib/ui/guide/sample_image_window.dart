@@ -3,7 +3,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
+
+import '../../system/clipboard/clipboard_service.dart';
 
 /// サンプル画像ウィンドウ
 /// ユーザーにコピーさせるための画像を表示するダイアログ
@@ -245,8 +246,11 @@ class _SampleImageWindowState extends State<SampleImageWindow> {
 
   /// クリップボードに画像をコピー
   Future<void> _copyImageToClipboard(Uint8List bytes) async {
-    // MethodChannelを使ってネイティブコードで画像をコピー
-    const channel = MethodChannel('com.clip_pix/clipboard');
-    await channel.invokeMethod<void>('writeImage', {'data': bytes});
+    final writer = ClipboardServiceFactory.createWriter();
+    try {
+      await writer.writeImage(bytes);
+    } finally {
+      writer.dispose();
+    }
   }
 }
