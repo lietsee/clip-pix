@@ -73,3 +73,12 @@ class GuideKeys {
     return firstGuideSteps.map((step) => getKey(step.id)).toList();
   }
 }
+
+/// インタラクティブガイドのハイライト用GlobalKey
+/// Showcaseのkeyとは別に、子ウィジェットに直接アタッチするキー
+class InteractiveGuideKeys {
+  InteractiveGuideKeys._();
+
+  static final folderButton = GlobalKey(debugLabel: 'folderButton');
+  static final clipboardToggle = GlobalKey(debugLabel: 'clipboardToggle');
+}

@@ -22,6 +22,7 @@ import 'data/grid_card_preferences_repository.dart';
 import 'data/grid_layout_settings_repository.dart';
 import 'data/guide_repository.dart';
 import 'data/onboarding_repository.dart';
+import 'ui/guide/interactive_guide_controller.dart';
 import 'data/grid_order_repository.dart';
 import 'data/image_repository.dart';
 import 'data/metadata_writer.dart';
@@ -1066,6 +1067,9 @@ class ClipPixApp extends StatelessWidget {
       ),
       ChangeNotifierProvider<GuideRepository>.value(
         value: guideRepo,
+      ),
+      ChangeNotifierProvider<InteractiveGuideController>(
+        create: (_) => InteractiveGuideController(),
       ),
       ...AppStateProvider.providers(
         appStateBox: appStateBox,

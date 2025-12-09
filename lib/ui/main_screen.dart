@@ -10,6 +10,9 @@ import 'package:window_manager/window_manager.dart';
 import '../data/file_info_manager.dart';
 import '../data/guide_repository.dart';
 import 'guide/guide_steps.dart';
+import 'guide/interactive_guide_controller.dart';
+import 'guide/guide_overlay.dart';
+import 'guide/sample_image_window.dart';
 import '../data/grid_card_preferences_repository.dart';
 import '../system/debug_log.dart';
 import '../data/grid_layout_settings_repository.dart';
@@ -81,6 +84,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
   // Guide state
   bool _guideStarted = false;
   final GlobalKey<ShowCaseWidgetState> _showcaseKey = GlobalKey<ShowCaseWidgetState>();
+  int? _lastHistoryCount;
 
   @override
   void initState() {
@@ -104,12 +108,24 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     if (_guideStarted || !widget.showGuide) return;
     _guideStarted = true;
 
-    debugPrint('[MainScreen] Starting showcase...');
-    // Delay slightly to ensure all widgets are rendered
+    debugPrint('[MainScreen] Starting interactive guide...');
+    // Start interactive guide instead of showcase directly
     Future.delayed(const Duration(milliseconds: 500), () {
       if (!mounted) return;
-      _showcaseKey.currentState?.startShowCase(GuideKeys.getGuideKeyList());
+      final guideController = context.read<InteractiveGuideController>();
+      final selectedState = context.read<SelectedFolderState>();
+      final clipboardMonitor = context.read<ClipboardMonitor>();
+
+      guideController.start(
+        hasFolderSelected: selectedState.current != null && selectedState.isValid,
+        isClipboardRunning: clipboardMonitor.isRunning,
+      );
     });
+  }
+
+  void _startShowcaseGuide() {
+    debugPrint('[MainScreen] Starting showcase...');
+    _showcaseKey.currentState?.startShowCase(GuideKeys.getGuideKeyList());
   }
 
   void _onGuideComplete() {
@@ -118,6 +134,40 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     final guideRepo = context.read<GuideRepository>();
     guideRepo.markSessionCompleted();
     guideRepo.setFirstGuideCompleted(true); // 永続化して次回起動時に表示しない
+
+    // インタラクティブガイドも完了状態に
+    final interactiveGuide = context.read<InteractiveGuideController>();
+    if (interactiveGuide.phase == GuidePhase.uiShowcase) {
+      interactiveGuide.onShowcaseComplete();
+    }
+  }
+
+  /// インタラクティブガイド: 画像保存の検知
+  void _checkImageSavedForGuide(
+    InteractiveGuideController guide,
+    ImageHistoryState history,
+  ) {
+    if (guide.phase != GuidePhase.sampleImageCopy) {
+      _lastHistoryCount = history.entries.length;
+      return;
+    }
+    if (_lastHistoryCount != null && history.entries.length > _lastHistoryCount!) {
+      debugPrint('[MainScreen] Image saved detected, advancing guide');
+      guide.onImageSaved();
+    }
+    _lastHistoryCount = history.entries.length;
+  }
+
+  /// インタラクティブガイド: フェーズに応じたハイライトキーを取得
+  GlobalKey? _getHighlightKeyForPhase(GuidePhase phase) {
+    switch (phase) {
+      case GuidePhase.folderSelection:
+        return InteractiveGuideKeys.folderButton;
+      case GuidePhase.clipboardToggle:
+        return InteractiveGuideKeys.clipboardToggle;
+      default:
+        return null;
+    }
   }
 
   @override
@@ -245,6 +295,18 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     final historyState = context.watch<ImageHistoryState>();
     final deletionMode = context.watch<DeletionModeState>();
     final clipboardMonitor = context.watch<ClipboardMonitor>();
+    final guideController = context.watch<InteractiveGuideController>();
+
+    // インタラクティブガイド: 画像保存の検知
+    _checkImageSavedForGuide(guideController, historyState);
+
+    // インタラクティブガイド: uiShowcaseフェーズでShowCaseViewを開始
+    if (guideController.phase == GuidePhase.uiShowcase) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _startShowcaseGuide();
+      });
+    }
 
     // GridLayoutSettingsを取得してAppBarの色を決定
     final settingsRepo = context.watch<GridLayoutSettingsRepository>();
@@ -323,7 +385,9 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
           }
           return KeyEventResult.ignored;
         },
-        child: Scaffold(
+        child: GuideOverlay(
+          highlightKey: _getHighlightKeyForPhase(guideController.phase),
+          child: Scaffold(
         appBar: AppBar(
           backgroundColor: appBarBgColor,
           foregroundColor: appBarFgColor,
@@ -356,24 +420,27 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
               key: GuideKeys.getKey('clipboard_toggle'),
               title: firstGuideSteps[1].title,
               description: firstGuideSteps[1].description,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                child: Tooltip(
-                  message: clipboardMonitor.isRunning
-                      ? 'クリップボード監視を停止'
-                      : 'クリップボード監視を開始',
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.content_paste, size: 20),
-                      const SizedBox(width: 4),
-                      Switch(
-                        value: clipboardMonitor.isRunning,
-                        onChanged: (value) {
-                          _toggleClipboardMonitor(context, value);
-                        },
-                      ),
-                    ],
+              child: Container(
+                key: InteractiveGuideKeys.clipboardToggle,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  child: Tooltip(
+                    message: clipboardMonitor.isRunning
+                        ? 'クリップボード監視を停止'
+                        : 'クリップボード監視を開始',
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.content_paste, size: 20),
+                        const SizedBox(width: 4),
+                        Switch(
+                          value: clipboardMonitor.isRunning,
+                          onChanged: (value) {
+                            _toggleClipboardMonitor(context, value);
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -407,10 +474,13 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
               key: GuideKeys.getKey('folder_btn'),
               title: firstGuideSteps[0].title,
               description: firstGuideSteps[0].description,
-              child: IconButton(
-                icon: const Icon(Icons.folder_open),
-                tooltip: 'フォルダを選択',
-                onPressed: () => _requestFolderSelection(context),
+              child: Container(
+                key: InteractiveGuideKeys.folderButton,
+                child: IconButton(
+                  icon: const Icon(Icons.folder_open),
+                  tooltip: 'フォルダを選択',
+                  onPressed: () => _requestFolderSelection(context),
+                ),
               ),
             ),
             // 一括削除ボタン
@@ -466,6 +536,7 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
         bottomNavigationBar: watcherStatus.lastError != null
             ? _ErrorBanner(message: watcherStatus.lastError!)
             : null,
+          ),
         ),
       ),
     );
@@ -858,6 +929,15 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     final monitor = context.read<ClipboardMonitor>();
     if (enabled) {
       await monitor.start();
+      // インタラクティブガイドに通知
+      final guideController = context.read<InteractiveGuideController>();
+      if (guideController.phase == GuidePhase.clipboardToggle) {
+        guideController.onClipboardEnabled();
+        // サンプル画像ウィンドウを表示
+        if (mounted) {
+          SampleImageWindow.show(context);
+        }
+      }
     } else {
       await monitor.stop();
     }
@@ -930,6 +1010,12 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('フォルダを選択しました: ${directory.path}')),
     );
+
+    // インタラクティブガイドに通知
+    final guideController = context.read<InteractiveGuideController>();
+    if (guideController.phase == GuidePhase.folderSelection) {
+      guideController.onFolderSelected();
+    }
   }
 
   void _ensureDirectorySync(
