@@ -168,6 +168,12 @@ class _MainScreenState extends State<MainScreen> with WindowListener {
         ];
       case GuidePhase.clipboardToggle:
         return [InteractiveGuideKeys.clipboardToggle];
+      // カード操作フェーズはオーバーレイなし（nullを返す）
+      case GuidePhase.cardResize:
+      case GuidePhase.cardZoom:
+      case GuidePhase.cardPan:
+      case GuidePhase.cardPreview:
+        return null;
       default:
         return null;
     }

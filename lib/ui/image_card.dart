@@ -53,6 +53,7 @@ class ImageCard extends StatefulWidget {
     this.onReorderEnd,
     this.onReorderCancel,
     this.onHoverChanged,
+    this.onRightClickReleased,
     this.debugIndex,
   });
 
@@ -82,6 +83,8 @@ class ImageCard extends StatefulWidget {
   final void Function(String id)? onReorderEnd;
   final void Function(String id)? onReorderCancel;
   final void Function(bool isHovered)? onHoverChanged;
+  final void Function(String id, {required bool didZoom, required bool didPan})?
+      onRightClickReleased;
 
   /// デバッグ用: カードの配列インデックス（debugShowCardIndex=trueの時に中央に表示）
   final int? debugIndex;
@@ -128,6 +131,8 @@ class _ImageCardState extends State<ImageCard>
   bool _isResizing = false;
   bool _showControls = false;
   bool _isPanning = false;
+  bool _didZoomThisSession = false;
+  bool _didPanThisSession = false;
   int _retryCount = 0;
   int _currentSpan = 1;
   Size? _resizeStartSize;
@@ -985,7 +990,15 @@ class _ImageCardState extends State<ImageCard>
     debugLog('[ImageCard] _handlePointerUp ENTRY: kind=${event.kind}');
     if (event.kind == PointerDeviceKind.mouse) {
       debugLog('[ImageCard] pointerUp: id=${widget.item.id.split('/').last}, '
-          'isPanning=$_isPanning');
+          'isPanning=$_isPanning, didZoom=$_didZoomThisSession, didPan=$_didPanThisSession');
+
+      // ズーム/パン操作の完了を通知（ガイド用）
+      widget.onRightClickReleased?.call(
+        widget.item.id,
+        didZoom: _didZoomThisSession,
+        didPan: _didPanThisSession,
+      );
+
       _isRightButtonPressed = false;
       if (_isPanning) {
         _isPanning = false;
@@ -996,6 +1009,10 @@ class _ImageCardState extends State<ImageCard>
             'offset=$_imageOffset, scale=$_currentScale');
         widget.onPan(widget.item.id, _imageOffset);
       }
+
+      // フラグをリセット
+      _didZoomThisSession = false;
+      _didPanThisSession = false;
     }
   }
 
@@ -1009,12 +1026,17 @@ class _ImageCardState extends State<ImageCard>
     }
     final local = box.globalToLocal(event.position);
     final delta = local - _panStartLocal!;
+    final newOffset = clampPanOffset(
+      offset: _panStartOffset! + delta,
+      size: _sizeNotifier.value,
+      scale: _currentScale,
+    );
+    // 実際にオフセットが変わった場合のみパンとして記録（ガイド用）
+    if (newOffset != _imageOffset) {
+      _didPanThisSession = true;
+    }
     setState(() {
-      _imageOffset = clampPanOffset(
-        offset: _panStartOffset! + delta,
-        size: _sizeNotifier.value,
-        scale: _currentScale,
-      );
+      _imageOffset = newOffset;
     });
   }
 
@@ -1080,6 +1102,8 @@ class _ImageCardState extends State<ImageCard>
     final zoomFactor = math.exp(-scrollDeltaY / 300.0);
     final targetScale = _clampScale(_currentScale * zoomFactor);
     _applyZoomImmediate(targetScale, focalPoint: focalPoint);
+    // ズームしたことを記録（ガイド用）
+    _didZoomThisSession = true;
   }
 
   void _applyZoomImmediate(double targetScale, {Offset? focalPoint}) {

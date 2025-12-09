@@ -1,6 +1,6 @@
 # ClipPix ドキュメント一覧
 
-**最終更新**: 2025-12-06
+**最終更新**: 2025-12-09
 
 ClipPixプロジェクトの全ドキュメントとその概要です。
 
@@ -79,6 +79,7 @@ ClipPixプロジェクトの全ドキュメントとその概要です。
 | [image_preview_window.md](./ui/image_preview_window.md) | 画像プレビューウィンドウ、最前面表示、プロセス管理、TextPreviewWindow/PdfPreviewWindowとの関係 |
 | [grid_settings_dialog.md](./ui/grid_settings_dialog.md) | グリッド設定ダイアログ、列数設定、背景色、一括サイズ調整、Undo/Redo |
 | [onboarding.md](./ui/onboarding.md) | オンボーディング（初回起動チュートリアル）、スライド形式、再表示機能 |
+| [interactive_guide.md](./ui/interactive_guide.md) | インタラクティブガイド（操作ガイド）、体験型チュートリアル、フェーズ遷移 |
 
 ---
 
@@ -143,7 +144,8 @@ docs/
 │   ├── pdf_card.md
 │   ├── image_preview_window.md
 │   ├── grid_settings_dialog.md
-│   └── onboarding.md
+│   ├── onboarding.md
+│   └── interactive_guide.md
 │
 ├── architecture/                         ← アーキテクチャ
 │   ├── data_flow.md
@@ -178,6 +180,7 @@ docs/
 | 一括削除 | main_screen.md, state_management.md |
 | ウィンドウ位置保存 | window_bounds_service.md |
 | オンボーディング | onboarding.md, grid_settings_dialog.md |
+| インタラクティブガイド | interactive_guide.md, main_screen.md |
 
 ### 実装ファイルとドキュメントの対応
 
@@ -202,4 +205,6 @@ docs/
 | `lib/ui/widgets/grid_minimap_overlay.dart` | main_screen.md (セクション14) |
 | `lib/ui/onboarding/onboarding_screen.dart` | onboarding.md |
 | `lib/data/onboarding_repository.dart` | onboarding.md |
+| `lib/ui/guide/interactive_guide_controller.dart` | interactive_guide.md |
+| `lib/ui/guide/guide_overlay.dart` | interactive_guide.md |
 | `lib/data/grid_card_preferences_repository.dart` | repositories.md |

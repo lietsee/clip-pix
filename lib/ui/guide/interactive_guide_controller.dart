@@ -17,6 +17,18 @@ enum GuidePhase {
   /// 画像保存確認
   imageSaveConfirm,
 
+  /// カードリサイズ体験
+  cardResize,
+
+  /// カードズーム体験
+  cardZoom,
+
+  /// カードパン体験
+  cardPan,
+
+  /// カードプレビュー体験
+  cardPreview,
+
   /// ShowCaseView UIガイド
   uiShowcase,
 
@@ -65,6 +77,32 @@ const List<InteractiveGuideStep> interactiveGuideSteps = [
     description: '画像が自動で保存されました！\nこれがClipPixの基本機能です。',
     actionLabel: '次へ',
   ),
+  InteractiveGuideStep(
+    phase: GuidePhase.cardResize,
+    title: 'カードをリサイズ',
+    description: 'カードの角をドラッグして\nサイズを変更してみましょう。',
+  ),
+  InteractiveGuideStep(
+    phase: GuidePhase.cardZoom,
+    title: 'ズームしてみよう',
+    description: 'カード上で右クリック＋マウスホイールで\n拡大・縮小できます。',
+  ),
+  InteractiveGuideStep(
+    phase: GuidePhase.cardPan,
+    title: '画像を移動',
+    description: 'ズーム中に右クリック＋ドラッグで\n画像の表示位置を移動できます。',
+  ),
+  InteractiveGuideStep(
+    phase: GuidePhase.cardPreview,
+    title: 'プレビュー表示',
+    description: 'カードをダブルクリックすると\n大きなプレビューが開きます。',
+  ),
+  InteractiveGuideStep(
+    phase: GuidePhase.completed,
+    title: 'ガイド完了！',
+    description: 'これでClipPixの基本操作は完了です。\n自由に画像を管理してください！',
+    actionLabel: '完了',
+  ),
 ];
 
 /// インタラクティブガイドのコントローラー
@@ -87,6 +125,10 @@ class InteractiveGuideController extends ChangeNotifier {
       _phase.index > GuidePhase.notStarted.index &&
       _phase.index < GuidePhase.uiShowcase.index;
 
+  /// ガイドカードを表示すべきか（インタラクティブフェーズまたはcompleted）
+  bool get shouldShowGuideCard =>
+      isInteractivePhase || _phase == GuidePhase.completed;
+
   /// 現在のステップ番号（1-indexed、インタラクティブフェーズのみ）
   int get currentStepNumber {
     if (!isInteractivePhase) return 0;
@@ -98,6 +140,10 @@ class InteractiveGuideController extends ChangeNotifier {
 
   /// 現在のステップ情報
   InteractiveGuideStep? get currentStep {
+    // completedフェーズ専用処理
+    if (_phase == GuidePhase.completed) {
+      return interactiveGuideSteps.last;
+    }
     if (!isInteractivePhase) return null;
     final index = _phase.index - 1; // GuidePhase.folderSelection.index == 1
     if (index < 0 || index >= interactiveGuideSteps.length) return null;
@@ -157,15 +203,47 @@ class InteractiveGuideController extends ChangeNotifier {
     if (_phase != GuidePhase.imageSaveConfirm) return;
     _phase = GuidePhase.uiShowcase;
     notifyListeners();
-    debugPrint('[InteractiveGuide] Proceeding to showcase, phase: $_phase');
+    debugPrint('[InteractiveGuide] Proceeding to UI showcase, phase: $_phase');
   }
 
-  /// UIショーケース完了時に呼び出す
-  void onShowcaseComplete() {
-    if (_phase != GuidePhase.uiShowcase) return;
+  /// カードリサイズ完了時に呼び出す
+  void onCardResized() {
+    if (_phase != GuidePhase.cardResize) return;
+    _phase = GuidePhase.cardZoom;
+    notifyListeners();
+    debugPrint('[InteractiveGuide] Card resized, phase: $_phase');
+  }
+
+  /// カードズーム完了時に呼び出す
+  void onCardZoomed() {
+    if (_phase != GuidePhase.cardZoom) return;
+    _phase = GuidePhase.cardPan;
+    notifyListeners();
+    debugPrint('[InteractiveGuide] Card zoomed, phase: $_phase');
+  }
+
+  /// カードパン完了時に呼び出す
+  void onCardPanned() {
+    if (_phase != GuidePhase.cardPan) return;
+    _phase = GuidePhase.cardPreview;
+    notifyListeners();
+    debugPrint('[InteractiveGuide] Card panned, phase: $_phase');
+  }
+
+  /// プレビュー表示時に呼び出す
+  void onPreviewOpened() {
+    if (_phase != GuidePhase.cardPreview) return;
     _phase = GuidePhase.completed;
     notifyListeners();
-    debugPrint('[InteractiveGuide] Guide completed');
+    debugPrint('[InteractiveGuide] Preview opened, guide completed');
+  }
+
+  /// UIショーケース完了時に呼び出す（カード操作ガイドへ進む）
+  void onShowcaseComplete() {
+    if (_phase != GuidePhase.uiShowcase) return;
+    _phase = GuidePhase.cardResize;
+    notifyListeners();
+    debugPrint('[InteractiveGuide] Showcase complete, proceeding to card operations, phase: $_phase');
   }
 
   /// ガイドをスキップ
@@ -174,6 +252,13 @@ class InteractiveGuideController extends ChangeNotifier {
     _isSkipped = true;
     notifyListeners();
     debugPrint('[InteractiveGuide] Guide skipped');
+  }
+
+  /// ガイド完了を確認してリセット
+  void confirmComplete() {
+    if (_phase != GuidePhase.completed) return;
+    reset();
+    debugPrint('[InteractiveGuide] Guide confirmed complete');
   }
 
   /// ガイドをリセット

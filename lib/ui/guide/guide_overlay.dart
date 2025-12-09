@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 
@@ -76,20 +77,29 @@ class _GuideOverlayState extends State<GuideOverlay> {
       builder: (context, guide, _) {
         // ガイドがアクティブになったらハイライトチェックをスケジュール
         final hasKeys = widget.highlightKeys != null && widget.highlightKeys!.isNotEmpty;
-        if (guide.isInteractivePhase && hasKeys && !_highlightReady) {
+        if (guide.shouldShowGuideCard && hasKeys && !_highlightReady) {
           _scheduleHighlightCheck();
         }
+
+        // カード操作フェーズかどうか判定
+        final isCardOperationPhase = guide.phase == GuidePhase.cardResize ||
+            guide.phase == GuidePhase.cardZoom ||
+            guide.phase == GuidePhase.cardPan ||
+            guide.phase == GuidePhase.cardPreview;
 
         return Stack(
           children: [
             widget.child,
-            if (guide.isInteractivePhase) ...[
-              // ハイライトキーがある場合は穴あきオーバーレイ、なければ通常オーバーレイ
-              if (hasKeys)
-                _buildHighlightOverlay(context, widget.highlightKeys!)
-              else
-                _buildBackgroundOverlay(context, guide),
-              // ガイドカード
+            if (guide.shouldShowGuideCard) ...[
+              // カード操作フェーズはオーバーレイなし（カードを自由に操作できるように）
+              if (!isCardOperationPhase) ...[
+                // ハイライトキーがある場合は穴あきオーバーレイ、なければ通常オーバーレイ
+                if (hasKeys)
+                  _buildHighlightOverlay(context, widget.highlightKeys!)
+                else
+                  _buildBackgroundOverlay(context, guide),
+              ],
+              // ガイドカード（常に表示）
               _buildGuideCard(context, guide),
             ],
           ],
@@ -101,8 +111,8 @@ class _GuideOverlayState extends State<GuideOverlay> {
   Widget _buildBackgroundOverlay(
       BuildContext context, InteractiveGuideController guide) {
     return Positioned.fill(
-      child: IgnorePointer(
-        ignoring: true,
+      child: _TouchBlockingOverlay(
+        allowedRects: const [],
         child: Container(
           color: Colors.black.withOpacity(0.3),
         ),
@@ -132,8 +142,8 @@ class _GuideOverlayState extends State<GuideOverlay> {
     // RenderBoxが取得できない場合は背景オーバーレイにフォールバック
     if (rects.isEmpty) {
       return Positioned.fill(
-        child: IgnorePointer(
-          ignoring: true,
+        child: _TouchBlockingOverlay(
+          allowedRects: const [],
           child: Container(
             color: Colors.black.withOpacity(0.3),
           ),
@@ -142,8 +152,8 @@ class _GuideOverlayState extends State<GuideOverlay> {
     }
 
     return Positioned.fill(
-      child: IgnorePointer(
-        ignoring: true,
+      child: _TouchBlockingOverlay(
+        allowedRects: rects,
         child: CustomPaint(
           painter: _HighlightPainter(
             highlightRects: rects,
@@ -161,6 +171,7 @@ class _GuideOverlayState extends State<GuideOverlay> {
 
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final isCompleted = guide.phase == GuidePhase.completed;
 
     return Positioned(
       left: 16,
@@ -176,37 +187,39 @@ class _GuideOverlayState extends State<GuideOverlay> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 進捗インジケーター
-              Row(
-                children: [
-                  Text(
-                    'ステップ ${guide.currentStepNumber}/${guide.totalInteractiveSteps}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+              // 進捗インジケーター（completedフェーズでは非表示）
+              if (!isCompleted) ...[
+                Row(
+                  children: [
+                    Text(
+                      'ステップ ${guide.currentStepNumber}/${guide.totalInteractiveSteps - 1}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      ),
                     ),
-                  ),
-                  const Spacer(),
-                  // 進捗ドット
-                  Row(
-                    children: List.generate(
-                      guide.totalInteractiveSteps,
-                      (index) => Container(
-                        width: 8,
-                        height: 8,
-                        margin: const EdgeInsets.symmetric(horizontal: 2),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: index < guide.currentStepNumber
-                              ? theme.colorScheme.primary
-                              : (isDark ? Colors.grey[600] : Colors.grey[300]),
+                    const Spacer(),
+                    // 進捗ドット
+                    Row(
+                      children: List.generate(
+                        guide.totalInteractiveSteps - 1, // completedステップは除外
+                        (index) => Container(
+                          width: 8,
+                          height: 8,
+                          margin: const EdgeInsets.symmetric(horizontal: 2),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: index < guide.currentStepNumber
+                                ? theme.colorScheme.primary
+                                : (isDark ? Colors.grey[600] : Colors.grey[300]),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
+                  ],
+                ),
+                const SizedBox(height: 12),
+              ],
               // タイトル
               Text(
                 step.title,
@@ -231,20 +244,30 @@ class _GuideOverlayState extends State<GuideOverlay> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  TextButton(
-                    onPressed: () => guide.skip(),
-                    child: Text(
-                      'スキップ',
-                      style: TextStyle(
-                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  // completedフェーズではスキップボタンを非表示
+                  if (!isCompleted) ...[
+                    TextButton(
+                      onPressed: () => guide.skip(),
+                      child: Text(
+                        'スキップ',
+                        style: TextStyle(
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                   if (step.phase == GuidePhase.imageSaveConfirm) ...[
                     const SizedBox(width: 8),
                     ElevatedButton(
                       onPressed: () => guide.proceedToShowcase(),
                       child: const Text('次へ'),
+                    ),
+                  ],
+                  // completedフェーズでは完了ボタンを表示
+                  if (isCompleted) ...[
+                    ElevatedButton(
+                      onPressed: () => guide.confirmComplete(),
+                      child: Text(step.actionLabel ?? '完了'),
                     ),
                   ],
                 ],
@@ -296,5 +319,49 @@ class _HighlightPainter extends CustomPainter {
       if (highlightRects[i] != oldDelegate.highlightRects[i]) return true;
     }
     return overlayColor != oldDelegate.overlayColor;
+  }
+}
+
+/// ハイライト領域以外のタッチをブロックするウィジェット
+class _TouchBlockingOverlay extends SingleChildRenderObjectWidget {
+  const _TouchBlockingOverlay({
+    required this.allowedRects,
+    super.child,
+  });
+
+  final List<Rect> allowedRects;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) {
+    return _RenderTouchBlockingOverlay(allowedRects: allowedRects);
+  }
+
+  @override
+  void updateRenderObject(
+      BuildContext context, _RenderTouchBlockingOverlay renderObject) {
+    renderObject.allowedRects = allowedRects;
+  }
+}
+
+class _RenderTouchBlockingOverlay extends RenderProxyBox {
+  _RenderTouchBlockingOverlay({required List<Rect> allowedRects})
+      : _allowedRects = allowedRects;
+
+  List<Rect> _allowedRects;
+  set allowedRects(List<Rect> value) {
+    _allowedRects = value;
+  }
+
+  @override
+  bool hitTest(BoxHitTestResult result, {required Offset position}) {
+    // ハイライト領域内ならイベントを通過させる（false = 通過）
+    for (final rect in _allowedRects) {
+      if (rect.contains(position)) {
+        return false;
+      }
+    }
+    // それ以外はブロック（true = このウィジェットで消費）
+    result.add(BoxHitTestEntry(this, position));
+    return true;
   }
 }

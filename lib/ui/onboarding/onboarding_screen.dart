@@ -84,6 +84,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
+  void _previousPage() {
+    if (_currentPage > 0) {
+      _pageController.previousPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
   void _skipToEnd() {
     _completeOnboarding();
   }
@@ -161,16 +170,32 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       contentPadding: EdgeInsets.zero,
                     ),
                   const SizedBox(height: 16),
-                  // 次へ / 始めるボタン
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _nextPage,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
+                  // 戻る / 次へ / 始めるボタン
+                  Row(
+                    children: [
+                      // 戻るボタン（最初のページ以外で表示）
+                      if (_currentPage > 0)
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: _previousPage,
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                            ),
+                            child: const Text('戻る'),
+                          ),
+                        ),
+                      if (_currentPage > 0) const SizedBox(width: 16),
+                      // 次へ/始めるボタン
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: _nextPage,
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          child: Text(isLastPage ? '始める' : '次へ'),
+                        ),
                       ),
-                      child: Text(isLastPage ? '始める' : '次へ'),
-                    ),
+                    ],
                   ),
                 ],
               ),

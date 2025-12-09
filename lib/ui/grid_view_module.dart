@@ -37,6 +37,7 @@ import '../system/state/image_library_notifier.dart';
 import '../system/state/image_library_state.dart';
 import '../system/state/selected_folder_state.dart';
 import '../system/window/window_finder.dart';
+import 'guide/interactive_guide_controller.dart';
 import 'image_card.dart';
 import 'widgets/grid_layout_surface.dart';
 import 'widgets/pdf_card.dart';
@@ -958,6 +959,7 @@ class GridViewModuleState extends State<GridViewModule> {
               onHoverChanged: (isHovered) {
                 _onCardHoverChanged(isHovered ? item.id : null);
               },
+              onRightClickReleased: _handleRightClickReleased,
               debugIndex: debugShowCardIndex ? index : null,
             ),
         },
@@ -1437,6 +1439,18 @@ class GridViewModuleState extends State<GridViewModule> {
       span = rawSpan.clamp(1, geometry.columnCount);
     }
 
+    // 現在のカードサイズを取得（ガイドのサイズ変更検出用）
+    Size? oldSize;
+    if (snapshot != null) {
+      final currentEntry = snapshot.entries.firstWhere(
+        (e) => e.id == id,
+        orElse: () => snapshot.entries.first,
+      );
+      if (currentEntry.id == id) {
+        oldSize = Size(currentEntry.rect.width, currentEntry.rect.height);
+      }
+    }
+
     // リサイズコーナーから目標列を計算
     int? preferredColumnStart;
     if (corner != null && snapshot != null && geometry != null) {
@@ -1489,6 +1503,17 @@ class GridViewModuleState extends State<GridViewModule> {
       columnSpan: span,
       preferredColumnStart: preferredColumnStart,
     ));
+
+    // ガイドコールバック（サイズが実際に変わった場合のみ）
+    final guide = context.read<InteractiveGuideController>();
+    if (guide.phase == GuidePhase.cardResize) {
+      final sizeChanged = oldSize == null ||
+          (oldSize.width - newSize.width).abs() > 1 ||
+          (oldSize.height - newSize.height).abs() > 1;
+      if (sizeChanged) {
+        guide.onCardResized();
+      }
+    }
   }
 
   /// 上方向へのリサイズ時、カードをプレビュー位置に近い順序に移動
@@ -1548,12 +1573,33 @@ class GridViewModuleState extends State<GridViewModule> {
     _scaleDebounceTimers[id] = Timer(const Duration(milliseconds: 150), () {
       unawaited(_layoutStore.updateCard(id: id, scale: scale));
     });
+    // ガイドコールバックは _handleRightClickReleased で処理
   }
 
   void _handlePan(String id, Offset offset) {
     debugLog(
         '[GridViewModule] _handlePan: id=${id.split('/').last}, offset=$offset');
     unawaited(_layoutStore.updateCard(id: id, offset: offset));
+    // ガイドコールバックは _handleRightClickReleased で処理
+  }
+
+  /// 右クリック離した時のハンドラ（ズーム/パン操作ガイド用）
+  void _handleRightClickReleased(
+    String id, {
+    required bool didZoom,
+    required bool didPan,
+  }) {
+    final guide = context.read<InteractiveGuideController>();
+
+    // ズームフェーズで実際にズームした場合
+    if (guide.phase == GuidePhase.cardZoom && didZoom) {
+      guide.onCardZoomed();
+    }
+
+    // パンフェーズで実際にパンした場合
+    if (guide.phase == GuidePhase.cardPan && didPan) {
+      guide.onCardPanned();
+    }
   }
 
   void _handleSpanChange(String id, int span) {
@@ -1909,6 +1955,12 @@ class GridViewModuleState extends State<GridViewModule> {
   }
 
   Future<void> _showPreviewDialog(ImageItem item) async {
+    // ガイドコールバック（プレビューを開こうとした時点で呼ぶ）
+    final guide = context.read<InteractiveGuideController>();
+    if (guide.phase == GuidePhase.cardPreview) {
+      guide.onPreviewOpened();
+    }
+
     if (_imagePreviewManager == null) {
       debugPrint('[GridViewModule] ImagePreviewProcessManager is null');
       _showFallbackPreview(item);

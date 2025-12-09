@@ -23,12 +23,12 @@ const List<GuideStep> firstGuideSteps = [
   GuideStep(
     id: 'folder_btn',
     title: 'フォルダ選択',
-    description: '画像を保存するフォルダを選択します。\nサブフォルダも自動で認識されます。',
+    description: '画像を保存するフォルダを選択・変更できます。\nサブフォルダも自動で認識されます。',
   ),
   GuideStep(
     id: 'clipboard_toggle',
     title: 'クリップボード監視',
-    description: 'ONにすると画像コピー時に自動保存します。\nURL画像も自動ダウンロード！',
+    description: 'ONにすると画像コピー時に自動保存します。\n画像のURLをコピーしても自動ダウンロード！',
   ),
   GuideStep(
     id: 'new_text_btn',
@@ -48,7 +48,7 @@ const List<GuideStep> firstGuideSteps = [
   GuideStep(
     id: 'grid_area',
     title: 'グリッドエリア',
-    description: '• カードの角をドラッグでリサイズ\n• マウスホイールでズーム\n• 長押し→ドラッグで並び替え\n• ダブルクリックでプレビュー',
+    description: 'ここにフォルダに保存されたカードが表示されます。\n• カードの角をドラッグでリサイズ\n• マウスホイールでズーム\n• ダブルクリックでプレビュー',
   ),
 ];
 

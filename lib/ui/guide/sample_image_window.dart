@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -105,7 +104,7 @@ class _SampleImageWindowState extends State<SampleImageWindow> {
             const SizedBox(height: 16),
             // 操作説明
             Text(
-              Platform.isMacOS ? '⌘+C または右クリック→コピー' : 'Ctrl+C または右クリック→コピー',
+              '下記ボタンをクリックまたは右クリック→コピー',
               style: TextStyle(
                 fontSize: 13,
                 color: isDark ? Colors.grey[400] : Colors.grey[600],

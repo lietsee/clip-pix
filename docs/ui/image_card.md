@@ -1,6 +1,6 @@
 # ImageCard 実装仕様
 
-最終更新: 2025-12-03
+最終更新: 2025-12-09
 対象コミット: `30276df`（feat: add four-corner resize handles for cards）
 
 本書は `lib/ui/image_card.dart` に実装されているカードコンポーネントの仕様・挙動・描画フローを整理したものです。GridViewModule/ClipPix のリファクタ作業で参照できるよう、ユーザー操作とコールバックの関係、描画制御、既知の制約を詳細にまとめます。
@@ -124,6 +124,22 @@ Rect _calculatePreviewRect(Size size) {
 - ズーム時はフォーカス点（ホイール位置）を考慮してパン位置を補正。
 - スケールは 0.5〜15.0 に clamp、更新時に `onZoom` で prefs レイヤへ保存要求。
 
+#### 4.2.1 右クリックリリース通知（ガイド連携）
+インタラクティブガイドのズーム/パン操作判定のため、右クリックリリース時に操作内容を通知:
+```dart
+void _handlePointerUp(PointerUpEvent event) {
+  widget.onRightClickReleased?.call(
+    widget.item.id,
+    didZoom: _didZoomThisSession,
+    didPan: _didPanThisSession,
+  );
+  _didZoomThisSession = false;
+  _didPanThisSession = false;
+}
+```
+- `_didZoomThisSession`: 右クリック中にホイールズームを行ったか
+- `_didPanThisSession`: 右クリック中にドラッグでパンを行ったか
+
 ### 4.3 コピー・プレビュー
 - コピーアイコン（右上のボタン）クリック or `Ctrl+C` で `onCopyImage`。
 - ダブルクリックでプレビュー (`onOpenPreview`)。シングルクリックはフォーカスのみ。
@@ -152,6 +168,7 @@ Rect _calculatePreviewRect(Size size) {
 右下ドラッグ            _sizeNotifier / _currentSpan -> onResize/onSpanChange
 右クリック+ドラッグ     _imageOffset 更新             onPan (操作終了時)
 右クリック+スクロール   _currentScale/_imageOffset -> onZoom
+右クリック離す          フラグリセット                onRightClickReleased (ガイド用)
 コピーアイコン          （状態変化なし）              onCopyImage
 Retryボタン             _visualState=loading -> onRetry
 ダブルクリック          (状態変化なし)               onOpenPreview

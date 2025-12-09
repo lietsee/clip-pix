@@ -43,9 +43,27 @@ class OnboardingRepository extends ChangeNotifier {
 
 - `PageController` で横スワイプ対応
 - ドット型ページインジケーター
-- 「スキップ」「次へ」「始める」ボタン
+- 「戻る」「スキップ」「次へ」「始める」ボタン
 - 最終ページに「次回から表示しない」チェックボックス
-- 最小ウィンドウサイズ保証（800x600）
+- 最小ウィンドウサイズ保証（800x750）
+
+#### ナビゲーションボタン
+| ページ | 表示ボタン |
+|--------|-----------|
+| 1ページ目 | 「次へ」のみ |
+| 2～5ページ目 | 「戻る」+「次へ」 |
+| 最終ページ | 「戻る」+「始める」 |
+
+```dart
+void _previousPage() {
+  if (_currentPage > 0) {
+    _pageController.previousPage(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+}
+```
 
 ### OnboardingAnimationWidget
 
