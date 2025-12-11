@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/grid_layout_settings_repository.dart';
 import '../../data/guide_repository.dart';
@@ -364,14 +365,11 @@ class _GridSettingsDialogState extends State<GridSettingsDialog> {
         ),
         const SizedBox(height: 8),
         OutlinedButton.icon(
-          onPressed: () async {
-            await context.read<GuideRepository>().resetGuide();
-            if (mounted) {
-              Navigator.of(context).pop();
-            }
+          onPressed: () {
+            launchUrl(Uri.parse('https://www.niwatoku.net/software/clip-pix'));
           },
-          icon: const Icon(Icons.tour_outlined),
-          label: const Text('操作ガイドを再表示'),
+          icon: const Icon(Icons.open_in_new),
+          label: const Text('ヘルプページを開く'),
         ),
       ],
     );
