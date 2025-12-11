@@ -6,7 +6,7 @@
 
 ## 概要
 
-`GridLayoutLayoutEngine` は、Pinterest風のマサリーレイアウトを計算する純粋な計算エンジンです。状態管理から分離された設計により、レイアウト計算のテスタビリティと再利用性を実現しています。
+`GridLayoutLayoutEngine` は、タイル風のマソンリーレイアウトを計算する純粋な計算エンジンです。状態管理から分離された設計により、レイアウト計算のテスタビリティと再利用性を実現しています。
 
 ### 設計原則
 
@@ -22,7 +22,7 @@ graph LR
     A[GridLayoutStore] -->|geometry + viewStates| B[GridLayoutLayoutEngine]
     B -->|LayoutComputationResult| A
     B -->|LayoutSnapshot| C[GridLayoutSurface]
-    C -->|レンダリング| D[PinterestSliverGrid]
+    C -->|レンダリング| D[タイルグリッド]
 ```
 
 ## 主要API
@@ -178,9 +178,9 @@ class GridCardViewState {
 
 ## レイアウトアルゴリズム
 
-### Pinterestスタイル配置
+### タイルスタイル配置
 
-カードを最短のカラムに配置していく「滝レイアウト」アルゴリズム。
+カードを最短のカラムに配置していく「マソンリーレイアウト」アルゴリズム。
 
 #### アルゴリズムフロー
 
@@ -425,7 +425,7 @@ final engine = GridLayoutLayoutEngine(idProvider: MockIdProvider());
 
 - [GridLayoutStore](./state_management.md#gridlayoutstore) - レイアウトエンジンを使用する状態管理
 - [GridLayoutSurface](./grid_layout_surface.md) - スナップショットのレンダリング
-- PinterestSliverGrid - マサリーレイアウトの実装（`lib/ui/widgets/pinterest_grid.dart`）
+- PinterestSliverGrid - マソンリーレイアウトの実装（`lib/ui/widgets/pinterest_grid.dart`）
 
 ## 制限事項
 

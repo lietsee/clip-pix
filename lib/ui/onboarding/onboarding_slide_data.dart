@@ -46,7 +46,7 @@ const List<OnboardingSlideData> onboardingSlides = [
   // スライド1: ようこそ
   OnboardingSlideData(
     title: 'ClipPixへようこそ',
-    description: 'クリップボードから画像を自動保存し、\nPinterest風グリッドで整理するアプリです',
+    description: 'クリップボードから画像を自動保存し、\nタイル風グリッドで整理するアプリです',
     icon: Icons.auto_awesome,
     iconColor: Colors.amber,
     animationType: OnboardingAnimationType.scaleIn,

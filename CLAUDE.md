@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-ClipPix is a Windows desktop application built with Flutter that automatically captures images from the clipboard, saves them with metadata (JSON), and displays them in a dynamic Pinterest-style grid with interactive resizing, zoom, and preview capabilities.
+ClipPix is a Windows desktop application built with Flutter that automatically captures images from the clipboard, saves them with metadata (JSON), and displays them in a dynamic tile-style masonry grid with interactive resizing, zoom, and preview capabilities.
 
 **Tech Stack**: Flutter 3.22+, Dart 3.5+, Hive (persistence), Provider + StateNotifier (state management), win32 (clipboard integration), flutter_staggered_grid_view
 
@@ -56,7 +56,7 @@ flutter analyze                    # Static analysis
 2. `GridLayoutLayoutEngine` generates `LayoutSnapshot` (rect positions, IDs, column spans)
 3. `GridLayoutSurface` manages Front/Back buffer for snapshots, coordinating with `GeometryMutationQueue` to batch updates
 4. User actions (column changes, bulk alignment, drag resize) → `GridResizeController` → `GridLayoutStore.updateGeometry()` → batched `notifyListeners()` once per commit
-5. `PinterestGrid` (Pinterest-style Sliver) renders cards based on snapshot geometry
+5. `PinterestGrid` (tile-style masonry Sliver) renders cards based on snapshot geometry
 
 ### State Management Structure
 

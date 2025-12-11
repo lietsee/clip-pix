@@ -242,7 +242,7 @@ sequenceDiagram
 
     Note over Surface: バッファスワップ
     Surface->>Surface: setState(front ← staging)
-    Surface->>Surface: PinterestSliverGrid再描画
+    Surface->>Surface: タイルグリッド再描画
 
     Note over Minimap: ミニマップ更新
     Minimap->>Minimap: setState() → rebuild with new snapshot

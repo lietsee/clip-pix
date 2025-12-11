@@ -53,7 +53,7 @@ ClipPixプロジェクトの全ドキュメントとその概要です。
 
 | ファイル | 概要 |
 |---------|------|
-| [grid_layout_layout_engine.md](./system/grid_layout_layout_engine.md) | Pinterestスタイルレイアウト計算エンジン、マサリーアルゴリズム、スナップショット生成 |
+| [grid_layout_layout_engine.md](./system/grid_layout_layout_engine.md) | タイルスタイルレイアウト計算エンジン、マソンリーアルゴリズム、スナップショット生成 |
 | [grid_layout_surface.md](./system/grid_layout_surface.md) | Front/Stagingダブルバッファアーキテクチャ、ジオメトリ更新スロットリング |
 | [grid_layout_mutation_controller.md](./system/grid_layout_mutation_controller.md) | グリッドミューテーションライフサイクル管理、ネスト対応、不整合検出 |
 | [grid_layout_store_migration.md](./system/grid_layout_store_migration.md) | GridLayoutStoreへの移行計画、バッチ適用方式、永続化同期パターン |
@@ -72,7 +72,7 @@ ClipPixプロジェクトの全ドキュメントとその概要です。
 | ファイル | 概要 |
 |---------|------|
 | [main_screen.md](./ui/main_screen.md) | メイン画面、フォルダ選択、タブ表示、AppBar、一括削除モード、プレビューウィンドウ管理 |
-| [grid_view.md](./ui/grid_view.md) | Pinterestスタイルグリッド表示、カードリサイズ、ズーム、ドラッグ&ドロップ、Entry Reconciliation |
+| [grid_view.md](./ui/grid_view.md) | タイルスタイルグリッド表示、カードリサイズ、ズーム、ドラッグ&ドロップ、Entry Reconciliation |
 | [image_card.md](./ui/image_card.md) | 画像カードコンポーネント、リサイズ・ズーム・パン操作、コピー・プレビュー、リオーダー |
 | [text_card.md](./ui/text_card.md) | テキストカードコンポーネント、ホバーボタン編集、インライン編集、お気に入り |
 | [pdf_card.md](./ui/pdf_card.md) | PDFカードコンポーネント、サムネイル表示、ページ数バッジ、プレビュー |

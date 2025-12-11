@@ -134,7 +134,7 @@ sequenceDiagram
 
     Surface->>Store: updateGeometry(geometry)
     Store->>Engine: compute(geometry, states)
-    Engine->>Engine: マサリーレイアウト計算
+    Engine->>Engine: マソンリーレイアウト計算
     Engine-->>Store: LayoutComputationResult
 
     Note over Store: スナップショット更新
@@ -384,7 +384,7 @@ setState(() {
 
 ## レイアウト計算アルゴリズム
 
-### Pinterest スタイルマサリーレイアウト
+### タイルスタイルマソンリーレイアウト
 
 ```mermaid
 flowchart TD
@@ -484,7 +484,7 @@ class _ImageCardState extends State<ImageCard> {
 
 ## Sliver レンダリング
 
-### PinterestSliverGrid の描画フロー
+### タイルグリッドの描画フロー
 
 ```mermaid
 sequenceDiagram
@@ -682,11 +682,11 @@ testWidgets('full rendering pipeline', (tester) async {
 - [Data Flow](./data_flow.md) - 全体データフロー
 - [State Management Flow](./state_management_flow.md) - 状態管理フロー
 
-## Masonryレイアウトループの終了条件 (2025-11-30追加)
+## マソンリーレイアウトループの終了条件 (2025-11-30追加)
 
 ### 問題と解決
 
-Pinterest/Masonryグリッドでは、カードは**最も低いカラム**に配置される。以前の実装では、1つのカードが`targetEndScrollOffset`を超えた時点でレイアウトループを終了していたが、これでは他のカラムがまだ短い場合にカードが配置されずに表示されないバグが発生していた。
+タイル/マソンリーグリッドでは、カードは**最も低いカラム**に配置される。以前の実装では、1つのカードが`targetEndScrollOffset`を超えた時点でレイアウトループを終了していたが、これでは他のカラムがまだ短い場合にカードが配置されずに表示されないバグが発生していた。
 
 **修正前（バグあり）**:
 ```dart
@@ -700,7 +700,7 @@ if (childEnd > targetEndScrollOffset) {
 **修正後（commit f787070）**:
 ```dart
 // 全カラムの最小高さがtargetを超えたら終了
-// Masonryでは次のカードは必ず最も低いカラムに配置される
+// マソンリーでは次のカードは必ず最も低いカラムに配置される
 // よって最小カラム高さ > target = 全カラムがビューポートをカバー済み
 final double minColumnHeight = columnHeights.reduce(math.min);
 if (minColumnHeight > targetEndScrollOffset) {
@@ -735,7 +735,7 @@ Column 0     Column 1     Column 2
 
 | 日付 | 内容 |
 |------|------|
-| 2025-11-30 | Masonryレイアウトループ終了条件の修正（f787070）追加 |
+| 2025-11-30 | マソンリーレイアウトループ終了条件の修正（f787070）追加 |
 | 2025-11-28 | セマンティクス機能削除（アクセシビリティ不要のため） |
 | 2025-11-28 | 全体アーキテクチャ図、詳細シーケンス図、カードライフサイクル追加 |
 | 2025-11-02 | 個別カード更新フロー、スナップショット再生成パターン追加 |

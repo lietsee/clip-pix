@@ -54,8 +54,8 @@ graph TB
     D --> E[GridLayoutLayoutEngine]
     A --> F[Front Buffer]
     A --> G[Staging Buffer]
-    F --> H[PinterestSliverGrid可視]
-    G --> I[PinterestSliverGrid非表示Offstage]
+    F --> H[タイルグリッド可視]
+    G --> I[タイルグリッド非表示Offstage]
 ```
 
 ## 主要API
@@ -99,7 +99,7 @@ typedef GridLayoutChildBuilder = Widget Function(
 );
 ```
 
-**役割**: Front/StagingバッファそれぞれでPinterestSliverGridをビルド
+**役割**: Front/Stagingバッファそれぞれでタイルグリッドをビルド
 
 ### GridColumnCountResolver
 
@@ -514,7 +514,7 @@ testWidgets('geometry change triggers buffer swap', (tester) async {
   await tester.pump();
   await tester.pump();
 
-  expect(find.byType(PinterestSliverGrid), findsOneWidget);
+  expect(find.byType(PinterestSliverGrid), findsOneWidget);  // 内部実装クラス名
 });
 ```
 

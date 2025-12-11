@@ -507,7 +507,7 @@ sequenceDiagram
     Store->>Store: notifyListeners()
     Store->>Surface: リスナー通知
     Surface->>Surface: setState(frontSnapshot ← stagingSnapshot)
-    Surface->>UI: PinterestSliverGrid再描画
+    Surface->>UI: タイルグリッド再描画
 ```
 
 ## エラー状態管理
