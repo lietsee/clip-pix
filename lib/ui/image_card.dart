@@ -186,8 +186,17 @@ class _ImageCardState extends State<ImageCard>
       _highlightController.repeat(reverse: true);
     }
 
+    // フォーカス変更時に青枠を再描画するためのリスナー
+    _focusNode.addListener(_onFocusChanged);
+
     debugPrint('[ImageCard] initState_restore: id=${widget.item.id.split('/').last}, '
         'offset=$_imageOffset, scale=$_currentScale');
+  }
+
+  void _onFocusChanged() {
+    if (mounted) {
+      setState(() {}); // フォーカス変更時に再描画
+    }
   }
 
   @override
@@ -260,6 +269,7 @@ class _ImageCardState extends State<ImageCard>
     _memoTooltipService = null;
     _overlayService?.dispose();
     _overlayService = null;
+    _focusNode.removeListener(_onFocusChanged);
     _focusNode.dispose();
     _sizeNotifier.removeListener(_handleSizeExternalChange);
     _scaleNotifier.removeListener(_handleScaleExternalChange);
@@ -376,17 +386,31 @@ class _ImageCardState extends State<ImageCard>
                 return AnimatedBuilder(
                   animation: _highlightAnimation,
                   builder: (context, child) {
-                    final borderOpacity = widget.isHighlighted
-                        ? _highlightAnimation.value
-                        : 0.0;
+                    // フォーカス状態または削除モード選択状態で青枠表示
+                    final showSelectionBorder =
+                        _focusNode.hasFocus || widget.isSelected;
+                    // ハイライト点滅 > 選択枠 > 枠なし の優先順位
+                    final Color borderColor;
+                    final double borderWidth;
+                    if (widget.isHighlighted) {
+                      borderColor =
+                          Colors.blue.withOpacity(_highlightAnimation.value);
+                      borderWidth = 3;
+                    } else if (showSelectionBorder) {
+                      borderColor = Colors.blue;
+                      borderWidth = 2;
+                    } else {
+                      borderColor = Colors.transparent;
+                      borderWidth = 0;
+                    }
                     return Container(
                       width: clampedSize.width,
                       height: clampedSize.height,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: Colors.blue.withOpacity(borderOpacity),
-                          width: 3,
+                          color: borderColor,
+                          width: borderWidth,
                         ),
                       ),
                       child: child,
