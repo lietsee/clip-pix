@@ -24,9 +24,14 @@ flutter test --coverage            # Run with coverage report
 flutter drive --target=integration_test/resize_flow_test.dart  # Integration tests
 
 # Build
-flutter build windows              # Production build
+flutter build windows              # Production build (Windows)
+flutter build macos --release      # Production build (macOS)
 dart format .                      # Format all Dart files (required by CI)
 flutter analyze                    # Static analysis
+
+# Distribution (macOS)
+./scripts/build_macos_dmg.sh       # Build, sign, notarize, create DMG
+./scripts/bump_version.sh patch    # Bump patch version (0.1.0 → 0.1.1)
 ```
 
 ## High-Level Architecture
