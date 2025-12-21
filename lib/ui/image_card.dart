@@ -154,6 +154,9 @@ class _ImageCardState extends State<ImageCard>
   String? _resolvedSignature;
   double _currentScale = 1.0;
   bool _suppressScaleListener = false;
+  // ピンチズーム用
+  double _pinchBaseScale = 1.0;
+  Offset? _pinchFocalPoint;
   Timer? _loadingTimeout;
   int _loadingStateVersion = 0;
   late ValueNotifier<Size> _sizeNotifier;
@@ -356,6 +359,9 @@ class _ImageCardState extends State<ImageCard>
           onPointerUp: _handlePointerUp,
           onPointerMove: _handlePointerMove,
           onPointerSignal: _handlePointerSignal,
+          onPointerPanZoomStart: _handlePanZoomStart,
+          onPointerPanZoomUpdate: _handlePanZoomUpdate,
+          onPointerPanZoomEnd: _handlePanZoomEnd,
           child: MouseRegion(
             onEnter: (_) {
               debugLog('[ImageCard] onEnter: ${widget.item.id.split('/').last}');
@@ -1065,43 +1071,96 @@ class _ImageCardState extends State<ImageCard>
   }
 
   void _handlePointerSignal(PointerSignalEvent event) {
-    if (event is PointerScrollEvent && _isRightButtonPressed) {
-      GestureBinding.instance.pointerSignalResolver.register(
-        event,
-        (resolvedEvent) {
-          final scrollEvent = resolvedEvent as PointerScrollEvent;
-          final box = context.findRenderObject() as RenderBox?;
-          final local = box?.globalToLocal(scrollEvent.position);
-          _handleWheelZoom(scrollEvent.scrollDelta.dy, focalPoint: local);
-          _consumeScroll = true;
-        },
-      );
+    if (event is PointerScrollEvent) {
+      // 右クリック押下中 または Cmd/Ctrl押下中にホイールズーム
+      final shouldZoom = _isRightButtonPressed || _isModifierZoomPressed();
+      if (shouldZoom) {
+        GestureBinding.instance.pointerSignalResolver.register(
+          event,
+          (resolvedEvent) {
+            final scrollEvent = resolvedEvent as PointerScrollEvent;
+            final box = context.findRenderObject() as RenderBox?;
+            final local = box?.globalToLocal(scrollEvent.position);
+            _handleWheelZoom(scrollEvent.scrollDelta.dy, focalPoint: local);
+            _consumeScroll = true;
+          },
+        );
+      }
     }
+  }
+
+  /// macOSではCmd、WindowsではCtrlが押されているかチェック
+  bool _isModifierZoomPressed() {
+    final keyboard = HardwareKeyboard.instance;
+    if (Platform.isMacOS) {
+      return keyboard.isMetaPressed; // Cmd key
+    } else {
+      return keyboard.isControlPressed; // Ctrl key
+    }
+  }
+
+  // ピンチズーム（タッチパッド）対応
+  void _handlePanZoomStart(PointerPanZoomStartEvent event) {
+    _pinchBaseScale = _currentScale;
+    final box = context.findRenderObject() as RenderBox?;
+    _pinchFocalPoint = box?.globalToLocal(event.position);
+    debugLog('[ImageCard] pinch_start: id=${widget.item.id.split('/').last}, '
+        'baseScale=$_pinchBaseScale');
+  }
+
+  void _handlePanZoomUpdate(PointerPanZoomUpdateEvent event) {
+    // event.scale は累積スケール (1.0が開始時、2.0で2倍)
+    if (event.scale == 1.0) {
+      // スケール変化なし（パンのみ）→ここでは無視
+      return;
+    }
+
+    final targetScale = _clampScale(_pinchBaseScale * event.scale);
+
+    // フォーカルポイントを更新
+    final box = context.findRenderObject() as RenderBox?;
+    final focalPoint = box?.globalToLocal(event.position) ?? _pinchFocalPoint;
+
+    _applyZoomImmediate(targetScale, focalPoint: focalPoint);
+    _didZoomThisSession = true;
+    _consumeScroll = true;
+
+    debugLog('[ImageCard] pinch_update: scale=${event.scale}, '
+        'targetScale=$targetScale');
+  }
+
+  void _handlePanZoomEnd(PointerPanZoomEndEvent event) {
+    debugLog('[ImageCard] pinch_end: finalScale=$_currentScale');
+    _pinchBaseScale = 1.0;
+    _pinchFocalPoint = null;
   }
 
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) {
       return KeyEventResult.ignored;
     }
-    final pressed = HardwareKeyboard.instance.logicalKeysPressed;
-    final ctrlPressed = pressed.contains(LogicalKeyboardKey.controlLeft) ||
-        pressed.contains(LogicalKeyboardKey.controlRight);
+    final keyboard = HardwareKeyboard.instance;
+    final pressed = keyboard.logicalKeysPressed;
+    // macOSではCmd、WindowsではCtrlを修飾キーとして使用
+    final modifierPressed = Platform.isMacOS
+        ? keyboard.isMetaPressed
+        : keyboard.isControlPressed;
     final shiftPressed = pressed.contains(LogicalKeyboardKey.shiftLeft) ||
         pressed.contains(LogicalKeyboardKey.shiftRight);
 
-    if (ctrlPressed &&
+    if (modifierPressed &&
         (event.logicalKey == LogicalKeyboardKey.equal ||
             event.logicalKey == LogicalKeyboardKey.numpadAdd)) {
       _applyZoom(0.1);
       return KeyEventResult.handled;
     }
-    if (ctrlPressed &&
+    if (modifierPressed &&
         (event.logicalKey == LogicalKeyboardKey.minus ||
             event.logicalKey == LogicalKeyboardKey.numpadSubtract)) {
       _applyZoom(-0.1);
       return KeyEventResult.handled;
     }
-    if (ctrlPressed && event.logicalKey == LogicalKeyboardKey.keyC) {
+    if (modifierPressed && event.logicalKey == LogicalKeyboardKey.keyC) {
       widget.onCopyImage(widget.item);
       return KeyEventResult.handled;
     }

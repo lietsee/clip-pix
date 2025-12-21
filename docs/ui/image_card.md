@@ -116,12 +116,25 @@ Rect _calculatePreviewRect(Size size) {
 - `onSpanChange` で列スパンを永続化
 
 ### 4.2 ズーム & パン
-- **マウス**: 右クリック押下中にホイールスクロール→指数関数的ズーム（`exp(-Δy / 300)`）。
-- **キーボード**: `Ctrl` + `+`/`-`、`Ctrl` + `Shift` + `=` 等で ±0.1 ずつズーム。
+
+#### ズーム操作一覧
+
+| 操作 | 方法 | プラットフォーム |
+|------|------|------------------|
+| **マウスホイールズーム** | 右クリック押下中にホイール回転 | Windows/macOS |
+| **修飾キー+ホイールズーム** | Cmd(macOS) / Ctrl(Windows) + ホイール回転 | 各OS |
+| **ピンチズーム** | タッチパッドで2本指ピンチ | macOS (Magic Trackpad/Magic Mouse), Windows (対応タッチパッド) |
+| **キーボードズーム** | Cmd/Ctrl + `+`/`-` | 各OS |
+
+#### 実装詳細
+
+- **マウスホイールズーム**: 右クリック押下中または修飾キー（Cmd/Ctrl）押下中にホイールスクロール→指数関数的ズーム（`exp(-Δy / 300)`）。`_isModifierZoomPressed()` でプラットフォームに応じた修飾キーを判定。
+- **ピンチズーム**: `Listener.onPointerPanZoomStart/Update/End` で `PointerPanZoomEvent` を処理。開始時のスケールを `_pinchBaseScale` に保存し、`event.scale` との積で目標スケールを計算。
+- **キーボード**: macOSでは `Cmd` + `+`/`-`、Windowsでは `Ctrl` + `+`/`-` で ±0.1 ずつズーム。
 - **パン**: 右クリック + ドラッグで有効。画像中央を基準に `clampPanOffset` で画角外へ出ないよう制限。
 - **パン永続化**: パン操作終了時（右クリックリリース）に `onPan(id, offset)` コールバックを呼び出し、`GridLayoutStore` 経由で Hive に永続化。アプリ再起動後も復元される。
 - **Listener 設定**: `behavior: HitTestBehavior.translucent` により、子要素（GestureDetector等）へのイベント伝播を維持しつつ、ポインターイベントを確実に受信。
-- ズーム時はフォーカス点（ホイール位置）を考慮してパン位置を補正。
+- ズーム時はフォーカス点（ホイール位置またはピンチ中心）を考慮してパン位置を補正。
 - スケールは 0.5〜15.0 に clamp、更新時に `onZoom` で prefs レイヤへ保存要求。
 
 #### 4.2.1 右クリックリリース通知（ガイド連携）
