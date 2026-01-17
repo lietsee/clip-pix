@@ -2296,32 +2296,72 @@ class GridViewModuleState extends State<GridViewModule> {
 
   String? _resolveExecutablePath() {
     final exe = Platform.resolvedExecutable;
-    if (exe.toLowerCase().contains('clip_pix')) {
+    // Check if running from installed/bundled app
+    if (exe.toLowerCase().contains('clip_pix') ||
+        exe.toLowerCase().contains('clippix')) {
       return exe;
     }
-    final debugCandidate = p.join(
-      Directory.current.path,
-      'build',
-      'windows',
-      'x64',
-      'runner',
-      'Debug',
-      'clip_pix.exe',
-    );
-    if (File(debugCandidate).existsSync()) {
-      return debugCandidate;
-    }
-    final releaseCandidate = p.join(
-      Directory.current.path,
-      'build',
-      'windows',
-      'x64',
-      'runner',
-      'Release',
-      'clip_pix.exe',
-    );
-    if (File(releaseCandidate).existsSync()) {
-      return releaseCandidate;
+
+    if (Platform.isMacOS) {
+      // macOS Debug build
+      final debugCandidate = p.join(
+        Directory.current.path,
+        'build',
+        'macos',
+        'Build',
+        'Products',
+        'Debug',
+        'ClipPix.app',
+        'Contents',
+        'MacOS',
+        'ClipPix',
+      );
+      if (File(debugCandidate).existsSync()) {
+        return debugCandidate;
+      }
+      // macOS Release build
+      final releaseCandidate = p.join(
+        Directory.current.path,
+        'build',
+        'macos',
+        'Build',
+        'Products',
+        'Release',
+        'ClipPix.app',
+        'Contents',
+        'MacOS',
+        'ClipPix',
+      );
+      if (File(releaseCandidate).existsSync()) {
+        return releaseCandidate;
+      }
+    } else {
+      // Windows Debug build
+      final debugCandidate = p.join(
+        Directory.current.path,
+        'build',
+        'windows',
+        'x64',
+        'runner',
+        'Debug',
+        'clip_pix.exe',
+      );
+      if (File(debugCandidate).existsSync()) {
+        return debugCandidate;
+      }
+      // Windows Release build
+      final releaseCandidate = p.join(
+        Directory.current.path,
+        'build',
+        'windows',
+        'x64',
+        'runner',
+        'Release',
+        'clip_pix.exe',
+      );
+      if (File(releaseCandidate).existsSync()) {
+        return releaseCandidate;
+      }
     }
     return null;
   }

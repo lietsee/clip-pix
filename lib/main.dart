@@ -342,17 +342,35 @@ bool _isParentProcessAlive(int pid) {
   }
 }
 
+// Global key to access the preview app state for zoom persistence
+GlobalKey<_ImagePreviewAppState>? _previewAppKey;
+
 Future<void> _launchPreviewMode(String payload, int? parentPid) async {
   // 親プロセス監視タイマー（親プロセス終了時に自動終了）
+  // ズーム状態を保存してから終了する
   if (parentPid != null) {
-    Timer.periodic(const Duration(seconds: 1), (timer) {
+    Timer.periodic(const Duration(seconds: 1), (timer) async {
       if (!_isParentProcessAlive(parentPid)) {
-        debugPrint('[ImagePreviewMode] Parent process $parentPid not found, exiting');
+        debugPrint(
+            '[ImagePreviewMode] Parent process $parentPid not found, saving zoom state and exiting');
         timer.cancel();
+
+        // Save zoom state before exiting
+        try {
+          final appState = _previewAppKey?.currentState;
+          if (appState != null) {
+            await appState.saveZoomState();
+            debugPrint('[ImagePreviewMode] Zoom state saved');
+          }
+        } catch (e) {
+          debugPrint('[ImagePreviewMode] Failed to save zoom state: $e');
+        }
+
         exit(0);
       }
     });
-    debugPrint('[ImagePreviewMode] Started parent process monitor for PID: $parentPid');
+    debugPrint(
+        '[ImagePreviewMode] Started parent process monitor for PID: $parentPid');
   }
 
   await runZonedGuarded(
@@ -416,6 +434,11 @@ Future<void> _launchPreviewMode(String payload, int? parentPid) async {
       ImagePreviewStateRepository? repository;
       Rect? restoredBounds;
 
+      // Zoom state variables (declared outside try block for scope)
+      double? initialZoomScale;
+      double? initialPanOffsetX;
+      double? initialPanOffsetY;
+
       // Generate unique Hive directory name based on item ID
       String getHiveDirectoryName(String itemId) {
         final bytes = utf8.encode(itemId);
@@ -434,24 +457,36 @@ Future<void> _launchPreviewMode(String payload, int? parentPid) async {
         await Hive.openBox<ImagePreviewState>('image_preview_state');
         debugPrint('[ImagePreviewMode] Hive initialized successfully');
 
-        // Load saved window bounds
+        // Load saved window bounds and zoom state
         repository = ImagePreviewStateRepository();
         final validator = ScreenBoundsValidator();
         final savedState = repository.get(item.id);
 
-        if (savedState != null &&
-            savedState.x != null &&
-            savedState.y != null &&
-            savedState.width != null &&
-            savedState.height != null) {
-          final bounds = Rect.fromLTWH(
-            savedState.x!,
-            savedState.y!,
-            savedState.width!,
-            savedState.height!,
-          );
-          restoredBounds = await validator.adjustIfOffScreen(bounds);
-          debugPrint('[ImagePreviewMode] Loaded saved bounds: $restoredBounds');
+        if (savedState != null) {
+          // Restore zoom state if available
+          initialZoomScale = savedState.zoomScale;
+          initialPanOffsetX = savedState.panOffsetX;
+          initialPanOffsetY = savedState.panOffsetY;
+
+          if (savedState.x != null &&
+              savedState.y != null &&
+              savedState.width != null &&
+              savedState.height != null) {
+            final bounds = Rect.fromLTWH(
+              savedState.x!,
+              savedState.y!,
+              savedState.width!,
+              savedState.height!,
+            );
+            restoredBounds = await validator.adjustIfOffScreen(bounds);
+            debugPrint(
+                '[ImagePreviewMode] Loaded saved bounds: $restoredBounds');
+          }
+
+          if (initialZoomScale != null) {
+            debugPrint(
+                '[ImagePreviewMode] Loaded zoom state: scale=$initialZoomScale, panX=$initialPanOffsetX, panY=$initialPanOffsetY');
+          }
         }
       } catch (error, stackTrace) {
         Logger('ImagePreviewWindow').warning(
@@ -516,12 +551,33 @@ Future<void> _launchPreviewMode(String payload, int? parentPid) async {
 
         // Run app AFTER window is fully initialized
         // This keeps the event loop alive and prevents early process exit
+        _previewAppKey = GlobalKey<_ImagePreviewAppState>();
         runApp(
           _ImagePreviewApp(
+            key: _previewAppKey,
             item: item,
             copyService: copyService,
             initialAlwaysOnTop: initialTop,
             repository: repository,
+            initialZoomScale: initialZoomScale,
+            initialPanOffsetX: initialPanOffsetX,
+            initialPanOffsetY: initialPanOffsetY,
+            onSaveZoomState: (scale, panX, panY) async {
+              if (repository != null) {
+                final bounds = await windowManager.getBounds();
+                await repository.save(
+                  item.id,
+                  bounds,
+                  alwaysOnTop: initialTop,
+                  zoomScale: scale,
+                  panOffsetX: panX,
+                  panOffsetY: panY,
+                );
+                await Hive.close();
+                debugPrint(
+                    '[ImagePreviewMode] Saved zoom state: scale=$scale, panX=$panX, panY=$panY');
+              }
+            },
           ),
         );
 
@@ -544,18 +600,50 @@ Future<void> _launchPreviewMode(String payload, int? parentPid) async {
   );
 }
 
-class _ImagePreviewApp extends StatelessWidget {
+class _ImagePreviewApp extends StatefulWidget {
   const _ImagePreviewApp({
+    super.key,
     required this.item,
     required this.copyService,
     required this.initialAlwaysOnTop,
     this.repository,
+    this.initialZoomScale,
+    this.initialPanOffsetX,
+    this.initialPanOffsetY,
+    this.onSaveZoomState,
   });
 
   final ImageItem item;
   final ClipboardCopyService copyService;
   final bool initialAlwaysOnTop;
   final ImagePreviewStateRepository? repository;
+  final double? initialZoomScale;
+  final double? initialPanOffsetX;
+  final double? initialPanOffsetY;
+  final Future<void> Function(double scale, double panX, double panY)?
+      onSaveZoomState;
+
+  @override
+  State<_ImagePreviewApp> createState() => _ImagePreviewAppState();
+}
+
+class _ImagePreviewAppState extends State<_ImagePreviewApp> {
+  final GlobalKey<dynamic> _previewWindowKey = GlobalKey();
+
+  /// Save zoom state (called from parent when parent process exits)
+  Future<void> saveZoomState() async {
+    final state = _previewWindowKey.currentState;
+    if (state != null) {
+      try {
+        final (scale, panX, panY) = state.getZoomState();
+        if (widget.onSaveZoomState != null) {
+          await widget.onSaveZoomState!(scale, panX, panY);
+        }
+      } catch (e) {
+        debugPrint('[_ImagePreviewAppState] Failed to save zoom state: $e');
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -563,10 +651,14 @@ class _ImagePreviewApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(useMaterial3: true),
       home: ImagePreviewWindow(
-        item: item,
-        initialAlwaysOnTop: initialAlwaysOnTop,
-        repository: repository,
-        onCopyImage: (image) => copyService.copyImage(image),
+        key: _previewWindowKey,
+        item: widget.item,
+        initialAlwaysOnTop: widget.initialAlwaysOnTop,
+        initialZoomScale: widget.initialZoomScale,
+        initialPanOffsetX: widget.initialPanOffsetX,
+        initialPanOffsetY: widget.initialPanOffsetY,
+        repository: widget.repository,
+        onCopyImage: (image) => widget.copyService.copyImage(image),
         onClose: () => exit(0),
         onToggleAlwaysOnTop: (_) {},
       ),

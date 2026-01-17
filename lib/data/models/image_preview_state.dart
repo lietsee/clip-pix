@@ -13,6 +13,9 @@ class ImagePreviewState extends HiveObject {
     this.y,
     required this.lastOpened,
     this.alwaysOnTop = false,
+    this.zoomScale,
+    this.panOffsetX,
+    this.panOffsetY,
   });
 
   /// ImageItemのID
@@ -43,6 +46,18 @@ class ImagePreviewState extends HiveObject {
   @HiveField(6, defaultValue: false)
   final bool alwaysOnTop;
 
+  /// ズーム倍率（null の場合は 1.0）
+  @HiveField(7)
+  final double? zoomScale;
+
+  /// パンX座標
+  @HiveField(8)
+  final double? panOffsetX;
+
+  /// パンY座標
+  @HiveField(9)
+  final double? panOffsetY;
+
   ImagePreviewState copyWith({
     String? imageId,
     double? width,
@@ -51,6 +66,9 @@ class ImagePreviewState extends HiveObject {
     double? y,
     DateTime? lastOpened,
     bool? alwaysOnTop,
+    double? zoomScale,
+    double? panOffsetX,
+    double? panOffsetY,
   }) {
     return ImagePreviewState(
       imageId: imageId ?? this.imageId,
@@ -60,11 +78,14 @@ class ImagePreviewState extends HiveObject {
       y: y ?? this.y,
       lastOpened: lastOpened ?? this.lastOpened,
       alwaysOnTop: alwaysOnTop ?? this.alwaysOnTop,
+      zoomScale: zoomScale ?? this.zoomScale,
+      panOffsetX: panOffsetX ?? this.panOffsetX,
+      panOffsetY: panOffsetY ?? this.panOffsetY,
     );
   }
 
   @override
   String toString() {
-    return 'ImagePreviewState(imageId: $imageId, width: $width, height: $height, x: $x, y: $y, lastOpened: $lastOpened, alwaysOnTop: $alwaysOnTop)';
+    return 'ImagePreviewState(imageId: $imageId, width: $width, height: $height, x: $x, y: $y, lastOpened: $lastOpened, alwaysOnTop: $alwaysOnTop, zoomScale: $zoomScale, panOffsetX: $panOffsetX, panOffsetY: $panOffsetY)';
   }
 }

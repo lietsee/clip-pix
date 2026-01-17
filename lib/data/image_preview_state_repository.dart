@@ -17,6 +17,9 @@ class ImagePreviewStateRepository {
     String imageId,
     Rect bounds, {
     bool alwaysOnTop = false,
+    double? zoomScale,
+    double? panOffsetX,
+    double? panOffsetY,
   }) async {
     final state = ImagePreviewState(
       imageId: imageId,
@@ -26,6 +29,9 @@ class ImagePreviewStateRepository {
       y: bounds.top,
       lastOpened: DateTime.now(),
       alwaysOnTop: alwaysOnTop,
+      zoomScale: zoomScale,
+      panOffsetX: panOffsetX,
+      panOffsetY: panOffsetY,
     );
     await _box.put(imageId, state);
   }

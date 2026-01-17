@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:vector_math/vector_math_64.dart' show Vector3;
 import 'package:flutter/services.dart';
 import 'package:hive/hive.dart';
 import 'package:logging/logging.dart';
@@ -17,18 +18,27 @@ class ImagePreviewWindow extends StatefulWidget {
     super.key,
     required this.item,
     this.initialAlwaysOnTop = false,
+    this.initialZoomScale,
+    this.initialPanOffsetX,
+    this.initialPanOffsetY,
     this.repository,
     this.onClose,
     this.onToggleAlwaysOnTop,
     this.onCopyImage,
+    this.onSaveZoomState,
   });
 
   final ImageItem item;
   final bool initialAlwaysOnTop;
+  final double? initialZoomScale;
+  final double? initialPanOffsetX;
+  final double? initialPanOffsetY;
   final ImagePreviewStateRepository? repository;
   final VoidCallback? onClose;
   final ValueChanged<bool>? onToggleAlwaysOnTop;
   final Future<void> Function(ImageItem item)? onCopyImage;
+  final Future<void> Function(double scale, double panX, double panY)?
+      onSaveZoomState;
 
   @override
   State<ImagePreviewWindow> createState() => _ImagePreviewWindowState();
@@ -46,11 +56,22 @@ class _ImagePreviewWindowState extends State<ImagePreviewWindow>
   Timer? _boundsDebounceTimer;
   bool _needsSave = false;
 
+  // Zoom state
+  final TransformationController _transformationController =
+      TransformationController();
+  double _currentZoom = 1.0;
+  static const double _minZoom = 0.5;
+  static const double _maxZoom = 15.0;
+
   @override
   void initState() {
     super.initState();
     windowManager.addListener(this);
     _isAlwaysOnTop = widget.initialAlwaysOnTop;
+
+    // Restore zoom state if provided
+    _restoreZoomState();
+
     if (_isAlwaysOnTop) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (mounted) {
@@ -65,10 +86,28 @@ class _ImagePreviewWindowState extends State<ImagePreviewWindow>
     }
   }
 
+  void _restoreZoomState() {
+    final scale = widget.initialZoomScale;
+    final panX = widget.initialPanOffsetX;
+    final panY = widget.initialPanOffsetY;
+
+    if (scale != null && scale != 1.0) {
+      final matrix = Matrix4.identity();
+      // ignore: deprecated_member_use
+      matrix.scale(scale);
+      if (panX != null && panY != null) {
+        matrix.setTranslation(Vector3(panX, panY, 0));
+      }
+      _transformationController.value = matrix;
+      _currentZoom = scale;
+    }
+  }
+
   @override
   void dispose() {
     _autoHideTimer?.cancel();
     _boundsDebounceTimer?.cancel();
+    _transformationController.dispose();
     windowManager.removeListener(this);
     if (_isAlwaysOnTop) {
       // Fire-and-forget since window is closing
@@ -147,19 +186,31 @@ class _ImagePreviewWindowState extends State<ImagePreviewWindow>
 
   @override
   Widget build(BuildContext context) {
+    // Use meta (Cmd) on macOS, control on Windows/Linux
+    final bool useMeta = Platform.isMacOS;
+
     final shortcuts = <ShortcutActivator, Intent>{
       const SingleActivator(LogicalKeyboardKey.escape): const _CloseIntent(),
-      const SingleActivator(LogicalKeyboardKey.keyW, control: true):
-          const _CloseIntent(),
-      const SingleActivator(
-        LogicalKeyboardKey.keyF,
-        control: true,
-        shift: true,
-      ): const _ToggleAlwaysOnTopIntent(),
-      const SingleActivator(LogicalKeyboardKey.keyC, control: true):
-          const _CopyIntent(),
+      SingleActivator(LogicalKeyboardKey.keyW,
+          control: !useMeta, meta: useMeta): const _CloseIntent(),
+      SingleActivator(LogicalKeyboardKey.keyF,
+          control: !useMeta, meta: useMeta, shift: true):
+          const _ToggleAlwaysOnTopIntent(),
+      SingleActivator(LogicalKeyboardKey.keyC,
+          control: !useMeta, meta: useMeta): const _CopyIntent(),
       const SingleActivator(LogicalKeyboardKey.f11):
           const _ToggleUIElementsIntent(),
+      // Zoom shortcuts
+      SingleActivator(LogicalKeyboardKey.equal,
+          control: !useMeta, meta: useMeta): const _ZoomInIntent(),
+      SingleActivator(LogicalKeyboardKey.minus,
+          control: !useMeta, meta: useMeta): const _ZoomOutIntent(),
+      SingleActivator(LogicalKeyboardKey.digit0,
+          control: !useMeta, meta: useMeta): const _ZoomResetIntent(),
+      SingleActivator(LogicalKeyboardKey.numpadAdd,
+          control: !useMeta, meta: useMeta): const _ZoomInIntent(),
+      SingleActivator(LogicalKeyboardKey.numpadSubtract,
+          control: !useMeta, meta: useMeta): const _ZoomOutIntent(),
     };
 
     return ClipRRect(
@@ -188,6 +239,18 @@ class _ImagePreviewWindowState extends State<ImagePreviewWindow>
                 _toggleUIElements();
                 return null;
               }),
+              _ZoomInIntent: CallbackAction<_ZoomInIntent>(onInvoke: (_) {
+                _zoomIn();
+                return null;
+              }),
+              _ZoomOutIntent: CallbackAction<_ZoomOutIntent>(onInvoke: (_) {
+                _zoomOut();
+                return null;
+              }),
+              _ZoomResetIntent: CallbackAction<_ZoomResetIntent>(onInvoke: (_) {
+                _resetZoom();
+                return null;
+              }),
             },
             child: Focus(
               autofocus: true,
@@ -206,6 +269,28 @@ class _ImagePreviewWindowState extends State<ImagePreviewWindow>
                           child: Container(color: Colors.transparent),
                         ),
                       ),
+                    // Zoom level indicator
+                    Positioned(
+                      bottom: 16,
+                      left: 16,
+                      child: AnimatedOpacity(
+                        opacity: _currentZoom != 1.0 ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 200),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Text(
+                            '${(_currentZoom * 100).toStringAsFixed(0)}%',
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 12),
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -312,30 +397,97 @@ class _ImagePreviewWindowState extends State<ImagePreviewWindow>
     final file = File(widget.item.filePath);
     return Container(
       color: Colors.black,
-      alignment: Alignment.center,
-      child: Image.file(
-        file,
-        fit: BoxFit.contain,
-        errorBuilder: (context, error, stackTrace) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            _logger.severe('Failed to load preview image', error, stackTrace);
-            widget.onClose?.call();
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            }
-          });
-          return Container(
-            color: Colors.grey.shade900,
-            alignment: Alignment.center,
-            child: const Text(
-              '読み込みに失敗しました',
-              style: TextStyle(color: Colors.white70),
+      child: GestureDetector(
+        onDoubleTap: _resetZoom,
+        child: InteractiveViewer(
+          transformationController: _transformationController,
+          minScale: _minZoom,
+          maxScale: _maxZoom,
+          onInteractionEnd: (_) => _updateZoomLevel(),
+          child: Center(
+            child: Image.file(
+              file,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted) return;
+                  _logger.severe(
+                      'Failed to load preview image', error, stackTrace);
+                  widget.onClose?.call();
+                  if (Navigator.of(context).canPop()) {
+                    Navigator.of(context).pop();
+                  }
+                });
+                return Container(
+                  color: Colors.grey.shade900,
+                  alignment: Alignment.center,
+                  child: const Text(
+                    '読み込みに失敗しました',
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                );
+              },
             ),
-          );
-        },
+          ),
+        ),
       ),
     );
+  }
+
+  // Zoom control methods
+  void _zoomIn() {
+    final currentScale = _transformationController.value.getMaxScaleOnAxis();
+    final newScale = (currentScale * 1.25).clamp(_minZoom, _maxZoom);
+    _animateToScale(newScale);
+  }
+
+  void _zoomOut() {
+    final currentScale = _transformationController.value.getMaxScaleOnAxis();
+    final newScale = (currentScale / 1.25).clamp(_minZoom, _maxZoom);
+    _animateToScale(newScale);
+  }
+
+  void _resetZoom() {
+    _transformationController.value = Matrix4.identity();
+    _updateZoomLevel();
+  }
+
+  void _animateToScale(double targetScale) {
+    final currentScale = _transformationController.value.getMaxScaleOnAxis();
+    if ((currentScale - targetScale).abs() < 0.001) return;
+
+    final scaleRatio = targetScale / currentScale;
+
+    // Scale around the center of the viewport
+    final viewportSize = MediaQuery.of(context).size;
+    final center = Offset(viewportSize.width / 2, viewportSize.height / 2);
+
+    final currentMatrix = _transformationController.value.clone();
+
+    // Apply scale around center
+    // ignore: deprecated_member_use
+    currentMatrix.translate(center.dx, center.dy);
+    // ignore: deprecated_member_use
+    currentMatrix.scale(scaleRatio);
+    // ignore: deprecated_member_use
+    currentMatrix.translate(-center.dx, -center.dy);
+
+    _transformationController.value = currentMatrix;
+    _updateZoomLevel();
+  }
+
+  void _updateZoomLevel() {
+    setState(() {
+      _currentZoom = _transformationController.value.getMaxScaleOnAxis();
+    });
+  }
+
+  /// Get current zoom state for saving
+  (double scale, double panX, double panY) getZoomState() {
+    final matrix = _transformationController.value;
+    final scale = matrix.getMaxScaleOnAxis();
+    final translation = matrix.getTranslation();
+    return (scale, translation.x, translation.y);
   }
 
   Future<void> _copyImage() async {
@@ -404,4 +556,16 @@ class _CopyIntent extends Intent {
 
 class _ToggleUIElementsIntent extends Intent {
   const _ToggleUIElementsIntent();
+}
+
+class _ZoomInIntent extends Intent {
+  const _ZoomInIntent();
+}
+
+class _ZoomOutIntent extends Intent {
+  const _ZoomOutIntent();
+}
+
+class _ZoomResetIntent extends Intent {
+  const _ZoomResetIntent();
 }

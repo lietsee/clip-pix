@@ -24,13 +24,16 @@ class ImagePreviewStateAdapter extends TypeAdapter<ImagePreviewState> {
       y: fields[4] as double?,
       lastOpened: fields[5] as DateTime,
       alwaysOnTop: fields[6] == null ? false : fields[6] as bool,
+      zoomScale: fields[7] as double?,
+      panOffsetX: fields[8] as double?,
+      panOffsetY: fields[9] as double?,
     );
   }
 
   @override
   void write(BinaryWriter writer, ImagePreviewState obj) {
     writer
-      ..writeByte(7)
+      ..writeByte(10)
       ..writeByte(0)
       ..write(obj.imageId)
       ..writeByte(1)
@@ -44,7 +47,13 @@ class ImagePreviewStateAdapter extends TypeAdapter<ImagePreviewState> {
       ..writeByte(5)
       ..write(obj.lastOpened)
       ..writeByte(6)
-      ..write(obj.alwaysOnTop);
+      ..write(obj.alwaysOnTop)
+      ..writeByte(7)
+      ..write(obj.zoomScale)
+      ..writeByte(8)
+      ..write(obj.panOffsetX)
+      ..writeByte(9)
+      ..write(obj.panOffsetY);
   }
 
   @override
