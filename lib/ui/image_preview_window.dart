@@ -408,6 +408,7 @@ class _ImagePreviewWindowState extends State<ImagePreviewWindow>
             child: Image.file(
               file,
               fit: BoxFit.contain,
+              filterQuality: FilterQuality.high,
               errorBuilder: (context, error, stackTrace) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (!mounted) return;
