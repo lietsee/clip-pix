@@ -1,4 +1,5 @@
 # Repository Guidelines
+# aaaa
 
 ## Project Structure & Module Organization
 ClipPix documents are split under `docs/system`, `docs/ui`, and `docs/data`; always align code with the matching detail spec (e.g., `lib/system/clipboard_monitor.dart` follows `docs/system/clipboard_monitor.md`). Surface modules live in `lib/ui/` (MainScreen, GridView, ImageCard, ImagePreviewWindow) and services in `lib/system/` (ClipboardMonitor, ClipboardCopyService, FileWatcher, ImageSaver). Persisted models and adapters belong under `lib/data/`, backed by Hive boxes as described in `docs/system/state_management.md`. Keep assets under `assets/` and isolate test fixtures in `test_resources/` so they do not leak into release builds.
